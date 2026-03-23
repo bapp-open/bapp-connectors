@@ -81,13 +81,12 @@ class GoIPApiClient:
 
         if "sending" in content:
             return True
-        elif "busy" in content:
+        if "busy" in content:
             if retries >= self._max_retries:
                 return False
             time.sleep(1)
             return self.send_sms(to, message, line=effective_line, retries=retries + 1)
-        else:
-            raise RuntimeError(f"GoIP send error: {content}")
+        raise RuntimeError(f"GoIP send error: {content}")
 
     # ── Status ──
 

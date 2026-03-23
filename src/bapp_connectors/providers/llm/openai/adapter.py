@@ -13,7 +13,7 @@ from bapp_connectors.core.dto import (
     ModelInfo,
     TranscriptionResult,
 )
-from bapp_connectors.core.http import BearerAuth, NoAuth, ResilientHttpClient
+from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
 from bapp_connectors.core.ports import LLMPort
 from bapp_connectors.providers.llm.openai.client import OpenAIApiClient
 from bapp_connectors.providers.llm.openai.manifest import manifest

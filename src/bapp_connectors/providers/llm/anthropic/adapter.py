@@ -12,7 +12,7 @@ from bapp_connectors.core.dto import (
     LLMResponse,
     ModelInfo,
 )
-from bapp_connectors.core.http import MultiHeaderAuth, NoAuth, ResilientHttpClient
+from bapp_connectors.core.http import MultiHeaderAuth, ResilientHttpClient
 from bapp_connectors.core.ports import LLMPort
 from bapp_connectors.providers.llm.anthropic.client import AnthropicApiClient
 from bapp_connectors.providers.llm.anthropic.manifest import manifest

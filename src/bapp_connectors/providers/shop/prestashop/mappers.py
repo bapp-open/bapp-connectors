@@ -22,7 +22,6 @@ from bapp_connectors.core.dto import (
     PaymentStatus,
     PaymentType,
     Product,
-    ProductAttribute,
     ProductCategory,
     ProductVariant,
     ProviderMeta,

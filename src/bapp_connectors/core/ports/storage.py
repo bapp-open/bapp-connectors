@@ -13,12 +13,10 @@ Optional methods (have default implementations that raise NotImplementedError):
 
 from __future__ import annotations
 
-import os
 import posixpath
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from io import BytesIO
 from typing import IO
 
 from bapp_connectors.core.ports.base import BasePort

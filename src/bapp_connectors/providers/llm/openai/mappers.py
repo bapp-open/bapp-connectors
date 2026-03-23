@@ -6,7 +6,6 @@ Converts between raw OpenAI API payloads and normalized framework DTOs.
 
 from __future__ import annotations
 
-import contextlib
 from datetime import UTC, datetime
 
 from bapp_connectors.core.dto import (

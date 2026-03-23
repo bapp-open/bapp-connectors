@@ -69,16 +69,33 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "E741",   # ambiguous variable name (used in loop vars matching API field names)
+    "N815",   # mixedCase in class scope — Pydantic models match provider API field names
     "RET504", # unnecessary assignment before return
+    "RET505", # unnecessary else after return
+    "B007",   # loop control variable not used
     "B008",   # function call in default argument (pydantic Field)
     "RUF012", # mutable class defaults — fine for Pydantic/dataclass models
+    "SIM102", # collapsible if — sometimes clearer nested
+    "SIM103", # return condition directly — sometimes clearer explicit
+    "SIM105", # contextlib.suppress — explicit try/except is clearer for complex cases
+    "SIM108", # ternary — multi-line if/else is clearer
+    "SIM110", # use all() — explicit loop is clearer
+    "SIM118", # use key in dict — .keys() is sometimes intentional
+    "ERA001", # commented-out code — some kept as API reference
+    "C416",   # unnecessary comprehension
+    "PTH119", # os.path.basename — fine in non-path contexts
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["T20"]  # allow print in tests
-"**/dto/**" = ["TCH003", "TCH001"]  # Pydantic models need runtime imports
-"**/models.py" = ["TCH003", "TCH001"]  # Pydantic models need runtime imports
-"**/mappers.py" = ["TCH003", "TCH001"]  # mappers use DTO types at runtime
+"**/dto/**" = ["TCH003", "TCH001", "TCH004"]  # Pydantic models need runtime imports
+"**/models.py" = ["TCH003", "TCH001", "TCH004"]  # Pydantic models need runtime imports
+"**/mappers.py" = ["TCH003", "TCH001", "TCH004"]  # mappers use DTO types at runtime
+"**/adapter.py" = ["TCH003", "TCH001", "TCH004"]  # adapters use types at runtime
+"**/capabilities/**" = ["TCH003", "TCH001"]  # ABC methods need types at runtime for Protocol
+"**/sync/**" = ["TCH003", "TCH001"]  # sync engine uses types at runtime
+"**/ports/**" = ["TCH003", "TCH001"]  # port ABCs need types at runtime
 
 [tool.ruff.lint.isort]
 known-first-party = ["bapp_connectors", "django_bapp_connectors"]

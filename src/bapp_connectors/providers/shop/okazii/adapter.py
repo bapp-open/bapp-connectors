@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING
 
 from bapp_connectors.core.capabilities import InvoiceAttachmentCapability
 from bapp_connectors.core.dto import (
-    OrderStatus,
     ConnectionTestResult,
     Order,
+    OrderStatus,
     PaginatedResult,
     Product,
 )
@@ -95,7 +95,7 @@ class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability):
         # Prices are managed through product feed.
         raise NotImplementedError("Okazii does not support direct price updates via API.")
 
-    def update_order_status(self, order_id: str, status: OrderStatus) -> "Order":
+    def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         raise NotImplementedError("Order status update is not supported by this provider.")
 
     # ── InvoiceAttachmentCapability ──

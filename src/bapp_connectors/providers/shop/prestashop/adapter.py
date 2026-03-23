@@ -342,15 +342,14 @@ class PrestaShopShopAdapter(
                 v = self.client.create_product_option_value({"id_attribute_group": option_id, "name": _multilang(val.name)})
                 created_values.append(v if isinstance(v, dict) else {})
             return attribute_from_prestashop_option(created if isinstance(created, dict) else {}, created_values)
-        else:
-            data = {"name": _multilang(attribute.name)}
-            created = self.client.create_product_feature(data)
-            feature_id = int(created.get("id", 0)) if isinstance(created, dict) else 0
-            created_values = []
-            for val in attribute.values:
-                v = self.client.create_product_feature_value({"id_feature": feature_id, "value": _multilang(val.name)})
-                created_values.append(v if isinstance(v, dict) else {})
-            return attribute_from_prestashop_feature(created if isinstance(created, dict) else {}, created_values)
+        data = {"name": _multilang(attribute.name)}
+        created = self.client.create_product_feature(data)
+        feature_id = int(created.get("id", 0)) if isinstance(created, dict) else 0
+        created_values = []
+        for val in attribute.values:
+            v = self.client.create_product_feature_value({"id_feature": feature_id, "value": _multilang(val.name)})
+            created_values.append(v if isinstance(v, dict) else {})
+        return attribute_from_prestashop_feature(created if isinstance(created, dict) else {}, created_values)
 
     def add_attribute_value(self, attribute_id: str, value: AttributeValue) -> AttributeValue:
         # Try as feature value first
@@ -445,6 +444,7 @@ class PrestaShopShopAdapter(
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
         """Parse a PrestaShop webhook payload."""
         import json
+
         from bapp_connectors.core.dto import WebhookEventType
         payload = json.loads(body)
 

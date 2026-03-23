@@ -8,14 +8,15 @@ adapter and a consumer-provided persistence layer via callbacks.
 from __future__ import annotations
 
 import logging
-from typing import Callable, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 from bapp_connectors.core.capabilities.product_management import (
     CategoryManagementCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
 )
-from bapp_connectors.core.dto import Product, ProductCategory, ProductPhoto, ProductUpdate
+from bapp_connectors.core.dto import Product, ProductCategory, ProductUpdate
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.core.sync.dto import CategoryMapping, SyncError, SyncResult
 

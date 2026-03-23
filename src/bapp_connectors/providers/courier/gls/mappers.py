@@ -281,7 +281,7 @@ def build_awb_payload(shipment: Shipment, client_number: int) -> dict:
 
     # COD
     if shipment.extra:
-        if "cod_amount" in shipment.extra and shipment.extra["cod_amount"]:
+        if shipment.extra.get("cod_amount"):
             payload["CODAmount"] = shipment.extra["cod_amount"]
             payload["CODReference"] = shipment.extra.get("cod_reference", "")
             payload["CODCurrency"] = shipment.extra.get("cod_currency", "RON")

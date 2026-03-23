@@ -14,7 +14,7 @@ from bapp_connectors.core.dto import (
     LLMResponse,
     ModelInfo,
 )
-from bapp_connectors.core.http import MultiHeaderAuth, NoAuth, ResilientHttpClient
+from bapp_connectors.core.http import MultiHeaderAuth, ResilientHttpClient
 from bapp_connectors.core.ports import LLMPort
 from bapp_connectors.providers.llm.gemini.client import GeminiApiClient
 from bapp_connectors.providers.llm.gemini.manifest import manifest

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ShopifyVariant(BaseModel):

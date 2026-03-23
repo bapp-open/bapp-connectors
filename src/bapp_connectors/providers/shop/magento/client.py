@@ -9,7 +9,7 @@ All list endpoints use searchCriteria query parameters.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 if TYPE_CHECKING:

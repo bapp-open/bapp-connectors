@@ -9,9 +9,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from bapp_connectors.core.dto import (
-    OrderStatus,
     ConnectionTestResult,
     Order,
+    OrderStatus,
     PaginatedResult,
     Product,
 )
@@ -102,5 +102,5 @@ class CelShopAdapter(ShopPort):
         # CEL does not have a documented price update endpoint in the current API
         raise NotImplementedError("CEL.ro does not support direct price updates via API")
 
-    def update_order_status(self, order_id: str, status: OrderStatus) -> "Order":
+    def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         raise NotImplementedError("Order status update is not supported by this provider.")

@@ -3,9 +3,7 @@ Shopify Admin REST API provider manifest.
 """
 
 from bapp_connectors.core.capabilities import (
-    AttributeManagementCapability,
     BulkUpdateCapability,
-    CategoryManagementCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     VariantManagementCapability,

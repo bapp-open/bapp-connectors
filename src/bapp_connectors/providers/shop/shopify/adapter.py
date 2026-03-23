@@ -30,7 +30,6 @@ from bapp_connectors.core.dto import (
     OrderStatus,
     PaginatedResult,
     Product,
-    ProductCategory,
     ProductUpdate,
     ProductVariant,
     WebhookEvent,
@@ -44,7 +43,6 @@ from bapp_connectors.providers.shop.shopify.manifest import manifest
 from bapp_connectors.providers.shop.shopify.mappers import (
     ORDER_STATUS_TO_SHOPIFY,
     SHOPIFY_ORDER_STATUS_MAP,
-    category_from_shopify,
     order_from_shopify,
     orders_from_shopify,
     product_from_shopify,

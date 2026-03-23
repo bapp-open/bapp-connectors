@@ -17,7 +17,6 @@ import base64
 import contextlib
 import hashlib
 import hmac
-import json
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -29,7 +28,6 @@ from bapp_connectors.core.dto import (
     OrderStatus,
     PaginatedResult,
     PaymentStatus,
-    PaymentType,
     Product,
     ProductCategory,
     ProductPhoto,

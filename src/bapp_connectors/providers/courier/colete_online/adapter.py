@@ -25,7 +25,6 @@ from bapp_connectors.providers.courier.colete_online.manifest import manifest
 from bapp_connectors.providers.courier.colete_online.mappers import (
     awb_label_from_co,
     build_order_payload,
-    shipments_from_co,
     tracking_events_from_co,
 )
 

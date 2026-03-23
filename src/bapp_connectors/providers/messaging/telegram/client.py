@@ -8,7 +8,7 @@ Auth is via bot token embedded in the URL path:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient

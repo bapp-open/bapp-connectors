@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING
 
 from bapp_connectors.core.capabilities import BulkUpdateCapability, InvoiceAttachmentCapability
 from bapp_connectors.core.dto import (
-    OrderStatus,
     BulkResult,
     ConnectionTestResult,
     Order,
+    OrderStatus,
     PaginatedResult,
     Product,
     ProductUpdate,
@@ -118,7 +118,7 @@ class EmagShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapabilit
             ]
         )
 
-    def update_order_status(self, order_id: str, status: OrderStatus) -> "Order":
+    def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         raise NotImplementedError("Order status update is not supported by this provider.")
 
     # ── BulkUpdateCapability ──

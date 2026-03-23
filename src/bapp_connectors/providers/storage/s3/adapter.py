@@ -9,7 +9,6 @@ Requires the `boto3` package (pip install boto3).
 
 from __future__ import annotations
 
-import posixpath
 from datetime import datetime
 from io import BytesIO
 from typing import IO, TYPE_CHECKING

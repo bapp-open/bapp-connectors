@@ -9,9 +9,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from bapp_connectors.core.dto import (
-    OrderStatus,
     ConnectionTestResult,
     Order,
+    OrderStatus,
     PaginatedResult,
     Product,
 )
@@ -118,5 +118,5 @@ class GomagShopAdapter(ShopPort):
         # this is a placeholder that uses the available API surface.
         raise NotImplementedError("Gomag API v1 does not support direct price updates.")
 
-    def update_order_status(self, order_id: str, status: OrderStatus) -> "Order":
+    def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         raise NotImplementedError("Order status update is not supported by this provider.")

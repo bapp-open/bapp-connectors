@@ -9,7 +9,6 @@ from __future__ import annotations
 from bapp_connectors.core.dto import (
     DeliveryReport,
     DeliveryStatus,
-    MessageChannel,
     OutboundMessage,
 )
 
