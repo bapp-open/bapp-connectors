@@ -1,93 +1,240 @@
-# connectors
+# bapp-connectors
 
+A ports-and-adapters integration framework for connecting to external services: marketplaces, couriers, payment gateways, messaging providers, and file storage.
 
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Architecture
 
 ```
-cd existing_repo
-git remote add origin https://git.pidginhost.net/bapp-cloud/packages/connectors.git
-git branch -M main
-git push -uf origin main
+┌──────────────────────────────────────────────┐
+│  Django Layer (django-bapp-connectors)        │
+│  Models, Services, Tasks, Circuit Breaker     │
+├──────────────────────────────────────────────┤
+│  Core Framework (bapp-connectors)             │
+│  Ports, DTOs, HTTP Client, Registry, Webhooks │
+├──────────────────────────────────────────────┤
+│  Provider Adapters                            │
+│  Trendyol, eMAG, Sameday, Stripe, ...        │
+└──────────────────────────────────────────────┘
 ```
 
-## Integrate with your tools
+**Two packages, one monorepo:**
 
-* [Set up project integrations](https://git.pidginhost.net/bapp-cloud/packages/connectors/-/settings/integrations)
+| Package | Purpose | Dependencies |
+|---|---|---|
+| `bapp-connectors` | Core framework + all provider adapters | `requests`, `pydantic` (no Django) |
+| `django-bapp-connectors` | Multi-tenant Django integration | `django`, `bapp-connectors`, `cryptography` |
 
-## Collaborate with your team
+## Providers
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+| Family | Providers |
+|---|---|
+| **Shop** | Trendyol, eMAG, WooCommerce, Gomag, Vendigo, Okazii, CEL.ro, PrestaShop |
+| **Courier** | Sameday |
+| **Payment** | Stripe, Netopia |
+| **Messaging** | RoboSMS, SMTP |
+| **Storage** | Dropbox, FTP |
 
-## Test and Deploy
+## Quick Start
 
-Use the built-in continuous integration in GitLab.
+### Install
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+```bash
+uv add bapp-connectors              # core only
+uv add django-bapp-connectors       # with Django integration
+```
 
-***
+### Use a provider directly
 
-# Editing this README
+```python
+from bapp_connectors.providers.shop.trendyol import TrendyolShopAdapter
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+adapter = TrendyolShopAdapter(credentials={
+    "username": "api_user",
+    "password": "api_pass",
+    "seller_id": "12345",
+    "country": "RO",
+})
 
-## Suggestions for a good README
+# Test connection
+result = adapter.test_connection()
+print(result.success)
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+# Fetch orders
+orders = adapter.get_orders()
+for order in orders.items:
+    print(order.order_id, order.status, order.total)
 
-## Name
-Choose a self-explaining name for your project.
+# Check capabilities
+from bapp_connectors.core.capabilities import BulkUpdateCapability
+if adapter.supports(BulkUpdateCapability):
+    adapter.bulk_update_products(updates)
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### Use the registry
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```python
+from bapp_connectors.core.registry import registry
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+# Import providers to register them
+import bapp_connectors.providers.shop.trendyol
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+# Create adapter via registry
+adapter = registry.create_adapter(
+    family="shop",
+    provider="trendyol",
+    credentials={"username": "...", "password": "...", "seller_id": "..."},
+)
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+# List all registered providers
+for manifest in registry.list_providers():
+    print(f"{manifest.family}: {manifest.name}")
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### Django integration
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+```python
+# models.py
+from django_bapp_connectors.models import AbstractConnection
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+class Connection(AbstractConnection):
+    company = models.ForeignKey("company.Company", on_delete=models.CASCADE)
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+# Usage
+conn = Connection.objects.create(
+    company=company,
+    provider_family="shop",
+    provider_name="trendyol",
+)
+conn.credentials = {"username": "...", "password": "...", "seller_id": "..."}
+conn.save()
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+# Get adapter and use it
+adapter = conn.get_adapter()
+orders = adapter.get_orders()
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+# Circuit breaker: auto-disables after 3 auth failures
+conn.is_operational  # True when is_enabled AND is_connected
+```
 
-## License
-For open source projects, say how it is licensed.
+## Core Concepts
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+### Ports (Interfaces)
+
+Each provider family has a port that defines the common contract:
+
+- `ShopPort` — orders, products, stock/price sync
+- `CourierPort` — AWB generation, tracking, shipment management
+- `PaymentPort` — checkout sessions, payment status, refunds
+- `MessagingPort` — send messages (SMS, email, WhatsApp)
+- `StoragePort` — upload, download, delete, list files
+
+### Capabilities (Optional Features)
+
+Adapters can implement optional capabilities beyond their port:
+
+- `BulkUpdateCapability` — batch product updates
+- `WebhookCapability` — signature verification, webhook parsing
+- `OAuthCapability` — OAuth2 flow (authorize, exchange, refresh)
+- `InvoiceAttachmentCapability` — attach invoices to orders
+- `ProductFeedCapability` — generate product feeds
+
+Feature discovery: `adapter.supports(BulkUpdateCapability)`
+
+### Normalized DTOs
+
+All providers return the same data types:
+
+- `Order`, `OrderItem`, `OrderStatus`, `PaymentStatus`
+- `Product`, `ProductUpdate`, `ProductCategory`
+- `Shipment`, `AWBLabel`, `TrackingEvent`
+- `CheckoutSession`, `PaymentResult`, `Refund`
+- `OutboundMessage`, `DeliveryReport`
+- `Contact`, `Address`
+- `PaginatedResult[T]` — cursor-based pagination
+
+Provider-specific data lives in the `extra: dict` field and `provider_meta`.
+
+### Resilient HTTP Client
+
+Built-in retry, rate limiting, and observability:
+
+- Exponential backoff with configurable max retries
+- Token-bucket rate limiting per provider
+- Request/response middleware chain for logging
+- Error classification: retryable vs permanent
+
+### Error Hierarchy
+
+```
+ConnectorError
+├── AuthenticationError      (401/403, not retryable)
+├── ConfigurationError       (bad config, not retryable)
+├── ValidationError          (bad request, not retryable)
+├── RateLimitError           (429, retryable, has retry_after)
+├── ProviderError            (5xx, retryable)
+├── PermanentProviderError   (4xx non-auth, not retryable)
+├── UnsupportedFeatureError  (capability not supported)
+└── WebhookVerificationError (bad signature)
+```
+
+## Development
+
+```bash
+# Setup
+cd packages/connectors
+uv sync --extra dev
+
+# Run tests
+uv run pytest tests/ src/bapp_connectors/providers/shop/trendyol/tests/ -v -p no:django
+
+# Lint
+uv run ruff check src/
+uv run ruff format src/
+```
+
+### Django workspace
+
+```bash
+cd packages/connectors/packages/django
+uv sync --extra dev
+uv run pytest tests/ -v
+```
+
+## Documentation
+
+- [Provider Development Guide](docs/PROVIDER_GUIDE.md) — How to add a new provider or create a new family
+- [Django Integration Guide](docs/DJANGO_INTEGRATION.md) — How to use the Django package
+
+## Project Structure
+
+```
+packages/connectors/
+├── src/bapp_connectors/
+│   ├── core/
+│   │   ├── ports/          # Port interfaces (contracts)
+│   │   ├── capabilities/   # Optional capability interfaces
+│   │   ├── dto/            # Normalized data transfer objects
+│   │   ├── http/           # Resilient HTTP client + auth + retry + rate limit
+│   │   ├── webhooks/       # Webhook dispatcher + signature verification
+│   │   ├── errors.py       # Error hierarchy
+│   │   ├── types.py        # Enums
+│   │   ├── manifest.py     # Provider manifest schema
+│   │   └── registry.py     # Provider registry
+│   └── providers/
+│       ├── shop/           # Trendyol, eMAG, WooCommerce, Gomag, Vendigo, Okazii, CEL, PrestaShop
+│       ├── courier/        # Sameday
+│       ├── payment/        # Stripe, Netopia
+│       ├── messaging/      # RoboSMS, SMTP
+│       └── storage/        # Dropbox, FTP
+├── packages/django/        # Django integration (separate uv workspace)
+│   └── src/django_bapp_connectors/
+│       ├── models/         # Abstract models (Connection, SyncState, WebhookEvent, ExecutionLog)
+│       ├── services/       # Service layer (Connection, Sync, Webhook)
+│       ├── webhooks/       # Django views + URL routing
+│       ├── tasks.py        # Celery tasks with circuit breaker
+│       ├── callbacks.py    # Execution logging middleware
+│       ├── encryption.py   # Fernet credential encryption
+│       └── admin.py        # Admin mixins
+├── tests/                  # Core framework tests
+└── docs/                   # Documentation
+```

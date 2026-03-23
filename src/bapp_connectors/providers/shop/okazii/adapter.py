@@ -1,0 +1,104 @@
+"""
+Okazii shop adapter — implements ShopPort + InvoiceAttachmentCapability.
+
+This is the main entry point for the Okazii integration.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from bapp_connectors.core.capabilities import InvoiceAttachmentCapability
+from bapp_connectors.core.dto import (
+    ConnectionTestResult,
+    Order,
+    PaginatedResult,
+    Product,
+)
+from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
+from bapp_connectors.core.ports import ShopPort
+from bapp_connectors.providers.shop.okazii.client import OkaziiApiClient
+from bapp_connectors.providers.shop.okazii.manifest import manifest
+from bapp_connectors.providers.shop.okazii.mappers import (
+    order_from_okazii,
+    orders_from_okazii,
+    products_from_okazii,
+)
+
+if TYPE_CHECKING:
+    from datetime import datetime
+    from decimal import Decimal
+
+
+class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability):
+    """
+    Okazii marketplace adapter.
+
+    Implements:
+    - ShopPort: orders, products, stock/price updates
+    - InvoiceAttachmentCapability: attach invoices to orders
+    """
+
+    manifest = manifest
+
+    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, **kwargs):
+        self.credentials = credentials
+
+        if http_client is None:
+            http_client = ResilientHttpClient(
+                base_url=self.manifest.base_url,
+                auth=BearerAuth(token=credentials.get("token", "")),
+                provider_name="okazii",
+            )
+
+        self.client = OkaziiApiClient(http_client=http_client)
+
+    # ── BasePort ──
+
+    def validate_credentials(self) -> bool:
+        missing = self.manifest.auth.validate_credentials(self.credentials)
+        return len(missing) == 0
+
+    def test_connection(self) -> ConnectionTestResult:
+        try:
+            success = self.client.test_auth()
+            return ConnectionTestResult(
+                success=success,
+                message="Connection successful" if success else "Authentication failed",
+            )
+        except Exception as e:
+            return ConnectionTestResult(success=False, message=str(e))
+
+    # ── ShopPort ──
+
+    def get_orders(self, since: datetime | None = None, cursor: str | None = None) -> PaginatedResult[Order]:
+        raw_orders = self.client.get_orders(created_after=since)
+        return orders_from_okazii(raw_orders)
+
+    def get_order(self, order_id: str) -> Order:
+        data = self.client.get_order(order_id)
+        return order_from_okazii(data)
+
+    def get_products(self, cursor: str | None = None) -> PaginatedResult[Product]:
+        # Okazii uses product feeds (XML/CSV) rather than a REST product API.
+        # Return empty result — products are managed via feed.
+        return products_from_okazii([])
+
+    def update_product_stock(self, product_id: str, quantity: int) -> None:
+        # Okazii does not expose a direct stock update endpoint.
+        # Stock is managed through product feed.
+        raise NotImplementedError("Okazii does not support direct stock updates via API.")
+
+    def update_product_price(self, product_id: str, price: Decimal, currency: str) -> None:
+        # Okazii does not expose a direct price update endpoint.
+        # Prices are managed through product feed.
+        raise NotImplementedError("Okazii does not support direct price updates via API.")
+
+    # ── InvoiceAttachmentCapability ──
+
+    def attach_invoice(self, order_id: str, invoice_url: str) -> bool:
+        try:
+            self.client.attach_invoice_url(order_id=order_id, invoice_url=invoice_url)
+            return True
+        except Exception:
+            return False

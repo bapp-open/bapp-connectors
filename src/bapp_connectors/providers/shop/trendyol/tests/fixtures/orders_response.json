@@ -1,0 +1,49 @@
+{
+  "page": 0,
+  "size": 50,
+  "totalPages": 1,
+  "totalElements": 1,
+  "content": [
+    {
+      "orderNumber": "ORD-12345",
+      "orderDate": 1700000000000,
+      "status": "Created",
+      "currencyCode": "TRY",
+      "customerEmail": "test@example.com",
+      "shipmentPackageId": 999,
+      "cargoTrackingNumber": "TRK123",
+      "invoiceAddress": {
+        "firstName": "John",
+        "lastName": "Doe",
+        "company": "",
+        "fullAddress": "123 Main St",
+        "city": "Istanbul",
+        "countyName": "Kadikoy",
+        "postalCode": "34000",
+        "countryCode": "TR",
+        "phone": "+90555123456",
+        "taxNumber": ""
+      },
+      "shipmentAddress": {
+        "firstName": "John",
+        "lastName": "Doe",
+        "fullAddress": "123 Main St",
+        "city": "Istanbul",
+        "countyName": "Kadikoy",
+        "postalCode": "34000",
+        "countryCode": "TR",
+        "phone": "+90555123456"
+      },
+      "lines": [
+        {
+          "id": 1,
+          "productName": "Test Product",
+          "stockCode": "SKU-001",
+          "quantity": 2,
+          "lineUnitPrice": 49.99,
+          "barcode": "8680000001"
+        }
+      ]
+    }
+  ]
+}
