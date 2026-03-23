@@ -1,0 +1,191 @@
+# Docker Compose for integration tests (storage + shop).
+#
+# Usage:
+#   docker compose -f docker-compose.test.yml up -d
+#   # Wait for WooCommerce setup (~30s on first run):
+#   docker compose -f docker-compose.test.yml logs woo-setup --follow
+#   uv run --extra dev --extra sftp --extra s3 pytest tests/ -v -m integration
+#   docker compose -f docker-compose.test.yml down -v
+
+services:
+
+  # ── Storage Services ──
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb local/test-bucket --ignore-existing;
+      exit 0;
+      "
+
+  ftp:
+    image: fauria/vsftpd:latest
+    ports:
+      - "2121:21"
+      - "21100-21110:21100-21110"
+    environment:
+      FTP_USER: testuser
+      FTP_PASS: testpass
+      PASV_ADDRESS: 127.0.0.1
+      PASV_MIN_PORT: 21100
+      PASV_MAX_PORT: 21110
+
+  sftp:
+    image: atmoz/sftp:latest
+    ports:
+      - "2222:22"
+    command: testuser:testpass:::upload
+
+  webdav:
+    image: bytemark/webdav:latest
+    ports:
+      - "8080:80"
+    environment:
+      AUTH_TYPE: Basic
+      USERNAME: testuser
+      PASSWORD: testpass
+
+  # ── WooCommerce (WordPress + MySQL) ──
+
+  woo-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  woocommerce:
+    image: wordpress:latest
+    ports:
+      - "8888:80"
+    environment:
+      WORDPRESS_DB_HOST: woo-db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    depends_on:
+      woo-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  # WooCommerce setup: python scripts/setup_woocommerce.py
+
+  # ── PrestaShop ──
+
+  presta-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: prestashop
+      MYSQL_USER: prestashop
+      MYSQL_PASSWORD: prestashop
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  prestashop:
+    image: prestashop/prestashop:8-apache
+    ports:
+      - "8889:80"
+    environment:
+      DB_SERVER: presta-db
+      DB_USER: prestashop
+      DB_PASSWD: prestashop
+      DB_NAME: prestashop
+      PS_DEV_MODE: "1"
+      PS_INSTALL_AUTO: "1"
+      PS_DOMAIN: "localhost:8889"
+      PS_FOLDER_ADMIN: "admin123"
+      PS_FOLDER_INSTALL: "install-dev"
+      ADMIN_MAIL: "test@test.com"
+      ADMIN_PASSWD: "TestPass123!"
+      PS_LANGUAGE: "en"
+      PS_COUNTRY: "RO"
+    depends_on:
+      presta-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  # PrestaShop setup: python scripts/setup_prestashop.py
+
+  # ── Magento 2 (OpenMage for lighter testing) ──
+  # Note: Full Magento 2 Docker images are very heavy (2GB+, ~5min startup).
+  # For integration tests, use the bitnami image which includes auto-setup.
+
+  magento-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: magento
+      MYSQL_USER: magento
+      MYSQL_PASSWORD: magento
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  magento:
+    image: bitnami/magento:2
+    ports:
+      - "8890:8080"
+      - "8891:8443"
+    environment:
+      MAGENTO_DATABASE_HOST: magento-db
+      MAGENTO_DATABASE_USER: magento
+      MAGENTO_DATABASE_PASSWORD: magento
+      MAGENTO_DATABASE_NAME: magento
+      MAGENTO_HOST: "127.0.0.1:8890"
+      MAGENTO_ADMIN_USER: admin
+      MAGENTO_ADMIN_PASSWORD: Admin123!
+      MAGENTO_MODE: developer
+      BITNAMI_DEBUG: "true"
+    depends_on:
+      magento-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+
+  # Magento setup: python scripts/setup_magento.py

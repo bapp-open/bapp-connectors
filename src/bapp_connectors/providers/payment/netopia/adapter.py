@@ -41,8 +41,9 @@ class NetopiaPaymentAdapter(PaymentPort):
 
     manifest = manifest
 
-    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, **kwargs):
+    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
+        config = config or {}
         self.api_key = credentials.get("api_key", "")
         self.pos_signature = credentials.get("pos_signature", "")
         self.sandbox = str(credentials.get("sandbox", "true")).lower() in ("true", "1", "yes")
@@ -75,8 +76,8 @@ class NetopiaPaymentAdapter(PaymentPort):
             api_key=self.api_key,
             pos_signature=self.pos_signature,
             sandbox=self.sandbox,
-            notify_url=kwargs.get("notify_url", ""),
-            redirect_url=kwargs.get("redirect_url", ""),
+            notify_url=config.get("notify_url", ""),
+            redirect_url=config.get("redirect_url", ""),
         )
 
     # ── BasePort ──

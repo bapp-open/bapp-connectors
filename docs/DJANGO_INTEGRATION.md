@@ -136,7 +136,7 @@ conn = Connection.objects.create(
     provider_family="shop",
     provider_name="trendyol",
     display_name="My Trendyol Store",
-    config={"item_match_field": "barcode"},
+    config={"item_match_field": "barcode"},  # tenant settings — validated & passed to adapter
 )
 
 # Set credentials (encrypted automatically)
@@ -176,6 +176,50 @@ if adapter.supports(BulkUpdateCapability):
     result = adapter.bulk_update_products(updates)
 ```
 
+### LLM usage
+
+```python
+from bapp_connectors.core.dto import ChatMessage, ChatRole
+
+# Get adapter from a connection configured for LLM
+adapter = llm_conn.get_adapter()
+
+# Chat completion
+response = adapter.complete([
+    ChatMessage(role=ChatRole.SYSTEM, content="You are a helpful assistant."),
+    ChatMessage(role=ChatRole.USER, content="Summarize this invoice."),
+])
+print(response.content)
+print(f"Tokens: {response.usage.total_tokens}")
+
+# Embeddings (if supported)
+from bapp_connectors.core.capabilities import EmbeddingCapability
+if adapter.supports(EmbeddingCapability):
+    result = adapter.embed(["search query", "document text"])
+    print(f"Dimensions: {len(result.embeddings[0])}")
+
+# Audio transcription (OpenAI Whisper)
+from bapp_connectors.core.capabilities import TranscriptionCapability
+if adapter.supports(TranscriptionCapability):
+    with open("meeting.mp3", "rb") as f:
+        result = adapter.transcribe(f.read(), language="ro")
+    print(result.text)
+
+# Tool/function calling
+from bapp_connectors.core.dto import ToolDefinition
+response = adapter.complete(
+    messages=[ChatMessage(role=ChatRole.USER, content="What's the weather in Bucharest?")],
+    tools=[ToolDefinition(name="get_weather", description="Get weather", parameters={"type": "object", "properties": {"city": {"type": "string"}}})],
+)
+if response.tool_calls:
+    print(response.tool_calls[0].name, response.tool_calls[0].arguments)
+
+# Platform-level key: tenant has no api_key, platform provides it via config
+# conn.credentials = {}  (empty)
+# conn.config = {"platform_api_key": "sk-platform-key", "default_model": "gpt-4o-mini"}
+adapter = conn.get_adapter()  # uses platform key automatically
+```
+
 ### Via the service layer
 
 ```python
@@ -190,12 +234,21 @@ result = ConnectionService.test_connection(conn)
 # Rotate credentials
 ConnectionService.rotate_credentials(conn, new_credentials={"token": "new_token"})
 
+# Update tenant settings (validated against manifest)
+ConnectionService.update_settings(conn, {"page_size": 100, "sync_mode": "full"})
+
+# Validate settings without saving
+errors = ConnectionService.validate_settings(conn, {"sync_mode": "invalid"})
+# errors = ["Invalid value for sync_mode: 'invalid'. Must be one of: ['incremental', 'full']"]
+
 # List available providers
 manifests = ConnectionService.list_available_providers(family="shop")
 for m in manifests:
     print(f"{m.name}: {m.display_name} (auth: {m.auth.strategy})")
     for field in m.auth.required_fields:
         print(f"  - {field.name}: {field.label} (required={field.required})")
+    for field in m.settings.fields:
+        print(f"  - [setting] {field.name}: {field.label} (type={field.field_type}, default={field.default})")
 ```
 
 ---
@@ -453,7 +506,7 @@ BAPP_CONNECTORS = {
 | `provider_name` | `CharField` | Provider name: trendyol, sameday, stripe, etc. |
 | `display_name` | `CharField` | Human-readable label |
 | `credentials_encrypted` | `TextField` | Fernet-encrypted JSON credentials |
-| `config` | `JSONField` | Non-sensitive connector configuration |
+| `config` | `JSONField` | Tenant settings (declared in manifest, passed as `config` to adapter) |
 | `is_enabled` | `BooleanField` | User-controlled on/off |
 | `is_connected` | `BooleanField` | Last known auth status |
 | `auth_failure_count` | `IntegerField` | Consecutive auth failures |

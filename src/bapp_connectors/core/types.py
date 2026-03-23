@@ -15,6 +15,7 @@ class ProviderFamily(StrEnum):
     PAYMENT = "payment"
     MESSAGING = "messaging"
     STORAGE = "storage"
+    LLM = "llm"
 
 
 class BackoffStrategy(StrEnum):
@@ -35,6 +36,16 @@ class AuthStrategy(StrEnum):
     API_KEY = "api_key"
     OAUTH2 = "oauth2"
     CUSTOM = "custom"
+
+
+class FieldType(StrEnum):
+    """Field types for provider settings, used for UI rendering."""
+
+    STR = "str"
+    BOOL = "bool"
+    INT = "int"
+    SELECT = "select"
+    TEXTAREA = "textarea"
 
 
 class SyncStatus(StrEnum):

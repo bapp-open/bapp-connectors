@@ -26,8 +26,9 @@ class _DummyShopAdapter(ShopPort):
         capabilities=[ShopPort],
     )
 
-    def __init__(self, credentials, http_client=None, **kwargs):
+    def __init__(self, credentials, http_client=None, config=None, **kwargs):
         self.credentials = credentials
+        self.config = config or {}
 
     def validate_credentials(self):
         return True
@@ -48,6 +49,9 @@ class _DummyShopAdapter(ShopPort):
         pass
 
     def update_product_price(self, product_id, price, currency):
+        pass
+
+    def update_order_status(self, order_id, status):
         pass
 
 
@@ -112,3 +116,18 @@ def test_create_adapter_missing_credentials():
     reg.register(_DummyShopAdapter)
     with pytest.raises(ConfigurationError, match="Missing credential"):
         reg.create_adapter("shop", "dummy", credentials={})
+
+
+def test_create_adapter_with_config():
+    reg = ProviderRegistry()
+    reg.register(_DummyShopAdapter)
+    adapter = reg.create_adapter("shop", "dummy", credentials={"token": "abc"}, config={"page_size": 100})
+    assert isinstance(adapter, _DummyShopAdapter)
+    assert adapter.config == {"page_size": 100}
+
+
+def test_create_adapter_config_defaults_to_empty():
+    reg = ProviderRegistry()
+    reg.register(_DummyShopAdapter)
+    adapter = reg.create_adapter("shop", "dummy", credentials={"token": "abc"})
+    assert adapter.config == {}

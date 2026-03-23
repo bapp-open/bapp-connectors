@@ -7,7 +7,9 @@ Uses Python's ftplib directly, not ResilientHttpClient.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import posixpath
+from io import BytesIO
+from typing import IO, TYPE_CHECKING
 
 from bapp_connectors.core.dto import ConnectionTestResult
 from bapp_connectors.core.ports import FileInfo, StoragePort
@@ -23,7 +25,7 @@ class FTPStorageAdapter(StoragePort):
     FTP storage adapter.
 
     Implements:
-    - StoragePort: upload, download, delete, list_files
+    - StoragePort: save, open, delete, exists, listdir, size, list_files
 
     Note: This adapter uses ftplib directly. The http_client parameter is
     accepted for interface compatibility but not used.
@@ -31,11 +33,10 @@ class FTPStorageAdapter(StoragePort):
 
     manifest = manifest
 
-    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, **kwargs):
+    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
 
         host = credentials.get("host", "")
-        # Derive host from username if not explicitly provided
         if not host and "@" in credentials.get("username", ""):
             host = credentials["username"].split("@")[1]
 
@@ -65,41 +66,84 @@ class FTPStorageAdapter(StoragePort):
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
 
-    # ── StoragePort ──
+    # ── StoragePort (Django Storage API) ──
 
-    def upload(self, file_data: bytes, file_name: str, remote_path: str) -> str:
-        """Upload a file to the FTP server. Returns the remote path."""
-        self.client.upload_file(file_data, file_name, remote_path)
-        target_dir = self.client._with_base(remote_path)
+    def save(self, name: str, content: bytes | IO) -> str:
+        if isinstance(content, bytes):
+            data = content
+        else:
+            data = content.read()
+        directory = posixpath.dirname(name) or "/"
+        file_name = posixpath.basename(name)
+        self.client.upload_file(data, file_name, directory)
+        target_dir = self.client._with_base(directory)
         if target_dir and not target_dir.endswith("/"):
             target_dir += "/"
         return f"{target_dir}{file_name}"
 
-    def download(self, remote_path: str) -> bytes:
-        """Download a file from the FTP server. Returns file bytes."""
-        return self.client.download_file(remote_path)
+    def open(self, name: str) -> IO:
+        data = self.client.download_file(name)
+        return BytesIO(data)
 
-    def delete(self, remote_path: str) -> bool:
-        """Delete a file from the FTP server. Returns True if successful."""
+    def delete(self, name: str) -> None:
         try:
-            self.client.delete_file(remote_path)
-            return True
+            self.client.delete_file(name)
+        except Exception:
+            pass
+
+    def exists(self, name: str) -> bool:
+        try:
+            conn = self.client._connect()
+            try:
+                target = self.client._with_base(name)
+                # Try SIZE (works for files)
+                conn.size(target)
+                return True
+            except Exception:
+                # Try CWD (works for directories)
+                try:
+                    conn.cwd(target)
+                    return True
+                except Exception:
+                    return False
+            finally:
+                try:
+                    conn.quit()
+                except Exception:
+                    pass
         except Exception:
             return False
 
+    def listdir(self, path: str) -> tuple[list[str], list[str]]:
+        entries = self.client.list_files(path)
+        dirs = [e["name"] for e in entries if e.get("is_directory")]
+        files = [e["name"] for e in entries if not e.get("is_directory")]
+        return dirs, files
+
+    def size(self, name: str) -> int:
+        try:
+            conn = self.client._connect()
+            try:
+                target = self.client._with_base(name)
+                return conn.size(target) or 0
+            finally:
+                try:
+                    conn.quit()
+                except Exception:
+                    pass
+        except Exception:
+            return 0
+
+    # ── Convenience override with richer metadata ──
+
     def list_files(self, remote_path: str = "/") -> list[FileInfo]:
-        """List files in an FTP directory."""
         entries = self.client.list_files(remote_path)
-        files = []
-        for entry in entries:
-            files.append(
-                FileInfo(
-                    path=entry.get("path", ""),
-                    name=entry.get("name", ""),
-                    size=entry.get("size", 0),
-                    content_type="",
-                    modified_at="",
-                    is_directory=entry.get("is_directory", False),
-                )
+        return [
+            FileInfo(
+                path=entry.get("path", ""),
+                name=entry.get("name", ""),
+                size=entry.get("size", 0),
+                is_directory=entry.get("is_directory", False),
             )
-        return files
+            for entry in entries
+        ]

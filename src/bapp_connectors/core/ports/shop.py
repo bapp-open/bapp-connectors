@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from datetime import datetime
     from decimal import Decimal
 
-    from bapp_connectors.core.dto import Order, PaginatedResult, Product
+    from bapp_connectors.core.dto import Order, OrderStatus, PaginatedResult, Product
 
 
 class ShopPort(BasePort):
@@ -46,4 +46,9 @@ class ShopPort(BasePort):
     @abstractmethod
     def update_product_price(self, product_id: str, price: Decimal, currency: str) -> None:
         """Update price for a product on the marketplace."""
+        ...
+
+    @abstractmethod
+    def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
+        """Update the status of an order on the marketplace. Returns the updated order."""
         ...

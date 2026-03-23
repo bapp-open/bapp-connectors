@@ -60,6 +60,7 @@ class Order(BaseDTO):
     order_id: str
     external_id: str | None = None
     status: OrderStatus = OrderStatus.PENDING
+    raw_status: str = ""  # original provider status string, never lost
     payment_status: PaymentStatus = PaymentStatus.UNPAID
     payment_type: PaymentType | None = None
     currency: str = ""

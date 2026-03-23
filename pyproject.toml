@@ -12,6 +12,8 @@ dependencies = [
 
 [project.optional-dependencies]
 oauth = ["oauthlib>=3.0"]
+sftp = ["paramiko>=3.0"]
+s3 = ["boto3>=1.28"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -32,6 +34,10 @@ packages = ["src/bapp_connectors"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "src"]
 pythonpath = ["src"]
+markers = [
+    "integration: integration tests requiring Docker services (docker-compose.test.yml)",
+]
+addopts = "-m 'not integration'"
 
 [tool.uv.workspace]
 members = ["packages/django"]

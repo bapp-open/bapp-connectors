@@ -12,6 +12,8 @@ from decimal import Decimal
 
 from bapp_connectors.core.dto import (
     Address,
+    AttributeDefinition,
+    AttributeValue,
     Contact,
     Order,
     OrderItem,
@@ -20,7 +22,9 @@ from bapp_connectors.core.dto import (
     PaymentStatus,
     PaymentType,
     Product,
+    ProductAttribute,
     ProductCategory,
+    ProductVariant,
     ProviderMeta,
 )
 
@@ -55,6 +59,17 @@ PRESTASHOP_ORDER_STATUS_MAP: dict[str, OrderStatus] = {
     "10": OrderStatus.PENDING,  # Awaiting bank wire
     "11": OrderStatus.PROCESSING,  # Remote payment accepted
     "12": OrderStatus.PROCESSING,  # On backorder (paid)
+}
+
+ORDER_STATUS_TO_PS: dict[OrderStatus, str] = {
+    OrderStatus.PENDING: "1",
+    OrderStatus.ACCEPTED: "2",
+    OrderStatus.PROCESSING: "3",
+    OrderStatus.SHIPPED: "4",
+    OrderStatus.DELIVERED: "5",
+    OrderStatus.CANCELLED: "6",
+    OrderStatus.REFUNDED: "7",
+    OrderStatus.RETURNED: "7",
 }
 
 PRESTASHOP_PAYMENT_TYPE_MAP: dict[str, PaymentType] = {
@@ -172,13 +187,17 @@ def order_from_prestashop(
     products = []
 
     # Extract order rows from associations
+    # Handles both nested {"order_rows": {"order_row": [...]}} and flat {"order_rows": [...]}
     associations = data.get("associations", {})
     order_rows = associations.get("order_rows", {})
     if order_rows:
-        raw_rows = order_rows.get("order_row", [])
-        if isinstance(raw_rows, dict):
-            raw_rows = [raw_rows]
-        products = raw_rows
+        if isinstance(order_rows, list):
+            products = order_rows
+        else:
+            raw_rows = order_rows.get("order_row", [])
+            if isinstance(raw_rows, dict):
+                raw_rows = [raw_rows]
+            products = raw_rows
 
     for row in products:
         items.append(
@@ -211,7 +230,8 @@ def order_from_prestashop(
     if date_str := data.get("date_add"):
         order_date = _parse_datetime(date_str)
 
-    status = PRESTASHOP_ORDER_STATUS_MAP.get(str(data.get("current_state", "")), OrderStatus.PENDING)
+    raw_status = str(data.get("current_state", ""))
+    status = PRESTASHOP_ORDER_STATUS_MAP.get(raw_status, OrderStatus.PENDING)
     payment_module = str(data.get("module", "")).lower()
     payment_type = PRESTASHOP_PAYMENT_TYPE_MAP.get(payment_module, PaymentType.OTHER)
 
@@ -251,6 +271,7 @@ def order_from_prestashop(
         order_id=str(data.get("id", "")),
         external_id=data.get("reference"),
         status=status,
+        raw_status=raw_status,
         payment_status=PaymentStatus.PAID
         if status not in (OrderStatus.PENDING, OrderStatus.CANCELLED)
         else PaymentStatus.UNPAID,
@@ -368,3 +389,129 @@ def category_from_prestashop(data: dict) -> ProductCategory:
         parent_id=str(parent_id) if parent_id else None,
         extra={k: v for k, v in data.items() if k not in ("id", "name", "id_parent")},
     )
+
+
+def categories_from_prestashop(results: list[dict]) -> list[ProductCategory]:
+    """Map a list of PrestaShop categories."""
+    return [category_from_prestashop(c) for c in results]
+
+
+# ── Attribute mappers (features + product options) ──
+
+
+def attribute_from_prestashop_feature(feature: dict, values: list[dict] | None = None) -> AttributeDefinition:
+    """Map a PrestaShop product_feature to AttributeDefinition."""
+    name = _extract_multilang_name(feature.get("name", ""))
+    attr_values = []
+    for v in (values or []):
+        val_name = _extract_multilang_name(v.get("value", ""))
+        attr_values.append(AttributeValue(value_id=str(v.get("id", "")), name=val_name))
+    return AttributeDefinition(
+        attribute_id=str(feature.get("id", "")),
+        name=name,
+        attribute_type="feature",
+        values=attr_values,
+        extra={"kind": "feature"},
+    )
+
+
+def attribute_from_prestashop_option(option: dict, values: list[dict] | None = None) -> AttributeDefinition:
+    """Map a PrestaShop product_option to AttributeDefinition."""
+    name = _extract_multilang_name(option.get("name", "")) or _extract_multilang_name(option.get("public_name", ""))
+    attr_values = []
+    for v in (values or []):
+        val_name = _extract_multilang_name(v.get("name", ""))
+        attr_values.append(AttributeValue(value_id=str(v.get("id", "")), name=val_name))
+    return AttributeDefinition(
+        attribute_id=str(option.get("id", "")),
+        name=name,
+        attribute_type="select",
+        values=attr_values,
+        extra={"kind": "option", "group_type": option.get("group_type", "select")},
+    )
+
+
+# ── Variant mappers (combinations) ──
+
+
+def variant_from_prestashop(combination: dict, option_values_map: dict | None = None) -> ProductVariant:
+    """Map a PrestaShop combination to ProductVariant DTO.
+
+    option_values_map: {option_value_id: {"name": "Red", "group_name": "Color"}}
+    """
+    option_values_map = option_values_map or {}
+    attributes: dict = {}
+
+    # Extract associations.product_option_values
+    assoc = combination.get("associations", {})
+    pov = assoc.get("product_option_values", [])
+    if isinstance(pov, dict):
+        pov = pov.get("product_option_value", [])
+    if isinstance(pov, dict):
+        pov = [pov]
+    if isinstance(pov, list):
+        for item in pov:
+            val_id = str(item.get("id", ""))
+            if val_id in option_values_map:
+                info = option_values_map[val_id]
+                attributes[info.get("group_name", "")] = info.get("name", "")
+
+    price_impact = Decimal(str(combination.get("price", 0)))
+
+    return ProductVariant(
+        variant_id=str(combination.get("id", "")),
+        sku=combination.get("reference", ""),
+        barcode=combination.get("ean13", ""),
+        price=price_impact if price_impact else None,  # delta, not absolute
+        stock=int(combination.get("quantity", 0)) if combination.get("quantity") is not None else None,
+        attributes=attributes,
+        extra={"price_is_delta": True},
+    )
+
+
+# ── Outbound product mappers (local → PrestaShop) ──
+
+
+def _multilang(value: str, lang_id: int = 1) -> dict:
+    """Wrap a string in PrestaShop multilang format."""
+    return {"language": [{"attrs": {"id": str(lang_id)}, "value": value}]}
+
+
+def product_to_prestashop(product, price_to_provider=None) -> dict:
+    """Map a Product DTO to a PrestaShop product payload for create/update."""
+    data: dict = {
+        "name": _multilang(product.name),
+        "active": "1" if product.active else "0",
+    }
+    if product.description:
+        data["description"] = _multilang(product.description)
+    if product.sku:
+        data["reference"] = product.sku
+    if product.barcode:
+        data["ean13"] = product.barcode
+    if product.price is not None:
+        convert = price_to_provider or (lambda x: x)
+        data["price"] = str(convert(product.price))
+    if product.categories:
+        # Use first category as default
+        data["id_category_default"] = product.categories[0]
+    return data
+
+
+def product_update_to_prestashop(update, price_to_provider=None) -> dict:
+    """Map a ProductUpdate DTO to a PrestaShop product update payload."""
+    data: dict = {"id": int(update.product_id)}
+    if update.name is not None:
+        data["name"] = _multilang(update.name)
+    if update.description is not None:
+        data["description"] = _multilang(update.description)
+    if update.sku is not None:
+        data["reference"] = update.sku
+    if update.price is not None:
+        convert = price_to_provider or (lambda x: x)
+        data["price"] = str(convert(update.price))
+    if update.active is not None:
+        data["active"] = "1" if update.active else "0"
+    if update.extra:
+        data.update(update.extra)
+    return data

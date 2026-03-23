@@ -1,0 +1,944 @@
+{
+  "info": {
+    "_postman_id": "4d2fc76b-b550-41a8-bb9f-f4f09d69105e",
+    "name": "ColeteOnline Api",
+    "description": "# 📦 API Colete-Online.ro\n\nAceastă colecție conține endpoint-urile oficiale pentru integrarea serviciilor de curierat **Colete-Online.ro**.\n\n## 🚀 Configurare Rapidă\n\nPentru a începe testarea, urmează acești pași:\n\n1. **Autentificare:**\n    \n    - Mergi la tab-ul **Variables** al acestei colecții.\n        \n    - Introdu valoarea pentru credentialsInBasic64 (aceasta fiind base64 din _**clientId:clientSecret**_).\n        \n    - Rulează request-ul `POST Authentication`. Dupa completeaza si valoarea pentru accessToken, astfel aceasta va fi folosita automat de toate celelalte requesturi.\n        \n\n## 🛠️ Variabile utilizate\n\n- `credentialsInBasic64`: base64 din _**clientId:clientSecret**_\n    \n- `accessToken`: Tokenul obtinut dupa requestul de autentificare.\n    \n\n---\n\n**Documentație completă:** [https://docs.api.colete-online.ro](https://docs.api.colete-online.ro)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "51038076",
+    "_collection_link": "https://go.postman.co/collection/51038076-4d2fc76b-b550-41a8-bb9f-f4f09d69105e?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Basic {{credentialsInBasic64}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "text",
+              "uuid": "d467621d-404e-400b-b507-7749022a141f"
+            }
+          ]
+        },
+        "url": {
+          "raw": "https://auth.colete-online.ro/token",
+          "protocol": "https",
+          "host": [
+            "auth",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "token"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/search/country/{needle}",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/search/country/den",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "search",
+            "country",
+            "den"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/search/location/{countryCode}/{needle}",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/search/location/RO/ghimp",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "search",
+            "location",
+            "RO",
+            "ghimp"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/search/city/{countryCode}/{county}/{needle}",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/search/city/RO/BC/ghi",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "search",
+            "city",
+            "RO",
+            "BC",
+            "ghi"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/search/street/{countryCode}/{city}/{county}/{needle}",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/search/street/RO/Timisoara/Timis/Avra",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "search",
+            "street",
+            "RO",
+            "Timisoara",
+            "Timis",
+            "Avra"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/search/postal-code/{countryCode}/{city}/{county}/{street}",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/search/postal-code/RO/Arad/Arad/B%C4%83ncil%C4%83%20Octav",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "search",
+            "postal-code",
+            "RO",
+            "Arad",
+            "Arad",
+            "B%C4%83ncil%C4%83%20Octav"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/search/validate-postal-code/{countryCode}/{city}/{county}/{street}/{postalCode}",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/search/validate-postal-code/RO/Timisoara/Timis/Pia%C8%9Ba%20Avram%20Iancu/300367",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "search",
+            "validate-postal-code",
+            "RO",
+            "Timisoara",
+            "Timis",
+            "Pia%C8%9Ba%20Avram%20Iancu",
+            "300367"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/search/postal-code-reverse/{countryCode}/{postalCode}",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/search/postal-code-reverse/RO/300367",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "search",
+            "postal-code-reverse",
+            "RO",
+            "300367"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/address",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/address",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "address"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/service/list",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/service/list",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "service",
+            "list"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/order (domestic)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sender\": {\n        \"contact\": {\n            \"name\": \"Test test\",\n            \"phone\": \"+40722222222\",\n            \"phone2\": \"0722222223\",\n            \"email\": \"contact@example.com\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"300375\",\n            \"city\": \"Timișoara\",\n            \"county\": \"Timiș\",\n            \"street\": \"Piața Avram Iancu\",\n            \"number\": \"6\",\n            \"block\": \"15\",\n            \"entrance\": \"A\",\n            \"intercom\": \"32\",\n            \"floor\": \"2\",\n            \"apartment\": \"15\"\n        }\n    },\n    \"recipient\": {\n        \"contact\": {\n            \"name\": \"Test2 test2\",\n            \"phone\": \"+40722222222\",\n            \"company\": \"Test Company\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"310152\",\n            \"city\": \"Arad\",\n            \"county\": \"Arad\",\n            \"street\": \"Băncilă Octav\",\n            \"number\": \"123\"\n        }\n    },\n    \"packages\": {\n        \"type\": 2,\n        \"content\": \"Test content\",\n        \"list\": [\n            {\n                \"weight\": 2.3,\n                \"width\": 15,\n                \"height\": 17,\n                \"length\": 19\n            }\n        ]\n    },\n    \"service\": {\n        \"selectionType\": \"bestPrice\",\n        \"serviceIds\": [\n            1,\n            2,\n            3,\n            4\n        ]\n    },\n    \"extraOptions\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/staging/order",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "staging",
+            "order"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/order (domesticToPoint)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sender\": {\n    \"contact\": {\n      \"name\": \"Test test\",\n      \"phone\": \"+40722222222\",\n      \"phone2\": \"0722222223\",\n      \"email\": \"contact@example.com\"\n    },\n    \"address\": {\n      \"countryCode\": \"RO\",\n      \"postalCode\": \"300375\",\n      \"city\": \"Timișoara\",\n      \"county\": \"Timiș\",\n      \"street\": \"Piața Avram Iancu\",\n      \"number\": \"6\",\n      \"block\": \"15\",\n      \"entrance\": \"A\",\n      \"intercom\": \"32\",\n      \"floor\": \"2\",\n      \"apartment\": \"15\"\n    }\n  },\n  \"recipient\": {\n    \"contact\": {\n      \"name\": \"Test2 test2\",\n      \"phone\": \"+40722222222\",\n      \"company\": \"Test Company\"\n    },\n    \"address\": {\n      \"countryCode\": \"RO\",\n      \"postalCode\": \"310152\",\n      \"city\": \"Arad\",\n      \"county\": \"Arad\",\n      \"street\": \"Băncilă Octav\",\n      \"number\": \"123\"\n    }\n  },\n  \"packages\": {\n    \"type\": 2,\n    \"content\": \"Test content\",\n    \"list\": [\n      {\n        \"weight\": 2.3,\n        \"width\": 15,\n        \"height\": 17,\n        \"length\": 19\n      }\n    ]\n  },\n  \"service\": {\n    \"activationId\": \"wxyd7VDDbGZqOdkvej4hYn9k1IQ=\",\n    \"specific\": {\n      \"domesticToPoint\": {\n        \"override\": true,\n        \"enabled\": true,\n        \"selectionType\": \"showClosest\",\n        \"serviceIds\": [\n          205\n        ]\n      }\n    }\n  },\n  \"extraOptions\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/staging/order",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "staging",
+            "order"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/order (domesticFromPoint)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sender\": {\n        \"contact\": {\n            \"name\": \"Test test\",\n            \"phone\": \"+40722222222\",\n            \"phone2\": \"0722222223\",\n            \"email\": \"contact@example.com\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"300375\",\n            \"city\": \"Timișoara\",\n            \"county\": \"Timiș\",\n            \"street\": \"Piața Avram Iancu\",\n            \"number\": \"6\",\n            \"block\": \"15\",\n            \"entrance\": \"A\",\n            \"intercom\": \"32\",\n            \"floor\": \"2\",\n            \"apartment\": \"15\"\n        },\n        \"shippingPoint\": {\n            \"id\": 5955\n        }\n    },\n    \"recipient\": {\n        \"contact\": {\n            \"name\": \"Test2 test2\",\n            \"phone\": \"+40722222222\",\n            \"company\": \"Test Company\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"310152\",\n            \"city\": \"Arad\",\n            \"county\": \"Arad\",\n            \"street\": \"Băncilă Octav\",\n            \"number\": \"123\"\n        }\n    },\n    \"packages\": {\n        \"type\": 2,\n        \"content\": \"Test content\",\n        \"list\": [\n            {\n                \"weight\": 2.3,\n                \"width\": 15,\n                \"height\": 17,\n                \"length\": 19\n            }\n        ]\n    },\n    \"service\": {\n        \"activationId\": \"O+dswBaoyFBmGVbF9x0UxiHPamk=\",\n        \"selectionType\": \"bestPrice\",\n        \"serviceIds\": [\n            207\n        ]\n    },\n    \"extraOptions\": [\n        {\n            \"id\": 13,\n            \"override\": true\n        }\n    ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/staging/order",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "staging",
+            "order"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/order (fromPointToPoint)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sender\": {\n        \"contact\": {\n            \"name\": \"Test test\",\n            \"phone\": \"+40722222222\",\n            \"phone2\": \"0722222223\",\n            \"email\": \"contact@example.com\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"300375\",\n            \"city\": \"Timișoara\",\n            \"county\": \"Timiș\",\n            \"street\": \"Piața Avram Iancu\",\n            \"number\": \"6\",\n            \"block\": \"15\",\n            \"entrance\": \"A\",\n            \"intercom\": \"32\",\n            \"floor\": \"2\",\n            \"apartment\": \"15\"\n        },\n        \"shippingPoint\": {\n            \"id\": 7522\n        }\n    },\n    \"recipient\": {\n        \"contact\": {\n            \"name\": \"Test2 test2\",\n            \"phone\": \"+40722222222\",\n            \"company\": \"Test Company\"\n        },\n        \"shippingPoint\": {\n            \"id\": 7111,\n            \"countryCode\": \"RO\"\n        }\n    },\n    \"packages\": {\n        \"type\": 2,\n        \"content\": \"Test content\",\n        \"list\": [\n            {\n                \"weight\": 2.3,\n                \"width\": 15,\n                \"height\": 17,\n                \"length\": 19\n            }\n        ]\n    },\n    \"service\": {\n        \"selectionType\": \"bestPrice\",\n        \"serviceIds\": [\n            208\n        ]\n    },\n    \"extraOptions\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/staging/order",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "staging",
+            "order"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/order/price (domestic)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sender\": {\n        \"contact\": {\n            \"name\": \"Test test\",\n            \"phone\": \"+40722222222\",\n            \"phone2\": \"0722222223\",\n            \"email\": \"contact@example.com\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"300375\",\n            \"city\": \"Timișoara\",\n            \"county\": \"Timiș\",\n            \"street\": \"Piața Avram Iancu\",\n            \"number\": \"6\",\n            \"block\": \"15\",\n            \"entrance\": \"A\",\n            \"intercom\": \"32\",\n            \"floor\": \"2\",\n            \"apartment\": \"15\"\n        }\n    },\n    \"recipient\": {\n        \"contact\": {\n            \"name\": \"Test2 test2\",\n            \"phone\": \"+40722222222\",\n            \"company\": \"Test Company\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"310152\",\n            \"city\": \"Arad\",\n            \"county\": \"Arad\",\n            \"street\": \"Băncilă Octav\",\n            \"number\": \"123\"\n        }\n    },\n    \"packages\": {\n        \"type\": 2,\n        \"content\": \"Test content\",\n        \"list\": [\n            {\n                \"weight\": 2.3,\n                \"width\": 15,\n                \"height\": 17,\n                \"length\": 19\n            }\n        ]\n    },\n    \"service\": {\n        \"selectionType\": \"bestPrice\",\n        \"serviceIds\": [\n            1,\n            2,\n            3,\n            4\n        ]\n    },\n    \"extraOptions\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/order/price",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "order",
+            "price"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/order/price (domestic&domesticToPoint)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sender\": {\n        \"contact\": {\n            \"name\": \"Test test\",\n            \"phone\": \"+40722222222\",\n            \"phone2\": \"0722222223\",\n            \"email\": \"contact@example.com\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"300375\",\n            \"city\": \"Timișoara\",\n            \"county\": \"Timiș\",\n            \"street\": \"Piața Avram Iancu\",\n            \"number\": \"6\",\n            \"block\": \"15\",\n            \"entrance\": \"A\",\n            \"intercom\": \"32\",\n            \"floor\": \"2\",\n            \"apartment\": \"15\"\n        }\n    },\n    \"recipient\": {\n        \"contact\": {\n            \"name\": \"Test2 test2\",\n            \"phone\": \"+40722222222\",\n            \"company\": \"Test Company\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"310152\",\n            \"city\": \"Arad\",\n            \"county\": \"Arad\",\n            \"street\": \"Băncilă Octav\",\n            \"number\": \"123\"\n        }\n    },\n    \"packages\": {\n        \"type\": 2,\n        \"content\": \"Test content\",\n        \"list\": [\n            {\n                \"weight\": 2.3,\n                \"width\": 15,\n                \"height\": 17,\n                \"length\": 19\n            }\n        ]\n    },\n    \"service\": {\n        \"specific\": {\n            \"domestic\": {\n                \"enabled\": true,\n                \"override\": true,\n                \"selectionType\": \"bestPrice\",\n                \"serviceIds\": [\n                    1,\n                    2,\n                    3,\n                    4\n                ]\n            },\n            \"domesticToPoint\": {\n                \"override\": true,\n                \"enabled\": true,\n                \"selectionType\": \"showClosest\",\n                \"serviceIds\": [\n                    203,\n                    205\n                ]\n            }\n        }\n    },\n    \"extraOptions\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/order/price",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "order",
+            "price"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/order/price (domestic&domesticToPoint&domesticFromPoint)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sender\": {\n        \"contact\": {\n            \"name\": \"Test test\",\n            \"phone\": \"+40722222222\",\n            \"phone2\": \"0722222223\",\n            \"email\": \"contact@example.com\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"300375\",\n            \"city\": \"Timișoara\",\n            \"county\": \"Timiș\",\n            \"street\": \"Piața Avram Iancu\",\n            \"number\": \"6\",\n            \"block\": \"15\",\n            \"entrance\": \"A\",\n            \"intercom\": \"32\",\n            \"floor\": \"2\",\n            \"apartment\": \"15\"\n        }\n    },\n    \"recipient\": {\n        \"contact\": {\n            \"name\": \"Test2 test2\",\n            \"phone\": \"+40722222222\",\n            \"company\": \"Test Company\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"310152\",\n            \"city\": \"Arad\",\n            \"county\": \"Arad\",\n            \"street\": \"Băncilă Octav\",\n            \"number\": \"123\"\n        }\n    },\n    \"packages\": {\n        \"type\": 2,\n        \"content\": \"Test content\",\n        \"list\": [\n            {\n                \"weight\": 2.3,\n                \"width\": 15,\n                \"height\": 17,\n                \"length\": 19\n            }\n        ]\n    },\n    \"service\": {\n        \"specific\": {\n            \"domestic\": {\n                \"enabled\": true,\n                \"override\": true,\n                \"selectionType\": \"bestPrice\",\n                \"serviceIds\": [\n                    1,\n                    2,\n                    3,\n                    4,\n                    25,\n                    207\n                ]\n            },\n            \"domesticToPoint\": {\n                \"override\": true,\n                \"enabled\": true,\n                \"selectionType\": \"showClosest\",\n                \"serviceIds\": [\n                    203,\n                    205\n                ]\n            }\n        }\n    },\n    \"extraOptions\": [\n        {\n            \"id\": 13,\n            \"override\": true\n        }\n    ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/order/price",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "order",
+            "price"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/order/price (fromPointToPoint)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sender\": {\n        \"contact\": {\n            \"name\": \"Test test\",\n            \"phone\": \"+40722222222\",\n            \"phone2\": \"0722222223\",\n            \"email\": \"contact@example.com\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"300375\",\n            \"city\": \"Timișoara\",\n            \"county\": \"Timiș\",\n            \"street\": \"Piața Avram Iancu\",\n            \"number\": \"6\",\n            \"block\": \"15\",\n            \"entrance\": \"A\",\n            \"intercom\": \"32\",\n            \"floor\": \"2\",\n            \"apartment\": \"15\"\n        },\n        \"shippingPoint\": {\n            \"id\": 7522\n        }\n    },\n    \"recipient\": {\n        \"contact\": {\n            \"name\": \"Test2 test2\",\n            \"phone\": \"+40722222222\",\n            \"company\": \"Test Company\"\n        },\n        \"shippingPoint\": {\n            \"id\": 7111,\n            \"countryCode\": \"RO\"\n        }\n    },\n    \"packages\": {\n        \"type\": 2,\n        \"content\": \"Test content\",\n        \"list\": [\n            {\n                \"weight\": 2.3,\n                \"width\": 15,\n                \"height\": 17,\n                \"length\": 19\n            }\n        ]\n    },\n    \"service\": {\n        \"selectionType\": \"bestPrice\",\n        \"serviceIds\": [\n            208\n        ]\n    },\n    \"extraOptions\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/order/price",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "order",
+            "price"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/order/status/{uniqueId}",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/staging/order/status/AP9WLNKTLFZX",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "staging",
+            "order",
+            "status",
+            "AP9WLNKTLFZX"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/order/awb/{uniqueId}",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/staging/order/awb/AP9WLNKTLFZX?formatType=A4",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "staging",
+            "order",
+            "awb",
+            "AP9WLNKTLFZX"
+          ],
+          "query": [
+            {
+              "key": "formatType",
+              "value": "A4"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/shipping-points/localities-list",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sender\": {\n        \"contact\": {\n            \"name\": \"Test test\",\n            \"phone\": \"+40722222222\",\n            \"phone2\": \"0722222223\",\n            \"email\": \"contact@example.com\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"300375\",\n            \"city\": \"Timișoara\",\n            \"county\": \"Timiș\",\n            \"street\": \"Piața Avram Iancu\",\n            \"number\": \"6\",\n            \"block\": \"15\",\n            \"entrance\": \"A\",\n            \"intercom\": \"32\",\n            \"floor\": \"2\",\n            \"apartment\": \"15\"\n        }\n    },\n    \"recipient\": {\n        \"contact\": {\n            \"name\": \"Test2 test2\",\n            \"phone\": \"+40722222222\",\n            \"company\": \"Test Company\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"310152\",\n            \"city\": \"Arad\",\n            \"county\": \"Arad\",\n            \"street\": \"Băncilă Octav\",\n            \"number\": \"123\"\n        }\n    },\n    \"packages\": {\n        \"type\": 2,\n        \"content\": \"Test content\",\n        \"list\": [\n            {\n                \"weight\": 2.3,\n                \"width\": 15,\n                \"height\": 17,\n                \"length\": 19\n            }\n        ]\n    },\n    \"service\": {\n        \"specific\": {\n            \"domesticToPoint\": {\n                \"override\": true,\n                \"serviceIds\": [\n                    202,\n                    203,\n                    204\n                ]\n            }\n        }\n    },\n    \"extraOptions\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/shipping-points/localities-list",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "shipping-points",
+            "localities-list"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/shipping-points/list/{county}",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sender\": {\n        \"contact\": {\n            \"name\": \"Test test\",\n            \"phone\": \"+40722222222\",\n            \"phone2\": \"0722222223\",\n            \"email\": \"contact@example.com\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"300375\",\n            \"city\": \"Timișoara\",\n            \"county\": \"Timiș\",\n            \"street\": \"Piața Avram Iancu\",\n            \"number\": \"6\",\n            \"block\": \"15\",\n            \"entrance\": \"A\",\n            \"intercom\": \"32\",\n            \"floor\": \"2\",\n            \"apartment\": \"15\"\n        }\n    },\n    \"recipient\": {\n        \"contact\": {\n            \"name\": \"Test2 test2\",\n            \"phone\": \"+40722222222\",\n            \"company\": \"Test Company\"\n        },\n        \"address\": {\n            \"countryCode\": \"RO\",\n            \"postalCode\": \"310152\",\n            \"city\": \"Arad\",\n            \"county\": \"Arad\",\n            \"street\": \"Băncilă Octav\",\n            \"number\": \"123\"\n        }\n    },\n    \"packages\": {\n        \"type\": 2,\n        \"content\": \"Test content\",\n        \"list\": [\n            {\n                \"weight\": 2.3,\n                \"width\": 15,\n                \"height\": 17,\n                \"length\": 19\n            }\n        ]\n    },\n    \"service\": {\n        \"specific\": {\n            \"domesticToPoint\": {\n                \"override\": true,\n                \"serviceIds\": [\n                    202,\n                    203,\n                    204\n                ]\n            }\n        }\n    },\n    \"extraOptions\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/shipping-points/list/Timiș",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "shipping-points",
+            "list",
+            "Timiș"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/user/balance",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://api.colete-online.ro/v1/user/balance",
+          "protocol": "https",
+          "host": [
+            "api",
+            "colete-online",
+            "ro"
+          ],
+          "path": [
+            "v1",
+            "user",
+            "balance"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "credentialsInBasic64",
+      "value": "BASE64_OF_YOUR_clientId:clientSecret"
+    },
+    {
+      "key": "accessToken",
+      "value": "ACCESS_TOKEN_OBTAINED_BY_AUTHENTIFICATION"
+    }
+  ]
+}

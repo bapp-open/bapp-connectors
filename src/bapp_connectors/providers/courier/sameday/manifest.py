@@ -8,9 +8,11 @@ from bapp_connectors.core.manifest import (
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
+    SettingsConfig,
+    SettingsField,
 )
 from bapp_connectors.core.ports import CourierPort
-from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
+from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
 manifest = ProviderManifest(
     name="sameday",
@@ -23,6 +25,24 @@ manifest = ProviderManifest(
         required_fields=[
             CredentialField(name="username", label="API Username", sensitive=False),
             CredentialField(name="password", label="API Password", sensitive=True),
+        ],
+    ),
+    settings=SettingsConfig(
+        fields=[
+            SettingsField(
+                name="pickup_point_id",
+                label="Default Pickup Point ID",
+                field_type=FieldType.INT,
+                required=False,
+                help_text="If not set, the default pickup point from the API will be used.",
+            ),
+            SettingsField(
+                name="service_id",
+                label="Default Service ID",
+                field_type=FieldType.INT,
+                default=7,
+                help_text="Sameday service ID. Default: 7 (24h).",
+            ),
         ],
     ),
     capabilities=[

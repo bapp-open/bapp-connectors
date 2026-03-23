@@ -26,6 +26,7 @@ class ConnectionService:
             family=connection.provider_family,
             provider=connection.provider_name,
             credentials=connection.credentials,
+            config=connection.config,
         )
 
     @staticmethod
@@ -42,6 +43,23 @@ class ConnectionService:
         """Update connection credentials (encrypted)."""
         connection.credentials = new_credentials
         connection.save(update_fields=["credentials_encrypted", "updated_at"])
+
+    @staticmethod
+    def validate_settings(connection, config: dict) -> list[str]:
+        """Validate settings against the provider's manifest. Returns error messages."""
+        manifest = registry.get_manifest(connection.provider_family, connection.provider_name)
+        return manifest.settings.validate_settings(config)
+
+    @staticmethod
+    def update_settings(connection, config: dict) -> None:
+        """Update connection settings (validated against manifest)."""
+        errors = ConnectionService.validate_settings(connection, config)
+        if errors:
+            from bapp_connectors.core.errors import ConfigurationError
+
+            raise ConfigurationError(f"Invalid settings: {'; '.join(errors)}")
+        connection.config = config
+        connection.save(update_fields=["config", "updated_at"])
 
     @staticmethod
     def list_available_providers(family: str | None = None):

@@ -27,7 +27,7 @@ Every provider consists of **7 files** in a single directory:
 
 | File | Purpose |
 |------|---------|
-| `manifest.py` | Declares capabilities, auth, rate limits, webhooks, base URL |
+| `manifest.py` | Declares capabilities, auth, settings, rate limits, webhooks, base URL |
 | `client.py` | Raw HTTP API calls (no business logic) |
 | `adapter.py` | Implements port interface(s) + capabilities |
 | `mappers.py` | Converts between provider payloads and normalized DTOs |
@@ -71,10 +71,12 @@ from bapp_connectors.core.manifest import (
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
+    SettingsConfig,
+    SettingsField,
     WebhookConfig,
 )
 from bapp_connectors.core.ports import ShopPort
-from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
+from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
 manifest = ProviderManifest(
     # ── Identity ──
@@ -92,6 +94,36 @@ manifest = ProviderManifest(
             CredentialField(name="shop_id", label="Shop ID", sensitive=False),
             # Optional fields:
             CredentialField(name="sandbox", label="Sandbox Mode", required=False, default="false"),
+        ],
+    ),
+
+    # ── Tenant Settings ──
+    # Settings are tenant-configurable options (separate from auth credentials).
+    # Stored in the Connection.config JSONField. Passed as `config` dict to the adapter.
+    settings=SettingsConfig(
+        fields=[
+            SettingsField(
+                name="page_size",
+                label="Page Size",
+                field_type=FieldType.INT,
+                default=50,
+                help_text="Number of items per API page.",
+            ),
+            SettingsField(
+                name="sync_mode",
+                label="Sync Mode",
+                field_type=FieldType.SELECT,
+                choices=["incremental", "full"],
+                default="incremental",
+                help_text="How to sync orders from Acme.",
+            ),
+            SettingsField(
+                name="auto_confirm",
+                label="Auto-Confirm Orders",
+                field_type=FieldType.BOOL,
+                default=False,
+                help_text="Automatically confirm new orders on sync.",
+            ),
         ],
     ),
 
@@ -136,6 +168,22 @@ manifest = ProviderManifest(
 | `BEARER` | `Authorization: Bearer {token}` header |
 | `API_KEY` | Not auto-applied; use `CUSTOM` and handle in adapter |
 | `CUSTOM` | Framework passes `NoAuth`; your adapter/client manages auth itself |
+
+**Settings field types:**
+
+| FieldType | Python type | UI widget |
+|-----------|------------|-----------|
+| `STR` | `str` | Text input |
+| `BOOL` | `bool` | Toggle/checkbox |
+| `INT` | `int` | Number input |
+| `SELECT` | `str` | Dropdown (requires `choices`) |
+| `TEXTAREA` | `str` | Multi-line text area |
+
+Settings vs credentials:
+- **Credentials** (`auth.required_fields`) = authentication secrets, stored encrypted in `credentials_encrypted`
+- **Settings** (`settings.fields`) = tenant preferences, stored in `config` JSONField, passed as `config` dict to adapter
+
+The registry validates settings (required fields, choice constraints) and applies defaults before passing `config` to the adapter.
 
 ### Step 3: Create Pydantic models (`models.py`)
 
@@ -350,9 +398,12 @@ class AcmeShopAdapter(ShopPort):
 
     manifest = manifest  # REQUIRED: attach the manifest to the class
 
-    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, **kwargs):
+    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
+        config = config or {}
         self.shop_id = credentials.get("shop_id", "")
+        self._page_size = config.get("page_size", 50)
+        self._auto_confirm = config.get("auto_confirm", False)
 
         # If no http_client provided (standalone use), create one
         if http_client is None:
@@ -405,7 +456,8 @@ class AcmeShopAdapter(ShopPort):
 
 **Key requirements:**
 - `manifest = manifest` class attribute is **mandatory** (registry reads it)
-- `__init__` must accept `credentials: dict` and `http_client: ResilientHttpClient | None`
+- `__init__` must accept `credentials: dict`, `http_client: ResilientHttpClient | None`, and `config: dict | None = None`
+- Access tenant settings via `config.get("setting_name", default)` — defaults are pre-applied by the registry
 - Implement ALL abstract methods from the port
 - Implement ALL declared capabilities from the manifest
 
@@ -508,12 +560,16 @@ The registry will **reject registration** if you declare a capability but don't 
 | `OAuthCapability` | `get_authorize_url(redirect_uri, state) -> str`, `exchange_code_for_token(code, ...) -> OAuthTokens`, `refresh_token(refresh_token) -> OAuthTokens` |
 | `InvoiceAttachmentCapability` | `attach_invoice(order_id, invoice_url) -> bool` |
 | `ProductFeedCapability` | `generate_feed(products, format) -> str \| bytes` |
+| `EmbeddingCapability` | `embed(texts, model) -> EmbeddingResult` |
+| `TranscriptionCapability` | `transcribe(audio, model, language) -> TranscriptionResult` |
+| `StreamingCapability` | `stream(messages, model) -> Iterator[LLMChunk]` |
+| `ImageGenerationCapability` | `generate_image(prompt, model, size) -> ImageResult` |
 
 ---
 
 ## Creating a New Provider Family
 
-If the existing families (shop, courier, payment, messaging, storage) don't fit, you can create a new one.
+If the existing families (shop, courier, payment, messaging, storage, llm) don't fit, you can create a new one.
 
 ### Step 1: Add the family to the enum
 
@@ -526,6 +582,7 @@ class ProviderFamily(StrEnum):
     PAYMENT = "payment"
     MESSAGING = "messaging"
     STORAGE = "storage"
+    LLM = "llm"
     ACCOUNTING = "accounting"   # <-- new family
 ```
 
@@ -614,9 +671,9 @@ providers/accounting/
 
 Before submitting a new provider, verify:
 
-- [ ] `manifest.py` — All fields populated, `base_url` set, capabilities declared
+- [ ] `manifest.py` — All fields populated, `base_url` set, capabilities declared, settings defined
 - [ ] `client.py` — Raw HTTP only, uses `ResilientHttpClient`, no Django imports
-- [ ] `adapter.py` — `manifest = manifest` class attribute, implements ALL port methods + declared capabilities
+- [ ] `adapter.py` — `manifest = manifest` class attribute, `__init__` accepts `config`, implements ALL port methods + declared capabilities
 - [ ] `mappers.py` — Sets `provider_meta` on DTOs, maps statuses to framework enums, provider-specific data in `extra`
 - [ ] `models.py` — Pydantic models for raw API payloads, `datetime`/`Decimal` imported at module level
 - [ ] `errors.py` — Maps HTTP errors to framework error hierarchy

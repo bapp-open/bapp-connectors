@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
+from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
 
 @dataclass
@@ -26,6 +26,50 @@ class CredentialField:
     def __post_init__(self):
         if not self.label:
             self.label = self.name.replace("_", " ").title()
+
+
+@dataclass
+class SettingsField:
+    """A single tenant-configurable setting for the provider."""
+
+    name: str
+    label: str = ""
+    field_type: FieldType = FieldType.STR
+    required: bool = False
+    default: str | bool | int | None = None
+    choices: list[str] | None = None
+    help_text: str = ""
+    description: str = ""
+
+    def __post_init__(self):
+        if not self.label:
+            self.label = self.name.replace("_", " ").title()
+
+
+@dataclass
+class SettingsConfig:
+    """Provider settings configuration — tenant-level options separate from auth."""
+
+    fields: list[SettingsField] = field(default_factory=list)
+
+    def validate_settings(self, config: dict) -> list[str]:
+        """Validate that required settings are present and choices are respected. Returns error messages."""
+        errors = []
+        for f in self.fields:
+            value = config.get(f.name)
+            if f.required and (value is None or value == ""):
+                errors.append(f"Missing required setting: {f.name}")
+            if value is not None and f.choices and str(value) not in f.choices:
+                errors.append(f"Invalid value for {f.name}: '{value}'. Must be one of: {f.choices}")
+        return errors
+
+    def apply_defaults(self, config: dict) -> dict:
+        """Return a copy of config with defaults filled in for missing fields."""
+        result = dict(config)
+        for f in self.fields:
+            if f.name not in result and f.default is not None:
+                result[f.name] = f.default
+        return result
 
 
 @dataclass
@@ -90,6 +134,7 @@ class ProviderManifest:
     base_url: str = ""
 
     auth: AuthConfig = field(default_factory=AuthConfig)
+    settings: SettingsConfig = field(default_factory=SettingsConfig)
     capabilities: list[type] = field(default_factory=list)
     rate_limit: RateLimitConfig = field(default_factory=RateLimitConfig)
     retry: RetryConfig = field(default_factory=RetryConfig)

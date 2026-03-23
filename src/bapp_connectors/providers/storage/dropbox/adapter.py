@@ -6,6 +6,10 @@ This is the main entry point for the Dropbox integration.
 
 from __future__ import annotations
 
+import posixpath
+from io import BytesIO
+from typing import IO
+
 from bapp_connectors.core.dto import ConnectionTestResult
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import FileInfo, StoragePort
@@ -18,12 +22,12 @@ class DropboxStorageAdapter(StoragePort):
     Dropbox storage adapter.
 
     Implements:
-    - StoragePort: upload, download, delete, list_files
+    - StoragePort: save, open, delete, exists, listdir, size, list_files
     """
 
     manifest = manifest
 
-    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, **kwargs):
+    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
         self.default_folder = credentials.get("default_folder", "/")
 
@@ -57,41 +61,81 @@ class DropboxStorageAdapter(StoragePort):
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
 
-    # ── StoragePort ──
+    # ── StoragePort (Django Storage API) ──
 
-    def upload(self, file_data: bytes, file_name: str, remote_path: str) -> str:
-        """Upload a file to Dropbox. Returns the remote path."""
-        result = self.client.upload_file(file_data, file_name, remote_path)
+    def save(self, name: str, content: bytes | IO) -> str:
+        if isinstance(content, bytes):
+            data = content
+        else:
+            data = content.read()
+        directory = posixpath.dirname(name) or "/"
+        file_name = posixpath.basename(name)
+        result = self.client.upload_file(data, file_name, directory)
         if isinstance(result, dict):
-            return result.get("path_display", f"{remote_path}/{file_name}")
-        return f"{remote_path}/{file_name}"
+            return result.get("path_display", name)
+        return name
 
-    def download(self, remote_path: str) -> bytes:
-        """Download a file from Dropbox. Returns file bytes."""
-        return self.client.download_file(remote_path)
+    def open(self, name: str) -> IO:
+        data = self.client.download_file(name)
+        return BytesIO(data)
 
-    def delete(self, remote_path: str) -> bool:
-        """Delete a file from Dropbox. Returns True if successful."""
+    def delete(self, name: str) -> None:
         try:
-            self.client.delete_file(remote_path)
+            self.client.delete_file(name)
+        except Exception:
+            pass  # Django Storage.delete() should not raise if file doesn't exist
+
+    def exists(self, name: str) -> bool:
+        try:
+            # Dropbox doesn't have a direct "exists" — try to get metadata
+            import json
+            self.client._call(
+                "POST", "files/get_metadata",
+                headers={"Content-Type": "application/json"},
+                data=json.dumps({"path": name if name.startswith("/") else "/" + name}),
+            )
             return True
         except Exception:
             return False
 
-    def list_files(self, remote_path: str = "/") -> list[FileInfo]:
-        """List files in a Dropbox directory."""
-        entries = self.client.list_folder(remote_path)
+    def listdir(self, path: str) -> tuple[list[str], list[str]]:
+        entries = self.client.list_folder(path)
+        dirs = []
         files = []
         for entry in entries:
-            tag = entry.get(".tag", "")
-            files.append(
-                FileInfo(
-                    path=entry.get("path_display", ""),
-                    name=entry.get("name", ""),
-                    size=entry.get("size", 0),
-                    content_type="",
-                    modified_at=entry.get("server_modified", ""),
-                    is_directory=tag == "folder",
-                )
+            name = entry.get("name", "")
+            if entry.get(".tag") == "folder":
+                dirs.append(name)
+            else:
+                files.append(name)
+        return dirs, files
+
+    def size(self, name: str) -> int:
+        try:
+            import json
+            result = self.client._call(
+                "POST", "files/get_metadata",
+                headers={"Content-Type": "application/json"},
+                data=json.dumps({"path": name if name.startswith("/") else "/" + name}),
             )
-        return files
+            if isinstance(result, dict):
+                return result.get("size", 0)
+        except Exception:
+            pass
+        return 0
+
+    # ── Convenience overrides with richer metadata ──
+
+    def list_files(self, remote_path: str = "/") -> list[FileInfo]:
+        entries = self.client.list_folder(remote_path)
+        return [
+            FileInfo(
+                path=entry.get("path_display", ""),
+                name=entry.get("name", ""),
+                size=entry.get("size", 0),
+                content_type="",
+                modified_at=entry.get("server_modified", ""),
+                is_directory=entry.get(".tag") == "folder",
+            )
+            for entry in entries
+        ]

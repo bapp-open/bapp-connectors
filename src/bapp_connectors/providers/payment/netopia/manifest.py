@@ -8,10 +8,12 @@ from bapp_connectors.core.manifest import (
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
+    SettingsConfig,
+    SettingsField,
     WebhookConfig,
 )
 from bapp_connectors.core.ports import PaymentPort
-from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
+from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
 NETOPIA_LIVE_URL = "https://secure.mobilpay.ro/pay/"
 NETOPIA_SANDBOX_URL = "https://sandboxsecure.mobilpay.ro/pay/"
@@ -44,6 +46,24 @@ manifest = ProviderManifest(
                 required=False,
                 default="true",
                 help_text="Set to 'true' for sandbox/test mode, 'false' for live.",
+            ),
+        ],
+    ),
+    settings=SettingsConfig(
+        fields=[
+            SettingsField(
+                name="notify_url",
+                label="Notification URL",
+                field_type=FieldType.STR,
+                required=False,
+                help_text="URL where Netopia sends payment notifications (IPN).",
+            ),
+            SettingsField(
+                name="redirect_url",
+                label="Redirect URL",
+                field_type=FieldType.STR,
+                required=False,
+                help_text="URL where the customer is redirected after payment.",
             ),
         ],
     ),

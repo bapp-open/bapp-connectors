@@ -26,13 +26,17 @@ A ports-and-adapters integration framework for connecting to external services: 
 
 ## Providers
 
-| Family | Providers |
-|---|---|
-| **Shop** | Trendyol, eMAG, WooCommerce, Gomag, Vendigo, Okazii, CEL.ro, PrestaShop |
-| **Courier** | Sameday |
-| **Payment** | Stripe, Netopia |
-| **Messaging** | RoboSMS, SMTP |
-| **Storage** | Dropbox, FTP |
+<!-- PROVIDERS:BEGIN -->
+| Family | Providers | Count |
+|---|---|---|
+| **Shop** | CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce | 10 |
+| **Courier** | Colete Online, GLS, Sameday | 3 |
+| **Payment** | Netopia, Stripe | 2 |
+| **Messaging** | GoIP, RoboSMS, SMTP Email, Telegram, WhatsApp | 5 |
+| **Storage** | Dropbox, FTP File Storage, S3 Storage, SFTP, WebDAV | 5 |
+| **LLM** | Anthropic, Google Gemini, Ollama, OpenAI | 4 |
+| | **Total** | **29** |
+<!-- PROVIDERS:END -->
 
 ## Quick Start
 
@@ -125,8 +129,9 @@ Each provider family has a port that defines the common contract:
 - `ShopPort` — orders, products, stock/price sync
 - `CourierPort` — AWB generation, tracking, shipment management
 - `PaymentPort` — checkout sessions, payment status, refunds
-- `MessagingPort` — send messages (SMS, email, WhatsApp)
-- `StoragePort` — upload, download, delete, list files
+- `MessagingPort` — send messages (SMS, email, WhatsApp, Telegram), reply to inbound
+- `StoragePort` — save, open, delete, exists, listdir, size (Django Storage API compatible)
+- `LLMPort` — chat completion, model listing, tool/function calling
 
 ### Capabilities (Optional Features)
 
@@ -137,6 +142,10 @@ Adapters can implement optional capabilities beyond their port:
 - `OAuthCapability` — OAuth2 flow (authorize, exchange, refresh)
 - `InvoiceAttachmentCapability` — attach invoices to orders
 - `ProductFeedCapability` — generate product feeds
+- `EmbeddingCapability` — text embeddings for RAG/search
+- `TranscriptionCapability` — audio-to-text (Whisper)
+- `StreamingCapability` — streaming LLM responses
+- `ImageGenerationCapability` — AI image generation
 
 Feature discovery: `adapter.supports(BulkUpdateCapability)`
 
@@ -148,7 +157,9 @@ All providers return the same data types:
 - `Product`, `ProductUpdate`, `ProductCategory`
 - `Shipment`, `AWBLabel`, `TrackingEvent`
 - `CheckoutSession`, `PaymentResult`, `Refund`
-- `OutboundMessage`, `DeliveryReport`
+- `OutboundMessage`, `InboundMessage`, `DeliveryReport`
+- `ChatMessage`, `LLMResponse`, `TokenUsage`, `ModelInfo`, `ToolCall`
+- `EmbeddingResult`, `TranscriptionResult`, `ImageResult`
 - `Contact`, `Address`
 - `PaginatedResult[T]` — cursor-based pagination
 
@@ -221,11 +232,14 @@ packages/connectors/
 │   │   ├── manifest.py     # Provider manifest schema
 │   │   └── registry.py     # Provider registry
 │   └── providers/
-│       ├── shop/           # Trendyol, eMAG, WooCommerce, Gomag, Vendigo, Okazii, CEL, PrestaShop
-│       ├── courier/        # Sameday
-│       ├── payment/        # Stripe, Netopia
-│       ├── messaging/      # RoboSMS, SMTP
-│       └── storage/        # Dropbox, FTP
+<!-- STRUCTURE:BEGIN -->
+│       ├── shop/          # CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce
+│       ├── courier/       # Colete Online, GLS, Sameday
+│       ├── payment/       # Netopia, Stripe
+│       ├── messaging/     # GoIP, RoboSMS, SMTP Email, Telegram, WhatsApp
+│       ├── storage/       # Dropbox, FTP File Storage, S3 Storage, SFTP, WebDAV
+│       └── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
+<!-- STRUCTURE:END -->
 ├── packages/django/        # Django integration (separate uv workspace)
 │   └── src/django_bapp_connectors/
 │       ├── models/         # Abstract models (Connection, SyncState, WebhookEvent, ExecutionLog)

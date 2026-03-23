@@ -36,7 +36,7 @@ class SMTPMessagingAdapter(MessagingPort):
 
     manifest = manifest
 
-    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, **kwargs):
+    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
 
         host = credentials.get("host", "")

@@ -164,12 +164,12 @@ class ResilientHttpClient:
         )
         self.middleware.fire_on_response(resp_ctx)
 
-        # Error classification
-        if not response.ok:
-            self._classify_error(response)
-
         if direct_response:
             return response
+
+        # Error classification (skipped for direct_response — caller handles status)
+        if not response.ok:
+            self._classify_error(response)
 
         return self._process_response(response)
 

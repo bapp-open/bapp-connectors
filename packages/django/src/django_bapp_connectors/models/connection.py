@@ -87,6 +87,7 @@ class AbstractConnection(models.Model):
             family=self.provider_family,
             provider=self.provider_name,
             credentials=self.credentials,
+            config=self.config,
         )
 
     def test_connection(self):

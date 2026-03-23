@@ -40,10 +40,11 @@ class SamedayCourierAdapter(CourierPort):
 
     manifest = manifest
 
-    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, **kwargs):
+    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
-        self._pickup_point_id: int | None = kwargs.get("pickup_point_id")
-        self._service_id: int = kwargs.get("service_id", 7)
+        config = config or {}
+        self._pickup_point_id: int | None = config.get("pickup_point_id")
+        self._service_id: int = config.get("service_id", 7)
 
         if http_client is None:
             http_client = ResilientHttpClient(

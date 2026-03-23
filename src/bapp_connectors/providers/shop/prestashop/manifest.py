@@ -2,32 +2,68 @@
 PrestaShop provider manifest — declares capabilities, auth, rate limits, and webhook config.
 """
 
+from bapp_connectors.core.capabilities import (
+    AttributeManagementCapability,
+    BulkUpdateCapability,
+    CategoryManagementCapability,
+    ProductCreationCapability,
+    ProductFullUpdateCapability,
+    VariantManagementCapability,
+    WebhookCapability,
+)
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
+    SettingsConfig,
+    SettingsField,
     WebhookConfig,
 )
 from bapp_connectors.core.ports import ShopPort
-from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
+from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
 manifest = ProviderManifest(
     name="prestashop",
     family=ProviderFamily.SHOP,
     display_name="PrestaShop",
     description="PrestaShop webservice integration for orders, products, categories, and inventory management.",
-    base_url="https://placeholder.prestashop.com/api/",  # Overridden per-instance from domain credential
+    base_url="https://placeholder.prestashop.com/api/",
     auth=AuthConfig(
-        strategy=AuthStrategy.TOKEN,
+        strategy=AuthStrategy.CUSTOM,
         required_fields=[
             CredentialField(name="domain", label="Shop Domain (e.g. https://myshop.com)", sensitive=False),
             CredentialField(name="token", label="API Key", sensitive=True),
         ],
     ),
+    settings=SettingsConfig(
+        fields=[
+            SettingsField(
+                name="prices_include_vat",
+                label="Store Prices Include VAT",
+                field_type=FieldType.BOOL,
+                default=True,
+                help_text="Whether PrestaShop prices include tax (tax_incl fields).",
+            ),
+            SettingsField(
+                name="vat_rate",
+                label="VAT Rate",
+                field_type=FieldType.STR,
+                default="0.19",
+                help_text="VAT rate as decimal (e.g., 0.19 for 19%).",
+            ),
+        ],
+    ),
     capabilities=[
         ShopPort,
+        BulkUpdateCapability,
+        ProductCreationCapability,
+        ProductFullUpdateCapability,
+        CategoryManagementCapability,
+        AttributeManagementCapability,
+        VariantManagementCapability,
+        WebhookCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,

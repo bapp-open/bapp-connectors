@@ -78,12 +78,13 @@ class ProviderRegistry:
         family: str,
         provider: str,
         credentials: dict,
+        config: dict | None = None,
         **kwargs: Any,
     ) -> BasePort:
         """
-        Instantiate an adapter with credentials and a pre-configured HTTP client.
+        Instantiate an adapter with credentials, config, and a pre-configured HTTP client.
 
-        The adapter's __init__ receives: credentials dict, http_client, and any extra kwargs.
+        The adapter's __init__ receives: credentials dict, http_client, config dict, and any extra kwargs.
         """
         cls = self.get_adapter_class(family, provider)
         manifest = cls.manifest
@@ -92,6 +93,14 @@ class ProviderRegistry:
         missing = manifest.auth.validate_credentials(credentials)
         if missing:
             raise ConfigurationError(f"Missing credential fields: {', '.join(missing)}")
+
+        # Validate and apply defaults to settings
+        effective_config = config or {}
+        if manifest.settings.fields:
+            errors = manifest.settings.validate_settings(effective_config)
+            if errors:
+                raise ConfigurationError(f"Invalid settings: {'; '.join(errors)}")
+            effective_config = manifest.settings.apply_defaults(effective_config)
 
         # Build auth strategy
         auth = self._build_auth(manifest.auth.strategy, credentials)
@@ -119,7 +128,7 @@ class ProviderRegistry:
             provider_name=manifest.name,
         )
 
-        return cls(credentials=credentials, http_client=http_client, **kwargs)
+        return cls(credentials=credentials, http_client=http_client, config=effective_config, **kwargs)
 
     def _build_auth(self, strategy: AuthStrategy, credentials: dict) -> BaseAuthStrategy:
         """Build the auth strategy from manifest + credentials."""

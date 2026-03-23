@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from bapp_connectors.core.dto import (
+    OrderStatus,
     ConnectionTestResult,
     Order,
     PaginatedResult,
@@ -39,7 +40,7 @@ class GomagShopAdapter(ShopPort):
 
     manifest = manifest
 
-    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, **kwargs):
+    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
         self.token = credentials.get("token", "")
         self.shop_site = credentials.get("shop_site", "")
@@ -116,3 +117,6 @@ class GomagShopAdapter(ShopPort):
         # Gomag does not have a dedicated price update endpoint in v1;
         # this is a placeholder that uses the available API surface.
         raise NotImplementedError("Gomag API v1 does not support direct price updates.")
+
+    def update_order_status(self, order_id: str, status: OrderStatus) -> "Order":
+        raise NotImplementedError("Order status update is not supported by this provider.")

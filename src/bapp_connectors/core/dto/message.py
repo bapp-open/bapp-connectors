@@ -31,6 +31,7 @@ class OutboundMessage(BaseDTO):
     message_id: str = ""
     channel: MessageChannel
     to: str
+    reply_to: str = ""  # ID of the message being replied to (for conversational context)
     subject: str = ""
     body: str = ""
     html_body: str = ""

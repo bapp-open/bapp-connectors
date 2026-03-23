@@ -2,17 +2,28 @@
 WooCommerce provider manifest — declares capabilities, auth, rate limits, and webhook config.
 """
 
-from bapp_connectors.core.capabilities import WebhookCapability
+from bapp_connectors.core.capabilities import (
+    AttributeManagementCapability,
+    BulkUpdateCapability,
+    CategoryManagementCapability,
+    ProductCreationCapability,
+    ProductFullUpdateCapability,
+    RelatedProductCapability,
+    VariantManagementCapability,
+    WebhookCapability,
+)
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
+    SettingsConfig,
+    SettingsField,
     WebhookConfig,
 )
 from bapp_connectors.core.ports import ShopPort
-from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
+from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
 manifest = ProviderManifest(
     name="woocommerce",
@@ -36,8 +47,33 @@ manifest = ProviderManifest(
             ),
         ],
     ),
+    settings=SettingsConfig(
+        fields=[
+            SettingsField(
+                name="prices_include_vat",
+                label="Store Prices Include VAT",
+                field_type=FieldType.BOOL,
+                default=True,
+                help_text="Whether the WooCommerce store is configured to use VAT-inclusive prices (WooCommerce > Settings > Tax > Prices entered with tax).",
+            ),
+            SettingsField(
+                name="vat_rate",
+                label="VAT Rate",
+                field_type=FieldType.STR,
+                default="0.19",
+                help_text="VAT rate as a decimal (e.g., 0.19 for 19%). Used to convert between net and gross prices.",
+            ),
+        ],
+    ),
     capabilities=[
         ShopPort,
+        BulkUpdateCapability,
+        ProductCreationCapability,
+        ProductFullUpdateCapability,
+        CategoryManagementCapability,
+        AttributeManagementCapability,
+        VariantManagementCapability,
+        RelatedProductCapability,
         WebhookCapability,
     ],
     rate_limit=RateLimitConfig(

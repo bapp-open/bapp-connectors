@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from bapp_connectors.core.capabilities import BulkUpdateCapability, InvoiceAttachmentCapability
 from bapp_connectors.core.dto import (
+    OrderStatus,
     BulkResult,
     ConnectionTestResult,
     Order,
@@ -44,7 +45,7 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
 
     manifest = manifest
 
-    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, **kwargs):
+    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
         self.seller_id = str(credentials.get("seller_id", ""))
         self.country = credentials.get("country", "RO")
@@ -108,6 +109,9 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
                 {"barcode": product_id, "salePrice": str(price), "listPrice": str(price)},
             ]
         )
+
+    def update_order_status(self, order_id: str, status: OrderStatus) -> "Order":
+        raise NotImplementedError("Order status update is not supported by this provider.")
 
     # ── BulkUpdateCapability ──
 
