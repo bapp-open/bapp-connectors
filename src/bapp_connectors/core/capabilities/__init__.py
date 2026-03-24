@@ -5,7 +5,7 @@ from .embedding import EmbeddingCapability
 from .image_generation import ImageGenerationCapability
 from .invoice_attach import InvoiceAttachmentCapability
 from .oauth import OAuthCapability, OAuthTokens
-from .product_feed import FeedFormat, ProductFeedCapability
+from .product_feed import FeedFormat, FeedUploadCapability, ProductFeedCapability
 from .product_management import (
     AttributeManagementCapability,
     CategoryManagementCapability,
@@ -25,6 +25,7 @@ __all__ = [
     "CategoryManagementCapability",
     "EmbeddingCapability",
     "FeedFormat",
+    "FeedUploadCapability",
     "ImageGenerationCapability",
     "InvoiceAttachmentCapability",
     "OAuthCapability",

@@ -35,7 +35,8 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Messaging** | GoIP, RoboSMS, SMTP Email, Telegram, WhatsApp | 5 |
 | **Storage** | Dropbox, FTP File Storage, S3 Storage, SFTP, WebDAV | 5 |
 | **LLM** | Anthropic, Google Gemini, Ollama, OpenAI | 4 |
-| | **Total** | **31** |
+| **Feed** | Compari.ro, Facebook Commerce, Google Merchant Center | 3 |
+| | **Total** | **34** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -238,7 +239,8 @@ packages/connectors/
 │       ├── payment/       # EuPlatesc, LibraPay, Netopia, Stripe
 │       ├── messaging/     # GoIP, RoboSMS, SMTP Email, Telegram, WhatsApp
 │       ├── storage/       # Dropbox, FTP File Storage, S3 Storage, SFTP, WebDAV
-│       └── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
+│       ├── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
+│       └── feed/          # Compari.ro, Facebook Commerce, Google Merchant Center
 <!-- STRUCTURE:END -->
 ├── packages/django/        # Django integration (separate uv workspace)
 │   └── src/django_bapp_connectors/

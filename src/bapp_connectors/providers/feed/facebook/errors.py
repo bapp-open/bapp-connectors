@@ -1,0 +1,3 @@
+"""
+Facebook feed error mapping.
+"""

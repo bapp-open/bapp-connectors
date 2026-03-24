@@ -16,6 +16,7 @@ class ProviderFamily(StrEnum):
     MESSAGING = "messaging"
     STORAGE = "storage"
     LLM = "llm"
+    FEED = "feed"
 
 
 class BackoffStrategy(StrEnum):

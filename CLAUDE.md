@@ -6,7 +6,7 @@ This file provides context for Claude Code when working in this repository.
 
 Ports-and-adapters integration framework. Zero Django dependencies in the core package.
 
-### Provider Families (6)
+### Provider Families (7)
 
 | Family | Port | Providers |
 |--------|------|-----------|
@@ -16,6 +16,7 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 | messaging | `MessagingPort` | GoIP, RoboSMS, SMTP, Telegram, WhatsApp |
 | storage | `StoragePort` | Dropbox, FTP, SFTP, S3, WebDAV |
 | llm | `LLMPort` | OpenAI, Anthropic, Ollama, Gemini |
+| feed | `FeedPort` | Google Merchant, Facebook Commerce, Compari.ro |
 
 ### Provider File Structure (7 files each)
 
@@ -41,7 +42,7 @@ providers/{family}/{provider}/
 
 ### Optional Capabilities
 
-EmbeddingCapability, TranscriptionCapability, StreamingCapability, ImageGenerationCapability, BulkUpdateCapability, BulkImportCapability, WebhookCapability, OAuthCapability, InvoiceAttachmentCapability, ProductFeedCapability
+EmbeddingCapability, TranscriptionCapability, StreamingCapability, ImageGenerationCapability, BulkUpdateCapability, BulkImportCapability, WebhookCapability, OAuthCapability, InvoiceAttachmentCapability, ProductFeedCapability, FeedUploadCapability
 
 ## Testing
 
