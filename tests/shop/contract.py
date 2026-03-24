@@ -8,8 +8,6 @@ contract tests run automatically.
 
 from __future__ import annotations
 
-from decimal import Decimal
-
 import pytest
 
 from bapp_connectors.core.dto import Order, PaginatedResult, Product

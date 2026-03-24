@@ -13,7 +13,6 @@ from bapp_connectors.core.capabilities import (
 )
 from bapp_connectors.core.dto import (
     ConnectionTestResult,
-    OrderStatus,
     PaginatedResult,
     Product,
     ProductCategory,
@@ -21,8 +20,7 @@ from bapp_connectors.core.dto import (
     ProductUpdate,
 )
 from bapp_connectors.core.ports import ShopPort
-from bapp_connectors.core.sync import ProductSyncEngine, SyncResult
-
+from bapp_connectors.core.sync import ProductSyncEngine
 
 # ── Mock adapters ──
 

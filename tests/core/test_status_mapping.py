@@ -3,7 +3,6 @@
 from bapp_connectors.core.dto import OrderStatus
 from bapp_connectors.core.status_mapping import StatusMapper
 
-
 DEFAULT_INBOUND = {
     "pending": OrderStatus.PENDING,
     "processing": OrderStatus.PROCESSING,

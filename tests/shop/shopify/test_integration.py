@@ -28,7 +28,7 @@ MOCK_PORT = 8899
 @pytest.fixture(scope="module")
 def mock_server():
     """Start the Shopify mock server for the test module."""
-    from tests.mocks.shopify_mock import start_mock_server, _reset
+    from tests.mocks.shopify_mock import start_mock_server
     server = start_mock_server(MOCK_PORT)
     yield server
     server.shutdown()
@@ -201,7 +201,9 @@ class TestShopifyWebhooks:
         assert any(w.get("id") == webhook_id for w in webhooks)
 
     def test_verify_webhook(self, adapter):
-        import base64, hashlib, hmac
+        import base64
+        import hashlib
+        import hmac
         body = b'{"id": 123}'
         secret = "test_secret"
         sig = base64.b64encode(hmac.new(secret.encode(), body, hashlib.sha256).digest()).decode()

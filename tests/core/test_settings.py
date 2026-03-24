@@ -15,7 +15,6 @@ from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.core.registry import ProviderRegistry
 from bapp_connectors.core.types import AuthStrategy, FieldType, ProviderFamily
 
-
 # ── SettingsField tests ──
 
 

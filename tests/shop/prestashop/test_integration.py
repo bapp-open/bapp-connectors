@@ -16,7 +16,6 @@ import pytest
 
 from bapp_connectors.core.dto import (
     Order,
-    OrderStatus,
     PaginatedResult,
     Product,
     ProductCategory,

@@ -82,13 +82,15 @@ ignore = [
     "SIM108", # ternary — multi-line if/else is clearer
     "SIM110", # use all() — explicit loop is clearer
     "SIM118", # use key in dict — .keys() is sometimes intentional
+    "RET503", # missing explicit return — fine for handler methods
+    "RUF059", # unpacked variable unused — intentional destructuring
     "ERA001", # commented-out code — some kept as API reference
     "C416",   # unnecessary comprehension
     "PTH119", # os.path.basename — fine in non-path contexts
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["T20"]  # allow print in tests
+"tests/**" = ["T20", "TC001", "TC003"]  # allow print in tests, runtime imports for fixtures
 "**/dto/**" = ["TCH003", "TCH001", "TCH004"]  # Pydantic models need runtime imports
 "**/models.py" = ["TCH003", "TCH001", "TCH004"]  # Pydantic models need runtime imports
 "**/mappers.py" = ["TCH003", "TCH001", "TCH004"]  # mappers use DTO types at runtime

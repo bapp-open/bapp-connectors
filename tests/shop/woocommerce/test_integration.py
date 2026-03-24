@@ -432,7 +432,13 @@ class TestWooCommerceVariants:
 
     @pytest.mark.xfail(reason="WooCommerce 10.x PHP 8.3 bug in attribute controller (variant test depends on attribute creation)", strict=False)
     def test_create_variable_product_with_variations(self, adapter):
-        from bapp_connectors.core.dto import AttributeDefinition, AttributeValue, Product, ProductAttribute, ProductVariant
+        from bapp_connectors.core.dto import (
+            AttributeDefinition,
+            AttributeValue,
+            Product,
+            ProductAttribute,
+            ProductVariant,
+        )
 
         # 1. Create attribute
         attr = adapter.create_attribute(AttributeDefinition(
@@ -667,7 +673,6 @@ class TestWooCommerceCategorySync:
 
     def test_create_and_pull_category(self, adapter):
         """Create a category, verify it shows in pull."""
-        from bapp_connectors.core.dto import ProductCategory
 
         cat_name = f"Sync Test {uuid.uuid4().hex[:8]}"
         created = adapter.create_category(cat_name)
@@ -794,7 +799,7 @@ class TestWooCommerceProductCreation:
 
     def test_full_update_product(self, adapter, test_product):
         """Test ProductFullUpdateCapability.update_product with all fields."""
-        from bapp_connectors.core.dto import ProductPhoto, ProductUpdate
+        from bapp_connectors.core.dto import ProductUpdate
 
         product_id, _ = test_product
         adapter.update_product(ProductUpdate(

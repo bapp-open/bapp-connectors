@@ -5,17 +5,9 @@ import json
 from bapp_connectors.core.dto import (
     ChatMessage,
     ChatRole,
-    EmbeddingResult,
     FinishReason,
-    LLMResponse,
     ToolCall,
     ToolDefinition,
-)
-from bapp_connectors.providers.llm.openai.mappers import (
-    embedding_result_from_openai,
-    llm_response_from_openai,
-    openai_messages_from_chat,
-    openai_tools_from_definitions,
 )
 from bapp_connectors.providers.llm.anthropic.mappers import (
     anthropic_messages_from_chat,
@@ -23,7 +15,12 @@ from bapp_connectors.providers.llm.anthropic.mappers import (
     hardcoded_models,
     llm_response_from_anthropic,
 )
-
+from bapp_connectors.providers.llm.openai.mappers import (
+    embedding_result_from_openai,
+    llm_response_from_openai,
+    openai_messages_from_chat,
+    openai_tools_from_definitions,
+)
 
 # ── OpenAI Mappers ──
 
