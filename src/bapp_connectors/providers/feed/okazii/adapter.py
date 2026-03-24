@@ -18,6 +18,7 @@ from bapp_connectors.core.dto.feed import (
 from bapp_connectors.core.dto.product import Product
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import FeedPort
+from bapp_connectors.providers.feed._utils import filter_products
 from bapp_connectors.providers.feed.okazii.manifest import manifest
 from bapp_connectors.providers.feed.okazii.mappers import (
     feed_items_to_xml,
@@ -59,6 +60,7 @@ class OkaziiFeedAdapter(FeedPort):
     # ── FeedPort ──
 
     def generate_feed(self, products: list[Product]) -> FeedResult:
+        products = filter_products(products, self.config)
         valid_items = []
         warnings = []
         skipped = 0
@@ -95,6 +97,7 @@ class OkaziiFeedAdapter(FeedPort):
         )
 
     def validate_products(self, products: list[Product]) -> FeedValidationResult:
+        products = filter_products(products, self.config)
         errors = []
         valid = 0
         invalid = 0

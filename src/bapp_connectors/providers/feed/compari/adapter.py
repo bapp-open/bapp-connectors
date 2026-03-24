@@ -15,7 +15,7 @@ from bapp_connectors.core.dto.feed import (
 from bapp_connectors.core.dto.product import Product
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import FeedPort
-from bapp_connectors.providers.feed._utils import expand_variants
+from bapp_connectors.providers.feed._utils import expand_variants, filter_products
 from bapp_connectors.providers.feed.compari.manifest import manifest
 from bapp_connectors.providers.feed.compari.mappers import (
     feed_items_to_csv,
@@ -56,6 +56,7 @@ class CompariFeedAdapter(FeedPort):
     # ── FeedPort ──
 
     def generate_feed(self, products: list[Product]) -> FeedResult:
+        products = filter_products(products, self.config)
         include_variants = str(self.config.get("include_variants", "true")).lower() in ("true", "1", "yes")
         feed_format = self.config.get("feed_format", "xml")
 
@@ -102,6 +103,7 @@ class CompariFeedAdapter(FeedPort):
         )
 
     def validate_products(self, products: list[Product]) -> FeedValidationResult:
+        products = filter_products(products, self.config)
         include_variants = str(self.config.get("include_variants", "true")).lower() in ("true", "1", "yes")
         errors = []
         valid = 0

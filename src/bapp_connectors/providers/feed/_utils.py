@@ -167,6 +167,71 @@ def expand_variants(product: Product, include_variants: bool = True) -> list[dic
     }]
 
 
+# ── Product filtering ──
+
+
+def filter_products(products: list[Product], config: dict) -> list[Product]:
+    """Filter products based on feed settings.
+
+    Supported config keys:
+    - categories_exclude: comma-separated list or JSON list of category names to exclude
+    - only_in_stock: "true" to exclude products with stock <= 0
+    """
+    result = products
+
+    # Only in stock
+    only_in_stock = str(config.get("only_in_stock", "false")).lower() in ("true", "1", "yes")
+    if only_in_stock:
+        result = [p for p in result if _is_in_stock(p)]
+
+    # Categories exclude
+    exclude_raw = config.get("categories_exclude", "")
+    if exclude_raw:
+        excluded = _parse_list(exclude_raw)
+        if excluded:
+            excluded_lower = {c.lower().strip() for c in excluded}
+            result = [p for p in result if not _has_excluded_category(p, excluded_lower)]
+
+    return result
+
+
+def _is_in_stock(product: Product) -> bool:
+    """Check if a product is in stock (considering variants)."""
+    if product.stock is not None and product.stock > 0:
+        return True
+    # If product has variants, check if any variant has stock
+    for variant in product.variants:
+        if variant.active and variant.stock is not None and variant.stock > 0:
+            return True
+    return product.stock is None  # unknown stock = assume in stock
+
+
+def _has_excluded_category(product: Product, excluded_lower: set[str]) -> bool:
+    """Check if any of the product's categories match the exclusion list."""
+    for cat in product.categories:
+        if cat.lower().strip() in excluded_lower:
+            return True
+    return False
+
+
+def _parse_list(raw: str | list) -> list[str]:
+    """Parse a comma-separated string or JSON list into a list of strings."""
+    if isinstance(raw, list):
+        return [str(x) for x in raw]
+    if not raw or not isinstance(raw, str):
+        return []
+    raw = raw.strip()
+    if raw.startswith("["):
+        import json
+
+        try:
+            parsed = json.loads(raw)
+            return [str(x) for x in parsed] if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+
 # ── Text utilities ──
 
 

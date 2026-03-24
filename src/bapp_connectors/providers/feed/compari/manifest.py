@@ -80,6 +80,21 @@ manifest = ProviderManifest(
                 default="true",
                 help_text="Expand product variants as separate feed items.",
             ),
+            # ── Filters ──
+            SettingsField(
+                name="only_in_stock",
+                label="Only In-Stock Products",
+                field_type=FieldType.BOOL,
+                default="false",
+                help_text="Exclude products that are out of stock.",
+            ),
+            SettingsField(
+                name="categories_exclude",
+                label="Exclude Categories",
+                field_type=FieldType.STR,
+                default="",
+                help_text="Comma-separated list of category names to exclude from the feed.",
+            ),
         ],
     ),
     capabilities=[FeedPort],
