@@ -31,11 +31,11 @@ A ports-and-adapters integration framework for connecting to external services: 
 |---|---|---|
 | **Shop** | CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce | 10 |
 | **Courier** | Colete Online, GLS, Sameday | 3 |
-| **Payment** | Netopia, Stripe | 2 |
+| **Payment** | EuPlatesc, Netopia, Stripe | 3 |
 | **Messaging** | GoIP, RoboSMS, SMTP Email, Telegram, WhatsApp | 5 |
 | **Storage** | Dropbox, FTP File Storage, S3 Storage, SFTP, WebDAV | 5 |
 | **LLM** | Anthropic, Google Gemini, Ollama, OpenAI | 4 |
-| | **Total** | **29** |
+| | **Total** | **30** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -235,7 +235,7 @@ packages/connectors/
 <!-- STRUCTURE:BEGIN -->
 │       ├── shop/          # CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce
 │       ├── courier/       # Colete Online, GLS, Sameday
-│       ├── payment/       # Netopia, Stripe
+│       ├── payment/       # EuPlatesc, Netopia, Stripe
 │       ├── messaging/     # GoIP, RoboSMS, SMTP Email, Telegram, WhatsApp
 │       ├── storage/       # Dropbox, FTP File Storage, S3 Storage, SFTP, WebDAV
 │       └── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
