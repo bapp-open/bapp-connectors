@@ -103,6 +103,7 @@ class Product(BaseDTO):
     barcode: str | None = None
     name: str = ""
     description: str = ""
+    url: str = ""
     price: Decimal | None = None
     currency: str = ""
     stock: int | None = None

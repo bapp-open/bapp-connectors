@@ -40,10 +40,15 @@ def extract_brand(product: Product, fallback: str = "") -> str:
 
 
 def build_product_url(template: str, product: Product, base_url: str) -> str:
-    """Resolve a product URL template.
+    """Resolve a product URL.
+
+    If the product already has a url (e.g., from the shop adapter's permalink),
+    use it directly. Otherwise, build from the template.
 
     Supports placeholders: {base_url}, {product_id}, {sku}
     """
+    if product.url:
+        return product.url
     url = template.replace("{base_url}", base_url.rstrip("/"))
     url = url.replace("{product_id}", str(product.product_id))
     url = url.replace("{sku}", product.sku or product.product_id)

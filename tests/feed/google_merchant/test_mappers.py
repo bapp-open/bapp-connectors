@@ -81,6 +81,51 @@ class TestProductToFeedItem:
         assert result.brand == "TestBrand"
         assert result.product_type == "Cat1 > Cat2"
 
+    def test_product_url_used_when_present(self, config):
+        """When product.url is set (e.g., from WooCommerce permalink), use it directly."""
+        product = Product(
+            product_id="PU1",
+            name="Product With URL",
+            url="https://myshop.ro/product/premium-widget",
+            price=Decimal("50"),
+            categories=["Test"],
+            photos=[ProductPhoto(url="https://shop.ro/img/widget.jpg", position=0)],
+        )
+        item_data = {
+            "product": product,
+            "variant": None,
+            "item_id": "PU1",
+            "sku": None,
+            "barcode": None,
+            "name": "Product With URL",
+            "price": Decimal("50"),
+            "stock": 5,
+            "image_url": "https://shop.ro/img/widget.jpg",
+        }
+        result = product_to_feed_item(product, item_data, config)
+        assert result.link == "https://myshop.ro/product/premium-widget"
+
+    def test_template_fallback_when_no_url(self, config):
+        """When product.url is empty, fall back to template."""
+        product = Product(
+            product_id="PU2",
+            name="No URL Product",
+            price=Decimal("30"),
+        )
+        item_data = {
+            "product": product,
+            "variant": None,
+            "item_id": "PU2",
+            "sku": None,
+            "barcode": None,
+            "name": "No URL Product",
+            "price": Decimal("30"),
+            "stock": None,
+            "image_url": "",
+        }
+        result = product_to_feed_item(product, item_data, config)
+        assert result.link == "https://shop.ro/p/PU2"
+
     def test_html_stripped(self, full_product, config):
         item_data = {
             "product": full_product,

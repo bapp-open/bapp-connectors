@@ -261,6 +261,7 @@ def product_from_woocommerce(data: dict, price_from_provider=None) -> Product:
         sku=data.get("sku", ""),
         name=data.get("name", ""),
         description=data.get("description", ""),
+        url=data.get("permalink", ""),
         price=price,
         currency="",
         stock=data.get("stock_quantity"),
