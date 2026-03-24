@@ -16,6 +16,8 @@ from bapp_connectors.core.dto import (
     PaymentResult,
     ProviderMeta,
     Refund,
+    WebhookEvent,
+    WebhookEventType,
 )
 
 # ── Status mappings ──
@@ -137,4 +139,36 @@ def refund_from_netopia(data: dict, payment_id: str) -> Refund:
             raw_payload=data,
             fetched_at=datetime.now(UTC),
         ),
+    )
+
+
+# ── Webhook event mapper ──
+
+
+NETOPIA_IPN_EVENT_MAP: dict[str, WebhookEventType] = {
+    "confirmed": WebhookEventType.ORDER_UPDATED,
+    "paid_pending": WebhookEventType.ORDER_UPDATED,
+    "cancelled": WebhookEventType.ORDER_CANCELLED,
+    "credit": WebhookEventType.ORDER_UPDATED,
+}
+
+
+def webhook_event_from_netopia(data: dict) -> WebhookEvent:
+    """Map a Netopia IPN notification to a WebhookEvent DTO."""
+    status_code = data.get("status")
+    raw_status = NETOPIA_STATUS_MAP.get(status_code, "unknown") if isinstance(status_code, int) else str(status_code or "unknown")
+    event_type = NETOPIA_IPN_EVENT_MAP.get(raw_status, WebhookEventType.UNKNOWN)
+
+    payment = data.get("payment", {})
+    order = data.get("order", {})
+    ntp_id = payment.get("ntpID") or order.get("ntpID") or data.get("ntpID", "")
+
+    return WebhookEvent(
+        event_id=str(ntp_id),
+        event_type=event_type,
+        provider="netopia",
+        provider_event_type=f"payment.{raw_status}",
+        payload=data,
+        idempotency_key=str(ntp_id),
+        received_at=datetime.now(UTC),
     )

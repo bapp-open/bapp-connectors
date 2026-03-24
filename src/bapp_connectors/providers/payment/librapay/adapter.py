@@ -11,6 +11,7 @@ import binascii
 import json
 from decimal import Decimal
 
+from bapp_connectors.core.capabilities import WebhookCapability
 from bapp_connectors.core.dto import (
     CheckoutSession,
     ConnectionTestResult,
@@ -36,7 +37,7 @@ from bapp_connectors.providers.payment.librapay.mappers import (
 )
 
 
-class LibraPayPaymentAdapter(PaymentPort):
+class LibraPayPaymentAdapter(PaymentPort, WebhookCapability):
     """LibraPay payment adapter."""
 
     manifest = manifest

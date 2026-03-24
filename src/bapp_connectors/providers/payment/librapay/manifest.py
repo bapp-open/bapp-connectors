@@ -5,6 +5,7 @@ LibraPay is a Romanian payment gateway (Libra Internet Bank) supporting
 card payments with form-based checkout and HMAC-SHA1 IPN verification.
 """
 
+from bapp_connectors.core.capabilities import WebhookCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -58,6 +59,7 @@ manifest = ProviderManifest(
     ),
     capabilities=[
         PaymentPort,
+        WebhookCapability,
     ],
     rate_limit=RateLimitConfig(requests_per_second=10, burst=20),
     retry=RetryConfig(

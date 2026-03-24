@@ -6,13 +6,16 @@ This is the main entry point for the Netopia integration.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
+from bapp_connectors.core.capabilities import WebhookCapability
 from bapp_connectors.core.dto import (
     CheckoutSession,
     ConnectionTestResult,
     PaymentResult,
     Refund,
+    WebhookEvent,
 )
 from bapp_connectors.core.http import MultiHeaderAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
@@ -25,18 +28,20 @@ from bapp_connectors.providers.payment.netopia.manifest import (
 from bapp_connectors.providers.payment.netopia.mappers import (
     checkout_session_from_netopia,
     payment_from_netopia,
+    webhook_event_from_netopia,
 )
 
 if TYPE_CHECKING:
     from decimal import Decimal
 
 
-class NetopiaPaymentAdapter(PaymentPort):
+class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
     """
     Netopia payment adapter.
 
     Implements:
     - PaymentPort: checkout sessions, payment status, refunds
+    - WebhookCapability: IPN notification parsing
     """
 
     manifest = manifest
@@ -132,3 +137,28 @@ class NetopiaPaymentAdapter(PaymentPort):
         raise UnsupportedFeatureError(
             "Netopia does not support programmatic refunds via API. Use the Netopia admin panel to process refunds."
         )
+
+    # ── WebhookCapability ──
+
+    def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
+        """Verify a Netopia IPN notification.
+
+        Netopia IPN sends JSON with payment status. The verification is done
+        by checking that the payload is valid JSON and contains expected fields.
+        Netopia does not use HMAC signatures on IPN — instead, the notifyUrl
+        must be a server-side endpoint that Netopia calls directly.
+        """
+        try:
+            data = json.loads(body)
+            # Basic structure check
+            return "payment" in data or "order" in data or "status" in data
+        except (json.JSONDecodeError, ValueError):
+            return False
+
+    def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
+        """Parse a Netopia IPN JSON payload into a WebhookEvent."""
+        try:
+            data = json.loads(body)
+        except (json.JSONDecodeError, ValueError):
+            data = {}
+        return webhook_event_from_netopia(data)

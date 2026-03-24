@@ -16,6 +16,7 @@ import binascii
 import json
 from decimal import Decimal
 
+from bapp_connectors.core.capabilities import WebhookCapability
 from bapp_connectors.core.dto import (
     CheckoutSession,
     ConnectionTestResult,
@@ -37,7 +38,7 @@ from bapp_connectors.providers.payment.euplatesc.mappers import (
 )
 
 
-class EuPlatescPaymentAdapter(PaymentPort):
+class EuPlatescPaymentAdapter(PaymentPort, WebhookCapability):
     """
     EuPlatesc payment adapter.
 

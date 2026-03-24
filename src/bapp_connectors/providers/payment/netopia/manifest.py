@@ -2,6 +2,7 @@
 Netopia provider manifest — declares capabilities, auth, rate limits, and webhook config.
 """
 
+from bapp_connectors.core.capabilities import WebhookCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -69,6 +70,7 @@ manifest = ProviderManifest(
     ),
     capabilities=[
         PaymentPort,
+        WebhookCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=10,
