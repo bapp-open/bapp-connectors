@@ -1,0 +1,3 @@
+"""
+Okazii feed error mapping.
+"""
