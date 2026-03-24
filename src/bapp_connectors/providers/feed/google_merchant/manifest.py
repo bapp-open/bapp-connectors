@@ -68,6 +68,20 @@ manifest = ProviderManifest(
                 help_text="ISO 4217 currency code for prices.",
             ),
             SettingsField(
+                name="default_google_category",
+                label="Default Google Product Category",
+                field_type=FieldType.STR,
+                default="",
+                help_text="Default Google taxonomy category (e.g., 'Electronics > Computers'). Used when no per-product or mapped category exists.",
+            ),
+            SettingsField(
+                name="category_mapping",
+                label="Category Mapping (JSON)",
+                field_type=FieldType.TEXTAREA,
+                default="",
+                help_text='JSON object mapping store categories to Google taxonomy. E.g., {"Electronics": "Electronics", "Clothing > T-Shirts": "Apparel & Accessories > Clothing > Shirts & Tops"}.',
+            ),
+            SettingsField(
                 name="feed_title",
                 label="Feed Title",
                 field_type=FieldType.STR,

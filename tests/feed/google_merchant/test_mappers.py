@@ -17,6 +17,7 @@ from bapp_connectors.providers.feed._utils import (
 )
 from bapp_connectors.providers.feed.google_merchant.mappers import (
     product_to_feed_item,
+    resolve_google_category,
     validate_feed_item,
 )
 
@@ -148,6 +149,106 @@ class TestValidateFeedItem:
         errors = validate_feed_item(feed_item)
         hard_errors = [e for e in errors if e[2]]
         assert len(hard_errors) >= 2  # title and image_link at minimum
+
+
+class TestGoogleProductCategory:
+    """Tests for google_product_category resolution."""
+
+    def test_per_product_override(self, config):
+        product = Product(
+            product_id="GC1", name="Laptop", price=Decimal("3000"),
+            categories=["Electronics", "Computers"],
+            extra={"google_product_category": "Electronics > Computers > Laptops"},
+        )
+        result = resolve_google_category(product, config)
+        assert result == "Electronics > Computers > Laptops"
+
+    def test_category_mapping_full_path(self, config):
+        config["category_mapping"] = '{"Electronics > Computers": "Electronics > Computers > Desktops"}'
+        product = Product(
+            product_id="GC2", name="Desktop", price=Decimal("2000"),
+            categories=["Electronics", "Computers"],
+        )
+        result = resolve_google_category(product, config)
+        assert result == "Electronics > Computers > Desktops"
+
+    def test_category_mapping_single_category(self, config):
+        config["category_mapping"] = '{"Electronics": "Electronics"}'
+        product = Product(
+            product_id="GC3", name="Gadget", price=Decimal("100"),
+            categories=["Electronics", "Gadgets"],
+        )
+        result = resolve_google_category(product, config)
+        assert result == "Electronics"
+
+    def test_category_mapping_as_dict(self, config):
+        config["category_mapping"] = {"Clothing": "Apparel & Accessories > Clothing"}
+        product = Product(
+            product_id="GC4", name="Shirt", price=Decimal("50"),
+            categories=["Clothing", "T-Shirts"],
+        )
+        result = resolve_google_category(product, config)
+        assert result == "Apparel & Accessories > Clothing"
+
+    def test_default_google_category_fallback(self, config):
+        config["default_google_category"] = "General Merchandise"
+        product = Product(
+            product_id="GC5", name="Widget", price=Decimal("10"),
+            categories=["Misc"],
+        )
+        result = resolve_google_category(product, config)
+        assert result == "General Merchandise"
+
+    def test_no_category_returns_empty(self, config):
+        product = Product(product_id="GC6", name="Nothing", price=Decimal("5"))
+        result = resolve_google_category(product, config)
+        assert result == ""
+
+    def test_per_product_overrides_mapping(self, config):
+        config["category_mapping"] = '{"Electronics": "Electronics > General"}'
+        config["default_google_category"] = "Fallback"
+        product = Product(
+            product_id="GC7", name="Override", price=Decimal("100"),
+            categories=["Electronics"],
+            extra={"google_product_category": "Electronics > Specific"},
+        )
+        result = resolve_google_category(product, config)
+        assert result == "Electronics > Specific"  # per-product wins
+
+    def test_mapping_overrides_default(self, config):
+        config["category_mapping"] = '{"Electronics": "Electronics > Mapped"}'
+        config["default_google_category"] = "Fallback"
+        product = Product(
+            product_id="GC8", name="Mapped", price=Decimal("100"),
+            categories=["Electronics"],
+        )
+        result = resolve_google_category(product, config)
+        assert result == "Electronics > Mapped"  # mapping wins over default
+
+    def test_invalid_json_mapping_falls_through(self, config):
+        config["category_mapping"] = "not valid json"
+        config["default_google_category"] = "Fallback"
+        product = Product(
+            product_id="GC9", name="Bad JSON", price=Decimal("10"),
+            categories=["Test"],
+        )
+        result = resolve_google_category(product, config)
+        assert result == "Fallback"
+
+    def test_feed_item_includes_google_category(self, config):
+        config["default_google_category"] = "Electronics > Audio"
+        product = Product(
+            product_id="GC10", name="Speaker", price=Decimal("200"),
+            categories=["Audio"],
+            photos=[ProductPhoto(url="https://shop.ro/speaker.jpg", position=0)],
+        )
+        item_data = {
+            "product": product, "variant": None, "item_id": "GC10",
+            "sku": None, "barcode": None, "name": "Speaker",
+            "price": Decimal("200"), "stock": 5, "image_url": "https://shop.ro/speaker.jpg",
+        }
+        feed_item = product_to_feed_item(product, item_data, config)
+        assert feed_item.google_product_category == "Electronics > Audio"
 
 
 class TestUtilities:

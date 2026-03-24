@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING
 
@@ -30,8 +31,52 @@ GOOGLE_NS = "http://base.google.com/ns/1.0"
 # CSV column order
 CSV_COLUMNS = [
     "id", "title", "description", "link", "image_link", "additional_image_link",
-    "price", "availability", "condition", "brand", "gtin", "mpn", "product_type",
+    "price", "availability", "condition", "brand", "gtin", "mpn",
+    "google_product_category", "product_type",
 ]
+
+
+def resolve_google_category(product: Product, config: dict) -> str:
+    """Resolve the google_product_category for a product.
+
+    Priority:
+    1. product.extra["google_product_category"] — per-product override
+    2. category_mapping config — maps store categories to Google taxonomy
+    3. default_google_category config — global fallback
+    """
+    # 1. Per-product override
+    per_product = product.extra.get("google_product_category", "")
+    if per_product:
+        return str(per_product)
+
+    # 2. Category mapping (JSON dict in settings)
+    mapping_raw = config.get("category_mapping", "")
+    if mapping_raw and product.categories:
+        mapping = _parse_category_mapping(mapping_raw)
+        if mapping:
+            # Try full category path first, then individual categories
+            full_path = " > ".join(product.categories)
+            if full_path in mapping:
+                return mapping[full_path]
+            for cat in product.categories:
+                if cat in mapping:
+                    return mapping[cat]
+
+    # 3. Global fallback
+    return config.get("default_google_category", "")
+
+
+def _parse_category_mapping(raw: str | dict) -> dict[str, str]:
+    """Parse category_mapping from settings (JSON string or dict)."""
+    if isinstance(raw, dict):
+        return raw
+    if not raw or not isinstance(raw, str):
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except (json.JSONDecodeError, ValueError):
+        return {}
 
 
 def product_to_feed_item(product: Product, item: dict, config: dict) -> GoogleFeedItem:
@@ -59,8 +104,9 @@ def product_to_feed_item(product: Product, item: dict, config: dict) -> GoogleFe
     # Brand extraction
     brand = extract_brand(product, config.get("brand_fallback", ""))
 
-    # Categories as product_type (> delimited for Google)
+    # Categories
     product_type = " > ".join(product.categories) if product.categories else ""
+    google_product_category = resolve_google_category(product, config)
 
     return GoogleFeedItem(
         id=item["item_id"],
@@ -74,6 +120,7 @@ def product_to_feed_item(product: Product, item: dict, config: dict) -> GoogleFe
         brand=brand,
         gtin=item["barcode"] or "",
         mpn=item["sku"] or "",
+        google_product_category=google_product_category,
         product_type=product_type,
         additional_image_links=additional_images,
     )
@@ -128,6 +175,8 @@ def feed_items_to_xml(items: list[GoogleFeedItem], config: dict) -> str:
             _add_g(item_el, "gtin", feed_item.gtin)
         if feed_item.mpn:
             _add_g(item_el, "mpn", feed_item.mpn)
+        if feed_item.google_product_category:
+            _add_g(item_el, "google_product_category", feed_item.google_product_category)
         if feed_item.product_type:
             _add_g(item_el, "product_type", feed_item.product_type)
 
@@ -155,6 +204,7 @@ def feed_items_to_csv(items: list[GoogleFeedItem]) -> str:
             item.brand,
             item.gtin,
             item.mpn,
+            item.google_product_category,
             item.product_type,
         ])
 

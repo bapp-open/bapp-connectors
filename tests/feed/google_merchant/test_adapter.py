@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from bapp_connectors.core.dto.product import Product
+from bapp_connectors.core.dto.product import Product, ProductPhoto
 from bapp_connectors.providers.feed.google_merchant.adapter import GoogleMerchantFeedAdapter
 from tests.feed.contract import FeedContractTests
 
@@ -156,6 +156,57 @@ class TestGoogleMerchantAdapter:
             price = item_el.find(f"{{{GOOGLE_NS}}}price").text
             if item_id == "PROD-001":
                 assert price == "299.99 RON"
+
+    def test_google_product_category_in_xml(self, feed_config, sample_products):
+        feed_config["default_google_category"] = "Electronics"
+        adapter = GoogleMerchantFeedAdapter(credentials={}, config=feed_config)
+        result = adapter.generate_feed(sample_products)
+        root = ET.fromstring(result.content)
+        items = root.find("channel").findall("item")
+        first = items[0]
+        gpc = first.find(f"{{{GOOGLE_NS}}}google_product_category")
+        assert gpc is not None
+        assert gpc.text == "Electronics"
+
+    def test_google_product_category_per_product(self, feed_config):
+        product = Product(
+            product_id="GPC-001",
+            name="Laptop",
+            description="A laptop.",
+            price=3000,
+            stock=10,
+            active=True,
+            categories=["Electronics"],
+            photos=[ProductPhoto(url="https://myshop.ro/img/laptop.jpg", position=0)],
+            extra={"google_product_category": "Electronics > Computers > Laptops"},
+        )
+        adapter = GoogleMerchantFeedAdapter(credentials={}, config=feed_config)
+        result = adapter.generate_feed([product])
+        root = ET.fromstring(result.content)
+        item_el = root.find("channel").find("item")
+        gpc = item_el.find(f"{{{GOOGLE_NS}}}google_product_category")
+        assert gpc is not None
+        assert gpc.text == "Electronics > Computers > Laptops"
+
+    def test_google_product_category_from_mapping(self, feed_config):
+        feed_config["category_mapping"] = '{"Electronics": "Electronics > General"}'
+        product = Product(
+            product_id="GPC-002",
+            name="Widget",
+            description="A widget.",
+            price=50,
+            stock=5,
+            active=True,
+            categories=["Electronics"],
+            photos=[ProductPhoto(url="https://myshop.ro/img/widget.jpg", position=0)],
+        )
+        adapter = GoogleMerchantFeedAdapter(credentials={}, config=feed_config)
+        result = adapter.generate_feed([product])
+        root = ET.fromstring(result.content)
+        item_el = root.find("channel").find("item")
+        gpc = item_el.find(f"{{{GOOGLE_NS}}}google_product_category")
+        assert gpc is not None
+        assert gpc.text == "Electronics > General"
 
     def test_test_connection_missing_base_url(self):
         adapter = GoogleMerchantFeedAdapter(credentials={}, config={})

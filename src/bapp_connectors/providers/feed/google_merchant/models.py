@@ -24,6 +24,7 @@ class GoogleFeedItem(BaseModel):
     brand: str = ""
     gtin: str = ""
     mpn: str = ""
+    google_product_category: str = ""
     product_type: str = ""
     additional_image_links: list[str] = []
     sale_price: str = ""
