@@ -184,13 +184,13 @@ def filter_products(products: list[Product], config: dict) -> list[Product]:
     if only_in_stock:
         result = [p for p in result if _is_in_stock(p)]
 
-    # Categories exclude
+    # Categories exclude (by ID)
     exclude_raw = config.get("categories_exclude", "")
     if exclude_raw:
         excluded = _parse_list(exclude_raw)
         if excluded:
-            excluded_lower = {c.lower().strip() for c in excluded}
-            result = [p for p in result if not _has_excluded_category(p, excluded_lower)]
+            excluded_ids = {str(c).strip() for c in excluded}
+            result = [p for p in result if not _has_excluded_category(p, excluded_ids)]
 
     return result
 
@@ -206,10 +206,10 @@ def _is_in_stock(product: Product) -> bool:
     return product.stock is None  # unknown stock = assume in stock
 
 
-def _has_excluded_category(product: Product, excluded_lower: set[str]) -> bool:
-    """Check if any of the product's categories match the exclusion list."""
-    for cat in product.categories:
-        if cat.lower().strip() in excluded_lower:
+def _has_excluded_category(product: Product, excluded_ids: set[str]) -> bool:
+    """Check if any of the product's category IDs match the exclusion set."""
+    for cat_id in product.category_ids:
+        if str(cat_id).strip() in excluded_ids:
             return True
     return False
 

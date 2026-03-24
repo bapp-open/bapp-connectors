@@ -248,7 +248,9 @@ def product_from_woocommerce(data: dict, price_from_provider=None) -> Product:
         with contextlib.suppress(Exception):
             price = convert(Decimal(str(raw_price)))
 
-    categories = [str(cat.get("name", "")) for cat in data.get("categories", [])]
+    raw_categories = data.get("categories", [])
+    categories = [str(cat.get("name", "")) for cat in raw_categories]
+    category_ids = [str(cat.get("id", "")) for cat in raw_categories if cat.get("id")]
 
     # Parse product-level attributes
     attributes = product_attributes_from_woocommerce(data.get("attributes", []))
@@ -267,6 +269,7 @@ def product_from_woocommerce(data: dict, price_from_provider=None) -> Product:
         stock=data.get("stock_quantity"),
         active=data.get("status", "") == "publish",
         categories=categories,
+        category_ids=category_ids,
         photos=photos,
         attributes=attributes,
         related=related,

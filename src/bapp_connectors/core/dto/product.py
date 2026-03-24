@@ -109,6 +109,7 @@ class Product(BaseDTO):
     stock: int | None = None
     active: bool = True
     categories: list[str] = []
+    category_ids: list[str] = []
     photos: list[ProductPhoto] = []
     attributes: list[ProductAttribute] = []
     variants: list[ProductVariant] = []

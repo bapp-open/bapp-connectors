@@ -94,7 +94,7 @@ manifest = ProviderManifest(
                 label="Exclude Categories",
                 field_type=FieldType.STR,
                 default="",
-                help_text="Comma-separated list of category names to exclude from the feed.",
+                help_text="Comma-separated list of category IDs to exclude from the feed.",
             ),
         ],
     ),
