@@ -14,6 +14,7 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 # In-memory storage
 _products: dict[int, dict] = {}
@@ -21,6 +22,7 @@ _variants: dict[int, dict] = {}
 _orders: dict[int, dict] = {}
 _webhooks: dict[int, dict] = {}
 _collections: dict[int, dict] = {}
+_smart_collections: dict[int, dict] = {}
 _next_id = 1000
 
 
@@ -37,6 +39,7 @@ def _reset():
     _orders.clear()
     _webhooks.clear()
     _collections.clear()
+    _smart_collections.clear()
     _next_id = 1000
     # Seed with sample data
     _seed_data()
@@ -61,6 +64,12 @@ def _seed_data():
         "images": [{"id": _get_next_id(), "src": "https://example.com/img.jpg", "alt": "Test", "position": 1}],
         "options": [{"name": "Title", "values": ["Default Title"]}],
         "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z",
+    }
+
+    cid = _get_next_id()
+    _smart_collections[cid] = {
+        "id": cid, "title": "Sale Items", "handle": "sale-items",
+        "rules": [{"column": "tag", "relation": "equals", "condition": "sale"}],
     }
 
     oid = _get_next_id()
@@ -93,6 +102,11 @@ class ShopifyMockHandler(BaseHTTPRequestHandler):
         if length:
             return json.loads(self.rfile.read(length))
         return {}
+
+    def _parse_query_params(self) -> dict[str, str]:
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        return {k: v[0] for k, v in params.items()}
 
     def _parse_path(self) -> tuple[str, str | None]:
         """Parse path into (resource, id).
@@ -138,7 +152,14 @@ class ShopifyMockHandler(BaseHTTPRequestHandler):
             return self._send_json({"shop": {"id": 1, "name": "Test Shop", "domain": "test.myshopify.com"}})
 
         if resource == "products" and rid is None:
-            return self._send_json({"products": list(_products.values())})
+            params = self._parse_query_params()
+            items = sorted(_products.values(), key=lambda p: p["id"])
+            since_id = int(params.get("since_id", 0))
+            if since_id:
+                items = [p for p in items if p["id"] > since_id]
+            limit = int(params.get("limit", 250))
+            items = items[:limit]
+            return self._send_json({"products": items})
         if resource == "products" and rid:
             p = _products.get(int(rid))
             return self._send_json({"product": p}, 200 if p else 404)
@@ -155,13 +176,23 @@ class ShopifyMockHandler(BaseHTTPRequestHandler):
             return self._send_json({"variant": v}, 200 if v else 404)
 
         if resource == "orders" and rid is None:
-            return self._send_json({"orders": list(_orders.values())})
+            params = self._parse_query_params()
+            items = sorted(_orders.values(), key=lambda o: o["id"])
+            since_id = int(params.get("since_id", 0))
+            if since_id:
+                items = [o for o in items if o["id"] > since_id]
+            limit = int(params.get("limit", 250))
+            items = items[:limit]
+            return self._send_json({"orders": items})
         if resource == "orders" and rid:
             o = _orders.get(int(rid))
             return self._send_json({"order": o}, 200 if o else 404)
 
         if resource == "custom_collections":
             return self._send_json({"custom_collections": list(_collections.values())})
+
+        if resource == "smart_collections":
+            return self._send_json({"smart_collections": list(_smart_collections.values())})
 
         if resource == "webhooks":
             return self._send_json({"webhooks": list(_webhooks.values())})
@@ -217,6 +248,28 @@ class ShopifyMockHandler(BaseHTTPRequestHandler):
             data["id"] = wid
             _webhooks[wid] = data
             return self._send_json({"webhook": data}, 201)
+
+        if resource.startswith("orders/") and resource.endswith("/cancel"):
+            oid = int(resource.split("/")[1])
+            if oid in _orders:
+                _orders[oid]["cancelled_at"] = "2024-01-15T00:00:00Z"
+                _orders[oid]["financial_status"] = "voided"
+                return self._send_json({"order": _orders[oid]})
+            return self._send_json({"errors": "Not Found"}, 404)
+
+        if resource.startswith("orders/") and resource.endswith("/close"):
+            oid = int(resource.split("/")[1])
+            if oid in _orders:
+                _orders[oid]["closed_at"] = "2024-01-15T00:00:00Z"
+                return self._send_json({"order": _orders[oid]})
+            return self._send_json({"errors": "Not Found"}, 404)
+
+        if resource.startswith("orders/") and resource.endswith("/open"):
+            oid = int(resource.split("/")[1])
+            if oid in _orders:
+                _orders[oid].pop("closed_at", None)
+                return self._send_json({"order": _orders[oid]})
+            return self._send_json({"errors": "Not Found"}, 404)
 
         if resource == "custom_collections":
             data = body.get("custom_collection", {})

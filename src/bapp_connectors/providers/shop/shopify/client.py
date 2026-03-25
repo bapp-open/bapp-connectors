@@ -37,8 +37,10 @@ class ShopifyApiClient:
 
     # ── Products ──
 
-    def get_products(self, limit: int = 50, **kwargs) -> list[dict]:
+    def get_products(self, limit: int = 250, since_id: int | None = None, **kwargs) -> list[dict]:
         params: dict[str, Any] = {"limit": limit}
+        if since_id is not None:
+            params["since_id"] = since_id
         params.update(kwargs.pop("params", {}))
         result = self._call("GET", "products.json", params=params, **kwargs)
         return result.get("products", []) if isinstance(result, dict) else []
@@ -87,8 +89,10 @@ class ShopifyApiClient:
 
     # ── Orders ──
 
-    def get_orders(self, limit: int = 50, status: str = "any", **kwargs) -> list[dict]:
+    def get_orders(self, limit: int = 250, status: str = "any", since_id: int | None = None, **kwargs) -> list[dict]:
         params: dict[str, Any] = {"limit": limit, "status": status}
+        if since_id is not None:
+            params["since_id"] = since_id
         params.update(kwargs.pop("params", {}))
         result = self._call("GET", "orders.json", params=params, **kwargs)
         return result.get("orders", []) if isinstance(result, dict) else []
@@ -101,6 +105,18 @@ class ShopifyApiClient:
         result = self._call("PUT", f"orders/{order_id}.json", json={"order": data}, **kwargs)
         return result.get("order", {}) if isinstance(result, dict) else {}
 
+    def cancel_order(self, order_id: int, **kwargs) -> dict:
+        result = self._call("POST", f"orders/{order_id}/cancel.json", **kwargs)
+        return result.get("order", {}) if isinstance(result, dict) else {}
+
+    def close_order(self, order_id: int, **kwargs) -> dict:
+        result = self._call("POST", f"orders/{order_id}/close.json", **kwargs)
+        return result.get("order", {}) if isinstance(result, dict) else {}
+
+    def reopen_order(self, order_id: int, **kwargs) -> dict:
+        result = self._call("POST", f"orders/{order_id}/open.json", **kwargs)
+        return result.get("order", {}) if isinstance(result, dict) else {}
+
     # ── Custom Collections ──
 
     def get_custom_collections(self, **kwargs) -> list[dict]:
@@ -110,6 +126,16 @@ class ShopifyApiClient:
     def create_custom_collection(self, data: dict, **kwargs) -> dict:
         result = self._call("POST", "custom_collections.json", json={"custom_collection": data}, **kwargs)
         return result.get("custom_collection", {}) if isinstance(result, dict) else {}
+
+    def delete_custom_collection(self, collection_id: int, **kwargs) -> bool:
+        self._call("DELETE", f"custom_collections/{collection_id}.json", **kwargs)
+        return True
+
+    # ── Smart Collections ──
+
+    def get_smart_collections(self, **kwargs) -> list[dict]:
+        result = self._call("GET", "smart_collections.json", **kwargs)
+        return result.get("smart_collections", []) if isinstance(result, dict) else []
 
     # ── Webhooks ──
 

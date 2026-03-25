@@ -15,14 +15,18 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
 from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
+    CategoryManagementCapability,
+    OAuthCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     VariantManagementCapability,
     WebhookCapability,
 )
+from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import (
     BulkResult,
     ConnectionTestResult,
@@ -30,6 +34,7 @@ from bapp_connectors.core.dto import (
     OrderStatus,
     PaginatedResult,
     Product,
+    ProductCategory,
     ProductUpdate,
     ProductVariant,
     WebhookEvent,
@@ -43,10 +48,12 @@ from bapp_connectors.providers.shop.shopify.manifest import manifest
 from bapp_connectors.providers.shop.shopify.mappers import (
     ORDER_STATUS_TO_SHOPIFY,
     SHOPIFY_ORDER_STATUS_MAP,
+    category_from_shopify,
     order_from_shopify,
     orders_from_shopify,
     product_from_shopify,
     product_to_shopify,
+    product_update_to_shopify,
     products_from_shopify,
     variant_from_shopify,
     variant_to_shopify,
@@ -61,6 +68,8 @@ if TYPE_CHECKING:
 class ShopifyShopAdapter(
     ShopPort,
     BulkUpdateCapability,
+    CategoryManagementCapability,
+    OAuthCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     VariantManagementCapability,
@@ -69,8 +78,8 @@ class ShopifyShopAdapter(
     """
     Shopify Admin REST API adapter.
 
-    Implements: ShopPort + BulkUpdate + ProductCreation + ProductFullUpdate +
-                VariantManagement + Webhook
+    Implements: ShopPort + BulkUpdate + CategoryManagement + OAuth +
+                ProductCreation + ProductFullUpdate + VariantManagement + Webhook
     """
 
     manifest = manifest
@@ -79,7 +88,10 @@ class ShopifyShopAdapter(
         self.credentials = credentials
         config = config or {}
 
-        store_domain = credentials.get("store_domain", "").rstrip("/")
+        self._store_domain = credentials.get("store_domain", "").rstrip("/")
+        self._client_id = credentials.get("client_id", "")
+        self._client_secret = credentials.get("client_secret", "")
+        store_domain = self._store_domain
         access_token = credentials.get("access_token", "")
         api_version = config.get("api_version", "2024-01")
         base_url = f"https://{store_domain}/admin/api/{api_version}/"
@@ -132,32 +144,75 @@ class ShopifyShopAdapter(
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
 
+    # ── OAuthCapability ──
+
+    def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
+        scopes = self.manifest.auth.oauth.scopes if self.manifest.auth.oauth else []
+        params = {
+            "client_id": self._client_id,
+            "scope": ",".join(scopes),
+            "redirect_uri": redirect_uri,
+            "state": state,
+        }
+        return f"https://{self._store_domain}/admin/oauth/authorize?{urlencode(params)}"
+
+    def exchange_code_for_token(self, code: str, redirect_uri: str, state: str = "") -> OAuthTokens:
+        response = self.client.http.call(
+            "POST",
+            f"https://{self._store_domain}/admin/oauth/access_token",
+            json={
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+                "code": code,
+            },
+        )
+        access_token = response.get("access_token", "") if isinstance(response, dict) else ""
+        scope = response.get("scope", "") if isinstance(response, dict) else ""
+        return OAuthTokens(
+            access_token=access_token,
+            extra={
+                "credentials": {
+                    "store_domain": self._store_domain,
+                    "access_token": access_token,
+                },
+                "scope": scope,
+            },
+        )
+
+    def refresh_token(self, refresh_token: str) -> OAuthTokens:
+        raise NotImplementedError("Shopify offline access tokens do not expire.")
+
     # ── ShopPort: Orders ──
 
     def get_orders(self, since: datetime | None = None, cursor: str | None = None) -> PaginatedResult[Order]:
         kwargs: dict = {}
         if since:
             kwargs["params"] = {"created_at_min": since.isoformat()}
-        response = self.client.get_orders(**kwargs)
-        return orders_from_shopify(response, price_from_provider=self._price_from_provider, status_mapper=self._status_mapper)
+        since_id = int(cursor) if cursor else None
+        response = self.client.get_orders(limit=250, since_id=since_id, **kwargs)
+        return orders_from_shopify(response, limit=250, price_from_provider=self._price_from_provider, status_mapper=self._status_mapper)
 
     def get_order(self, order_id: str) -> Order:
         data = self.client.get_order(int(order_id))
         return order_from_shopify(data, price_from_provider=self._price_from_provider, status_mapper=self._status_mapper)
 
     def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
-        # Shopify order status changes are limited — mainly closing/reopening
-        # Fulfillment status changes require the Fulfillment API
-        raise NotImplementedError(
-            "Shopify order status updates require the Fulfillment API. "
-            "Use adapter.client.update_order() for direct API access."
+        if status == OrderStatus.CANCELLED:
+            data = self.client.cancel_order(int(order_id))
+            return order_from_shopify(data, price_from_provider=self._price_from_provider, status_mapper=self._status_mapper)
+        # Shopify REST API only supports cancellation directly.
+        # Fulfillment-based statuses (SHIPPED, DELIVERED) require the Fulfillment API.
+        raise ValueError(
+            f"Shopify REST API does not support setting status to {status.value}. "
+            f"Only CANCELLED is supported. Fulfillment status changes require the Fulfillment API."
         )
 
     # ── ShopPort: Products ──
 
     def get_products(self, cursor: str | None = None) -> PaginatedResult[Product]:
-        response = self.client.get_products(limit=50)
-        return products_from_shopify(response, price_from_provider=self._price_from_provider)
+        since_id = int(cursor) if cursor else None
+        response = self.client.get_products(limit=250, since_id=since_id)
+        return products_from_shopify(response, limit=250, price_from_provider=self._price_from_provider)
 
     def update_product_stock(self, product_id: str, quantity: int) -> None:
         # Shopify stock is per-variant via inventory_levels
@@ -192,18 +247,22 @@ class ShopifyShopAdapter(
     def delete_product(self, product_id: str) -> None:
         self.client.delete_product(int(product_id))
 
+    # ── CategoryManagementCapability ──
+
+    def get_categories(self) -> list[ProductCategory]:
+        custom = self.client.get_custom_collections()
+        smart = self.client.get_smart_collections()
+        return [category_from_shopify(c) for c in custom] + [category_from_shopify(c) for c in smart]
+
+    def create_category(self, name: str, parent_id: str | None = None) -> ProductCategory:
+        # Shopify collections don't support parent/child hierarchy
+        result = self.client.create_custom_collection({"title": name})
+        return category_from_shopify(result)
+
     # ── ProductFullUpdateCapability ──
 
     def update_product(self, update: ProductUpdate) -> None:
-        data: dict = {}
-        if update.name is not None:
-            data["title"] = update.name
-        if update.description is not None:
-            data["body_html"] = update.description
-        if update.active is not None:
-            data["status"] = "active" if update.active else "draft"
-        if update.categories is not None:
-            data["tags"] = ", ".join(update.categories)
+        data = product_update_to_shopify(update, price_to_provider=self._price_to_provider)
         if data:
             self.client.update_product(int(update.product_id), data)
         if update.price is not None:

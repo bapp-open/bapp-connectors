@@ -31,6 +31,7 @@ from bapp_connectors.core.dto import (
     Product,
     ProductCategory,
     ProductPhoto,
+    ProductUpdate,
     ProductVariant,
     ProviderMeta,
     WebhookEvent,
@@ -133,11 +134,14 @@ def product_from_shopify(data: dict, price_from_provider=None) -> Product:
     )
 
 
-def products_from_shopify(response: list[dict], price_from_provider=None) -> PaginatedResult[Product]:
+def products_from_shopify(response: list[dict], limit: int = 250, price_from_provider=None) -> PaginatedResult[Product]:
     products = [product_from_shopify(p, price_from_provider=price_from_provider) for p in response]
+    has_more = len(response) >= limit
+    cursor = str(response[-1]["id"]) if has_more and response else None
     return PaginatedResult(
         items=products,
-        has_more=len(response) >= 50,
+        cursor=cursor,
+        has_more=has_more,
         total=None,
     )
 
@@ -166,6 +170,25 @@ def product_to_shopify(product, price_to_provider=None) -> dict:
     if product.photos:
         data["images"] = [{"src": p.url, "alt": p.alt_text} for p in product.photos]
 
+    return data
+
+
+def product_update_to_shopify(update: ProductUpdate, price_to_provider=None) -> dict:
+    """Map a ProductUpdate DTO to a Shopify product update payload.
+
+    Price and stock are handled separately via variant/inventory endpoints.
+    """
+    data: dict = {}
+    if update.name is not None:
+        data["title"] = update.name
+    if update.description is not None:
+        data["body_html"] = update.description
+    if update.active is not None:
+        data["status"] = "active" if update.active else "draft"
+    if update.categories is not None:
+        data["tags"] = ", ".join(update.categories)
+    if update.photos is not None:
+        data["images"] = [{"src": p.url, "alt": p.alt_text or ""} for p in update.photos]
     return data
 
 
@@ -299,11 +322,14 @@ def order_from_shopify(data: dict, price_from_provider=None, status_mapper=None)
     )
 
 
-def orders_from_shopify(response: list[dict], price_from_provider=None, status_mapper=None) -> PaginatedResult[Order]:
+def orders_from_shopify(response: list[dict], limit: int = 250, price_from_provider=None, status_mapper=None) -> PaginatedResult[Order]:
     orders = [order_from_shopify(o, price_from_provider=price_from_provider, status_mapper=status_mapper) for o in response]
+    has_more = len(response) >= limit
+    cursor = str(response[-1]["id"]) if has_more and response else None
     return PaginatedResult(
         items=orders,
-        has_more=len(response) >= 50,
+        cursor=cursor,
+        has_more=has_more,
         total=None,
     )
 
@@ -315,6 +341,11 @@ def category_from_shopify(data: dict) -> ProductCategory:
     return ProductCategory(
         category_id=str(data.get("id", "")),
         name=data.get("title", ""),
+        parent_id=None,  # Shopify collections have no hierarchy
+        extra={
+            "handle": data.get("handle", ""),
+            "collection_type": "smart" if "rules" in data else "custom",
+        },
     )
 
 

@@ -4,6 +4,8 @@ Shopify Admin REST API provider manifest.
 
 from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
+    CategoryManagementCapability,
+    OAuthCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     VariantManagementCapability,
@@ -12,6 +14,7 @@ from bapp_connectors.core.capabilities import (
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
+    OAuthConfig,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
@@ -32,8 +35,19 @@ manifest = ProviderManifest(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
             CredentialField(name="store_domain", label="Store Domain (e.g. myshop.myshopify.com)", sensitive=False),
-            CredentialField(name="access_token", label="Admin API Access Token", sensitive=True),
+            CredentialField(name="access_token", label="Admin API Access Token", sensitive=True, required=False),
+            CredentialField(name="client_id", label="App Client ID", sensitive=False, required=False),
+            CredentialField(name="client_secret", label="App Client Secret", sensitive=True, required=False),
         ],
+        oauth=OAuthConfig(
+            credential_fields=[
+                CredentialField(name="store_domain", label="Store Domain (e.g. myshop.myshopify.com)", sensitive=False),
+                CredentialField(name="client_id", label="App Client ID", sensitive=False),
+                CredentialField(name="client_secret", label="App Client Secret", sensitive=True),
+            ],
+            scopes=["read_products", "write_products", "read_orders", "write_orders", "read_inventory", "write_inventory"],
+            display_name="Connect with Shopify",
+        ),
     ),
     settings=SettingsConfig(
         fields=[
@@ -62,6 +76,8 @@ manifest = ProviderManifest(
     capabilities=[
         ShopPort,
         BulkUpdateCapability,
+        CategoryManagementCapability,
+        OAuthCapability,
         ProductCreationCapability,
         ProductFullUpdateCapability,
         VariantManagementCapability,

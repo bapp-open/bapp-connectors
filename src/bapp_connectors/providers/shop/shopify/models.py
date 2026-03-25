@@ -59,6 +59,15 @@ class ShopifyOrder(BaseModel):
     customer: dict | None = None
 
 
+class ShopifyCollection(BaseModel):
+    id: int | None = None
+    title: str = ""
+    handle: str = ""
+    body_html: str = ""
+    sort_order: str = "best-selling"
+    published: bool = True
+
+
 class ShopifyWebhook(BaseModel):
     id: int | None = None
     topic: str = ""
