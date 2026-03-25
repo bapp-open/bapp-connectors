@@ -12,17 +12,20 @@ import hmac
 import json
 from decimal import Decimal
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
 from bapp_connectors.core.capabilities import (
     AttributeManagementCapability,
     BulkUpdateCapability,
     CategoryManagementCapability,
+    OAuthCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     RelatedProductCapability,
     VariantManagementCapability,
     WebhookCapability,
 )
+from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import (
     AttributeDefinition,
     AttributeValue,
@@ -71,12 +74,13 @@ if TYPE_CHECKING:
 class WooCommerceShopAdapter(
     ShopPort,
     BulkUpdateCapability,
-    ProductCreationCapability,
-    ProductFullUpdateCapability,
     CategoryManagementCapability,
     AttributeManagementCapability,
-    VariantManagementCapability,
+    OAuthCapability,
+    ProductCreationCapability,
+    ProductFullUpdateCapability,
     RelatedProductCapability,
+    VariantManagementCapability,
     WebhookCapability,
 ):
     """
@@ -88,6 +92,7 @@ class WooCommerceShopAdapter(
     - ProductCreationCapability: create/delete products
     - ProductFullUpdateCapability: full product updates (name, desc, photos, categories)
     - CategoryManagementCapability: read + create categories
+    - OAuthCapability: redirect-based key generation via /wc-auth/v1/authorize
     - WebhookCapability: receive and verify webhooks
     """
 
@@ -159,6 +164,42 @@ class WooCommerceShopAdapter(
             )
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
+
+    # ── OAuthCapability ──
+    # WooCommerce uses a pseudo-OAuth flow via /wc-auth/v1/authorize.
+    # The user approves on the WC admin, then WC POSTs consumer_key + consumer_secret
+    # to the callback URL. The POST body is passed as the "code" parameter.
+
+    def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
+        params = {
+            "app_name": "BApp",
+            "scope": "read_write",
+            "user_id": state,
+            "return_url": redirect_uri,
+            "callback_url": redirect_uri,
+        }
+        return f"{self.domain}/wc-auth/v1/authorize?{urlencode(params)}"
+
+    def exchange_code_for_token(self, code: str, redirect_uri: str, state: str = "") -> OAuthTokens:
+        # WooCommerce POSTs {consumer_key, consumer_secret, key_permissions} to callback_url.
+        # The callback handler serializes that POST body as JSON and passes it as "code".
+        data = json.loads(code) if isinstance(code, str) else code
+        consumer_key = data.get("consumer_key", "")
+        consumer_secret = data.get("consumer_secret", "")
+        return OAuthTokens(
+            access_token=consumer_key,
+            extra={
+                "credentials": {
+                    "domain": self.domain,
+                    "consumer_key": consumer_key,
+                    "consumer_secret": consumer_secret,
+                },
+                "key_permissions": data.get("key_permissions", ""),
+            },
+        )
+
+    def refresh_token(self, refresh_token: str) -> OAuthTokens:
+        raise NotImplementedError("WooCommerce API keys do not expire.")
 
     # ── ShopPort ──
 

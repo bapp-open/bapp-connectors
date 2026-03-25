@@ -1,5 +1,5 @@
 """
-Dropbox storage adapter — implements StoragePort.
+Dropbox storage adapter — implements StoragePort + OAuthCapability.
 
 This is the main entry point for the Dropbox integration.
 """
@@ -9,20 +9,27 @@ from __future__ import annotations
 import posixpath
 from io import BytesIO
 from typing import IO
+from urllib.parse import urlencode
 
+from bapp_connectors.core.capabilities import OAuthCapability
+from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import ConnectionTestResult
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import FileInfo, StoragePort
 from bapp_connectors.providers.storage.dropbox.client import DropboxApiClient
 from bapp_connectors.providers.storage.dropbox.manifest import manifest
 
+_DBX_AUTH_URL = "https://www.dropbox.com/oauth2/authorize"
+_DBX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token"
 
-class DropboxStorageAdapter(StoragePort):
+
+class DropboxStorageAdapter(StoragePort, OAuthCapability):
     """
     Dropbox storage adapter.
 
     Implements:
     - StoragePort: save, open, delete, exists, listdir, size, list_files
+    - OAuthCapability: OAuth2 authorization code flow with refresh tokens
     """
 
     manifest = manifest
@@ -30,6 +37,8 @@ class DropboxStorageAdapter(StoragePort):
     def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
         self.default_folder = credentials.get("default_folder", "/")
+        self._app_key = credentials.get("app_key", "")
+        self._app_secret = credentials.get("app_secret", "")
 
         if http_client is None:
             from bapp_connectors.core.http import BearerAuth
@@ -60,6 +69,76 @@ class DropboxStorageAdapter(StoragePort):
             )
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
+
+    # ── OAuthCapability ──
+
+    def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
+        params = {
+            "client_id": self._app_key,
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "token_access_type": "offline",
+        }
+        return f"{_DBX_AUTH_URL}?{urlencode(params)}"
+
+    def exchange_code_for_token(self, code: str, redirect_uri: str, state: str = "") -> OAuthTokens:
+        response = self.client.http.call(
+            "POST",
+            _DBX_TOKEN_URL,
+            data={
+                "code": code,
+                "grant_type": "authorization_code",
+                "client_id": self._app_key,
+                "client_secret": self._app_secret,
+                "redirect_uri": redirect_uri,
+            },
+        )
+        data = response if isinstance(response, dict) else {}
+        access_token = data.get("access_token", "")
+        refresh_tok = data.get("refresh_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            refresh_token=refresh_tok,
+            expires_in=data.get("expires_in"),
+            token_type=data.get("token_type", "Bearer"),
+            extra={
+                "credentials": {
+                    "token": access_token,
+                    "app_key": self._app_key,
+                    "app_secret": self._app_secret,
+                    "refresh_token": refresh_tok,
+                },
+            },
+        )
+
+    def refresh_token(self, refresh_token: str) -> OAuthTokens:
+        response = self.client.http.call(
+            "POST",
+            _DBX_TOKEN_URL,
+            data={
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+                "client_id": self._app_key,
+                "client_secret": self._app_secret,
+            },
+        )
+        data = response if isinstance(response, dict) else {}
+        access_token = data.get("access_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=data.get("expires_in"),
+            token_type=data.get("token_type", "Bearer"),
+            extra={
+                "credentials": {
+                    "token": access_token,
+                    "app_key": self._app_key,
+                    "app_secret": self._app_secret,
+                    "refresh_token": refresh_token,
+                },
+            },
+        )
 
     # ── StoragePort (Django Storage API) ──
 

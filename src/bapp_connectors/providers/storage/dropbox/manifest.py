@@ -2,9 +2,11 @@
 Dropbox provider manifest — declares capabilities, auth, rate limits.
 """
 
+from bapp_connectors.core.capabilities import OAuthCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
+    OAuthConfig,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
@@ -21,7 +23,10 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.BEARER,
         required_fields=[
-            CredentialField(name="token", label="Access Token", sensitive=True),
+            CredentialField(name="token", label="Access Token", sensitive=True, required=False),
+            CredentialField(name="app_key", label="App Key", sensitive=False, required=False),
+            CredentialField(name="app_secret", label="App Secret", sensitive=True, required=False),
+            CredentialField(name="refresh_token", label="Refresh Token", sensitive=True, required=False),
             CredentialField(
                 name="default_folder",
                 label="Default Folder",
@@ -31,8 +36,16 @@ manifest = ProviderManifest(
                 help_text="Default folder path for file operations.",
             ),
         ],
+        oauth=OAuthConfig(
+            credential_fields=[
+                CredentialField(name="app_key", label="App Key", sensitive=False),
+                CredentialField(name="app_secret", label="App Secret", sensitive=True),
+            ],
+            scopes=[],
+            display_name="Connect with Dropbox",
+        ),
     ),
-    capabilities=[StoragePort],
+    capabilities=[StoragePort, OAuthCapability],
     rate_limit=RateLimitConfig(
         requests_per_second=10,
         burst=20,

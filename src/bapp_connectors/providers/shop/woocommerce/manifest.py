@@ -6,6 +6,7 @@ from bapp_connectors.core.capabilities import (
     AttributeManagementCapability,
     BulkUpdateCapability,
     CategoryManagementCapability,
+    OAuthCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     RelatedProductCapability,
@@ -15,6 +16,7 @@ from bapp_connectors.core.capabilities import (
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
+    OAuthConfig,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
@@ -34,8 +36,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="consumer_key", label="Consumer Key", sensitive=True),
-            CredentialField(name="consumer_secret", label="Consumer Secret", sensitive=True),
+            CredentialField(name="consumer_key", label="Consumer Key", sensitive=True, required=False),
+            CredentialField(name="consumer_secret", label="Consumer Secret", sensitive=True, required=False),
             CredentialField(name="domain", label="Store Domain", sensitive=False, help_text="e.g. https://myshop.com"),
             CredentialField(
                 name="verify_ssl",
@@ -46,6 +48,13 @@ manifest = ProviderManifest(
                 help_text="Set to 'false' to disable SSL verification",
             ),
         ],
+        oauth=OAuthConfig(
+            credential_fields=[
+                CredentialField(name="domain", label="Store Domain", sensitive=False, help_text="e.g. https://myshop.com"),
+            ],
+            scopes=["read_write"],
+            display_name="Connect with WooCommerce",
+        ),
     ),
     settings=SettingsConfig(
         fields=[
@@ -68,12 +77,13 @@ manifest = ProviderManifest(
     capabilities=[
         ShopPort,
         BulkUpdateCapability,
-        ProductCreationCapability,
-        ProductFullUpdateCapability,
         CategoryManagementCapability,
         AttributeManagementCapability,
-        VariantManagementCapability,
+        OAuthCapability,
+        ProductCreationCapability,
+        ProductFullUpdateCapability,
         RelatedProductCapability,
+        VariantManagementCapability,
         WebhookCapability,
     ],
     rate_limit=RateLimitConfig(

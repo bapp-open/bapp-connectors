@@ -73,11 +73,25 @@ class SettingsConfig:
 
 
 @dataclass
+class OAuthConfig:
+    """Declarative OAuth configuration for providers that support redirect-based authorization.
+
+    Enables the UI layer to discover OAuth support and know which fields to collect
+    before starting the OAuth flow.
+    """
+
+    credential_fields: list[CredentialField] = field(default_factory=list)
+    scopes: list[str] = field(default_factory=list)
+    display_name: str = ""
+
+
+@dataclass
 class AuthConfig:
     """Authentication configuration for a provider."""
 
     strategy: AuthStrategy = AuthStrategy.NONE
     required_fields: list[CredentialField] = field(default_factory=list)
+    oauth: OAuthConfig | None = None
 
     def validate_credentials(self, credentials: dict) -> list[str]:
         """Validate that all required fields are present. Returns list of missing field names."""
