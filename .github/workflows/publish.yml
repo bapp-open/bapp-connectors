@@ -6,23 +6,32 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+*"
 
 jobs:
-  publish:
+  publish-core:
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: pypi-core
     permissions:
       id-token: write
-    strategy:
-      matrix:
-        package:
-          - "."
-          - "packages/django"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install build
-      - run: python -m build ${{ matrix.package }}
+      - run: python -m build .
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-django:
+    runs-on: ubuntu-latest
+    environment: pypi-django
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - run: python -m build packages/django
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: ${{ matrix.package }}/dist/
+          packages-dir: packages/django/dist/
