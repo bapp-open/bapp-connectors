@@ -33,10 +33,10 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Courier** | Colete Online, GLS, Sameday | 3 |
 | **Payment** | EuPlatesc, LibraPay, Netopia, Stripe | 4 |
 | **Messaging** | GoIP, RoboSMS, SMTP Email, Telegram, WhatsApp | 5 |
-| **Storage** | Dropbox, FTP File Storage, S3 Storage, SFTP, WebDAV | 5 |
+| **Storage** | Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV | 7 |
 | **LLM** | Anthropic, Google Gemini, Ollama, OpenAI | 4 |
 | **Feed** | Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro | 4 |
-| | **Total** | **35** |
+| | **Total** | **37** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -238,7 +238,7 @@ packages/connectors/
 │       ├── courier/       # Colete Online, GLS, Sameday
 │       ├── payment/       # EuPlatesc, LibraPay, Netopia, Stripe
 │       ├── messaging/     # GoIP, RoboSMS, SMTP Email, Telegram, WhatsApp
-│       ├── storage/       # Dropbox, FTP File Storage, S3 Storage, SFTP, WebDAV
+│       ├── storage/       # Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV
 │       ├── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
 │       └── feed/          # Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro
 <!-- STRUCTURE:END -->

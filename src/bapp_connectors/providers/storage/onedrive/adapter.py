@@ -6,7 +6,6 @@ Uses Microsoft Graph API v1.0 with path-based file access.
 
 from __future__ import annotations
 
-import posixpath
 from io import BytesIO
 from typing import IO
 from urllib.parse import urlencode

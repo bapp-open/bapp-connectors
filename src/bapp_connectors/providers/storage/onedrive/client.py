@@ -7,7 +7,7 @@ OneDrive supports path-based access: /root:/path/to/file:/
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient

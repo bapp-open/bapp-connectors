@@ -9,8 +9,7 @@ Google Drive is ID-based: files are identified by ID, not path.
 from __future__ import annotations
 
 import json
-import posixpath
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
