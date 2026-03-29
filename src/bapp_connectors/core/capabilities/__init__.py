@@ -14,7 +14,9 @@ from .product_management import (
     RelatedProductCapability,
     VariantManagementCapability,
 )
+from .saved_payment import SavedPaymentCapability
 from .streaming import StreamingCapability
+from .subscriptions import SubscriptionCapability
 from .transcription import TranscriptionCapability
 from .webhooks import WebhookCapability
 
@@ -34,7 +36,9 @@ __all__ = [
     "ProductFeedCapability",
     "ProductFullUpdateCapability",
     "RelatedProductCapability",
+    "SavedPaymentCapability",
     "StreamingCapability",
+    "SubscriptionCapability",
     "TranscriptionCapability",
     "VariantManagementCapability",
     "WebhookCapability",

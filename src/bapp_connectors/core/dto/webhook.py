@@ -31,6 +31,13 @@ class WebhookEventType(StrEnum):
     PAYMENT_FAILED = "payment.failed"
     PAYMENT_REFUNDED = "payment.refunded"
 
+    # Subscriptions
+    SUBSCRIPTION_CREATED = "subscription.created"
+    SUBSCRIPTION_UPDATED = "subscription.updated"
+    SUBSCRIPTION_CANCELLED = "subscription.cancelled"
+    SUBSCRIPTION_PAYMENT_SUCCEEDED = "subscription.payment_succeeded"
+    SUBSCRIPTION_PAYMENT_FAILED = "subscription.payment_failed"
+
     # Products
     PRODUCT_CREATED = "product.created"
     PRODUCT_UPDATED = "product.updated"

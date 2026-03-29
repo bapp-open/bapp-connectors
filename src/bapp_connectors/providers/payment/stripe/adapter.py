@@ -12,12 +12,14 @@ import json
 import time
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.capabilities import WebhookCapability
+from bapp_connectors.core.capabilities import SavedPaymentCapability, SubscriptionCapability, WebhookCapability
 from bapp_connectors.core.dto import (
     CheckoutSession,
     ConnectionTestResult,
     PaymentResult,
     Refund,
+    SavedPaymentMethod,
+    Subscription,
     WebhookEvent,
 )
 from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
@@ -29,7 +31,9 @@ from bapp_connectors.providers.payment.stripe.mappers import (
     amount_to_stripe,
     checkout_session_from_stripe,
     payment_from_stripe,
+    payment_method_from_stripe,
     refund_from_stripe,
+    subscription_from_stripe,
     webhook_event_from_stripe,
 )
 
@@ -37,13 +41,15 @@ if TYPE_CHECKING:
     from decimal import Decimal
 
 
-class StripePaymentAdapter(PaymentPort, WebhookCapability):
+class StripePaymentAdapter(PaymentPort, WebhookCapability, SubscriptionCapability, SavedPaymentCapability):
     """
     Stripe payment adapter.
 
     Implements:
     - PaymentPort: checkout sessions, payment status, refunds
     - WebhookCapability: webhook verification and parsing
+    - SubscriptionCapability: recurring billing via checkout
+    - SavedPaymentCapability: customer management, card saving, direct charges
     """
 
     manifest = manifest
@@ -94,6 +100,9 @@ class StripePaymentAdapter(PaymentPort, WebhookCapability):
         client_email: str | None = None,
     ) -> CheckoutSession:
         stripe_amount = amount_to_stripe(amount, currency)
+        # Stripe requires success_url for hosted checkout sessions
+        if not success_url:
+            success_url = "https://example.com/return"
         response = self.client.create_checkout_session(
             amount=stripe_amount,
             currency=currency,
@@ -123,6 +132,152 @@ class StripePaymentAdapter(PaymentPort, WebhookCapability):
             reason=reason or None,
         )
         return refund_from_stripe(response)
+
+    # ── SubscriptionCapability ──
+
+    def create_subscription_checkout(
+        self,
+        price_id: str,
+        success_url: str | None = None,
+        cancel_url: str | None = None,
+        customer_email: str | None = None,
+        trial_days: int | None = None,
+        metadata: dict | None = None,
+    ) -> CheckoutSession:
+        if not success_url:
+            success_url = "https://example.com/return"
+        response = self.client.create_subscription_checkout(
+            price_id=price_id,
+            success_url=success_url,
+            cancel_url=cancel_url,
+            customer_email=customer_email,
+            trial_days=trial_days,
+            metadata=metadata,
+        )
+        return checkout_session_from_stripe(response)
+
+    def get_subscription(self, subscription_id: str) -> Subscription:
+        response = self.client.get_subscription(subscription_id)
+        return subscription_from_stripe(response)
+
+    def cancel_subscription(self, subscription_id: str, immediate: bool = False) -> Subscription:
+        if immediate:
+            response = self.client.cancel_subscription(subscription_id)
+        else:
+            response = self.client.update_subscription(
+                subscription_id,
+                cancel_at_period_end="true",
+            )
+        return subscription_from_stripe(response)
+
+    def update_subscription(self, subscription_id: str, price_id: str) -> Subscription:
+        # Get current subscription to find the item ID to replace
+        current = self.client.get_subscription(subscription_id)
+        items = current.get("items", {}).get("data", [])
+        if not items:
+            from bapp_connectors.core.errors import PermanentProviderError
+            raise PermanentProviderError("Subscription has no items to update")
+
+        item_id = items[0]["id"]
+        response = self.client.update_subscription(
+            subscription_id,
+            **{
+                f"items[0][id]": item_id,
+                f"items[0][price]": price_id,
+            },
+        )
+        return subscription_from_stripe(response)
+
+    def pause_subscription(self, subscription_id: str) -> Subscription:
+        response = self.client.update_subscription(
+            subscription_id,
+            **{"pause_collection[behavior]": "void"},
+        )
+        return subscription_from_stripe(response)
+
+    def resume_subscription(self, subscription_id: str) -> Subscription:
+        response = self.client.update_subscription(
+            subscription_id,
+            pause_collection="",
+        )
+        return subscription_from_stripe(response)
+
+    # ── SavedPaymentCapability ──
+
+    def create_customer(
+        self,
+        email: str,
+        name: str = "",
+        metadata: dict | None = None,
+    ) -> str:
+        response = self.client.create_customer(
+            email=email, name=name, metadata=metadata,
+        )
+        return response["id"]
+
+    def create_setup_checkout(
+        self,
+        customer_id: str,
+        success_url: str | None = None,
+        cancel_url: str | None = None,
+    ) -> CheckoutSession:
+        if not success_url:
+            success_url = "https://example.com/return"
+        response = self.client.create_setup_checkout(
+            customer_id=customer_id,
+            success_url=success_url,
+            cancel_url=cancel_url,
+        )
+        return checkout_session_from_stripe(response)
+
+    def list_payment_methods(self, customer_id: str) -> list[SavedPaymentMethod]:
+        # Get default PM from customer for is_default flagging
+        customer = self.client.get_customer(customer_id)
+        default_pm = (
+            customer.get("invoice_settings", {}).get("default_payment_method") or ""
+        )
+
+        response = self.client.list_payment_methods(customer_id)
+        return [
+            payment_method_from_stripe(pm, default_pm_id=default_pm)
+            for pm in response.get("data", [])
+        ]
+
+    def delete_payment_method(self, payment_method_id: str) -> bool:
+        self.client.detach_payment_method(payment_method_id)
+        return True
+
+    def charge_saved_method(
+        self,
+        customer_id: str,
+        payment_method_id: str,
+        amount: Decimal,
+        currency: str,
+        description: str = "",
+        metadata: dict | None = None,
+    ) -> PaymentResult:
+        stripe_amount = amount_to_stripe(amount, currency)
+        response = self.client.create_payment_intent(
+            customer_id=customer_id,
+            payment_method_id=payment_method_id,
+            amount=stripe_amount,
+            currency=currency,
+            description=description,
+            metadata=metadata,
+        )
+        return payment_from_stripe(response)
+
+    def get_customer(self, customer_id: str) -> dict:
+        return self.client.get_customer(customer_id)
+
+    def set_default_payment_method(
+        self, customer_id: str, payment_method_id: str,
+    ) -> bool:
+        self.client.update_customer(
+            customer_id,
+            **{"invoice_settings[default_payment_method]": payment_method_id},
+        )
+        return True
 
     # ── WebhookCapability ──
 

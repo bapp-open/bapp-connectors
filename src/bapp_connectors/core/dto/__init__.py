@@ -23,6 +23,8 @@ from .message import DeliveryReport, DeliveryStatus, InboundMessage, MessageChan
 from .order import Order, OrderItem, OrderStatus, PaymentStatus, PaymentType
 from .partner import Address, Contact
 from .payment import CheckoutSession, PaymentMethodType, PaymentResult, Refund
+from .saved_payment import CardBrand, SavedPaymentMethod
+from .subscription import Subscription, SubscriptionInterval, SubscriptionStatus
 from .product import (
     AttributeDefinition,
     AttributeValue,
@@ -82,8 +84,13 @@ __all__ = [
     "ProductUpdate",
     "ProductVariant",
     "ProviderMeta",
+    "CardBrand",
     "Refund",
     "RelatedProductLink",
+    "SavedPaymentMethod",
+    "Subscription",
+    "SubscriptionInterval",
+    "SubscriptionStatus",
     "Shipment",
     "ShipmentStatus",
     "TokenUsage",

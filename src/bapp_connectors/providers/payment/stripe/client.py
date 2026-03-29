@@ -92,3 +92,155 @@ class StripeApiClient:
             data["reason"] = reason
 
         return self._call("POST", "refunds", data=data)
+
+    # ── Subscriptions ──
+
+    def create_subscription_checkout(
+        self,
+        *,
+        price_id: str,
+        success_url: str | None = None,
+        cancel_url: str | None = None,
+        customer_email: str | None = None,
+        trial_days: int | None = None,
+        metadata: dict[str, str] | None = None,
+    ) -> dict:
+        """Create a checkout session in subscription mode."""
+        data: dict[str, Any] = {
+            "mode": "subscription",
+            "line_items[0][price]": price_id,
+            "line_items[0][quantity]": "1",
+        }
+        if success_url:
+            data["success_url"] = success_url
+        if cancel_url:
+            data["cancel_url"] = cancel_url
+        if customer_email:
+            data["customer_email"] = customer_email
+        if trial_days is not None:
+            data["subscription_data[trial_period_days]"] = str(trial_days)
+        if metadata:
+            for key, value in metadata.items():
+                data[f"subscription_data[metadata][{key}]"] = value
+
+        return self._call("POST", "checkout/sessions", data=data)
+
+    def get_subscription(self, subscription_id: str) -> dict:
+        """Retrieve a subscription by ID."""
+        return self._call("GET", f"subscriptions/{subscription_id}")
+
+    def cancel_subscription(self, subscription_id: str) -> dict:
+        """Cancel a subscription immediately."""
+        return self._call("DELETE", f"subscriptions/{subscription_id}")
+
+    def update_subscription(self, subscription_id: str, **data: Any) -> dict:
+        """Update a subscription."""
+        return self._call("POST", f"subscriptions/{subscription_id}", data=data)
+
+    def create_price(
+        self,
+        *,
+        amount: int,
+        currency: str,
+        interval: str,
+        interval_count: int = 1,
+        product_name: str = "",
+    ) -> dict:
+        """Create a recurring price (used in tests and dynamic pricing)."""
+        data: dict[str, Any] = {
+            "unit_amount": str(amount),
+            "currency": currency.lower(),
+            "recurring[interval]": interval,
+            "recurring[interval_count]": str(interval_count),
+            "product_data[name]": product_name or f"{currency.upper()} {interval}ly plan",
+        }
+        return self._call("POST", "prices", data=data)
+
+    # ── Customers ──
+
+    def create_customer(
+        self,
+        *,
+        email: str,
+        name: str = "",
+        metadata: dict[str, str] | None = None,
+    ) -> dict:
+        """Create a Stripe customer."""
+        data: dict[str, Any] = {"email": email}
+        if name:
+            data["name"] = name
+        if metadata:
+            for key, value in metadata.items():
+                data[f"metadata[{key}]"] = value
+        return self._call("POST", "customers", data=data)
+
+    def get_customer(self, customer_id: str) -> dict:
+        """Retrieve a Stripe customer by ID."""
+        return self._call("GET", f"customers/{customer_id}")
+
+    def update_customer(self, customer_id: str, **data: Any) -> dict:
+        """Update a Stripe customer."""
+        return self._call("POST", f"customers/{customer_id}", data=data)
+
+    # ── Setup (save card) ──
+
+    def create_setup_checkout(
+        self,
+        *,
+        customer_id: str,
+        success_url: str | None = None,
+        cancel_url: str | None = None,
+        currency: str = "usd",
+    ) -> dict:
+        """Create a checkout session in setup mode (collect card without charging)."""
+        data: dict[str, Any] = {
+            "mode": "setup",
+            "customer": customer_id,
+            "currency": currency.lower(),
+        }
+        if success_url:
+            data["success_url"] = success_url
+        if cancel_url:
+            data["cancel_url"] = cancel_url
+        return self._call("POST", "checkout/sessions", data=data)
+
+    # ── Payment Methods ──
+
+    def list_payment_methods(self, customer_id: str, pm_type: str = "card") -> dict:
+        """List payment methods attached to a customer."""
+        return self._call(
+            "GET", "payment_methods",
+            params={"customer": customer_id, "type": pm_type},
+        )
+
+    def detach_payment_method(self, payment_method_id: str) -> dict:
+        """Detach a payment method from its customer."""
+        return self._call("POST", f"payment_methods/{payment_method_id}/detach")
+
+    # ── Direct Charge (off-session) ──
+
+    def create_payment_intent(
+        self,
+        *,
+        customer_id: str,
+        payment_method_id: str,
+        amount: int,
+        currency: str,
+        description: str = "",
+        metadata: dict[str, str] | None = None,
+    ) -> dict:
+        """Create and confirm a PaymentIntent using a saved payment method."""
+        data: dict[str, Any] = {
+            "customer": customer_id,
+            "payment_method": payment_method_id,
+            "amount": str(amount),
+            "currency": currency.lower(),
+            "confirm": "true",
+            "off_session": "true",
+        }
+        if description:
+            data["description"] = description
+        if metadata:
+            for key, value in metadata.items():
+                data[f"metadata[{key}]"] = value
+        return self._call("POST", "payment_intents", data=data)

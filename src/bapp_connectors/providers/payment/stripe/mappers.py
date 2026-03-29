@@ -11,11 +11,16 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from bapp_connectors.core.dto import (
+    CardBrand,
     CheckoutSession,
     PaymentMethodType,
     PaymentResult,
     ProviderMeta,
     Refund,
+    SavedPaymentMethod,
+    Subscription,
+    SubscriptionInterval,
+    SubscriptionStatus,
     WebhookEvent,
     WebhookEventType,
 )
@@ -177,13 +182,164 @@ def refund_from_stripe(data: dict) -> Refund:
     )
 
 
+# ── Subscription mapper ──
+
+STRIPE_SUBSCRIPTION_STATUS_MAP: dict[str, SubscriptionStatus] = {
+    "active": SubscriptionStatus.ACTIVE,
+    "past_due": SubscriptionStatus.PAST_DUE,
+    "paused": SubscriptionStatus.PAUSED,
+    "incomplete": SubscriptionStatus.PENDING,
+    "incomplete_expired": SubscriptionStatus.CANCELLED,
+    "canceled": SubscriptionStatus.CANCELLED,
+    "unpaid": SubscriptionStatus.UNPAID,
+    "trialing": SubscriptionStatus.TRIALING,
+}
+
+STRIPE_INTERVAL_MAP: dict[str, SubscriptionInterval] = {
+    "day": SubscriptionInterval.DAY,
+    "week": SubscriptionInterval.WEEK,
+    "month": SubscriptionInterval.MONTH,
+    "year": SubscriptionInterval.YEAR,
+}
+
+
+def subscription_from_stripe(data: dict) -> Subscription:
+    """Map a Stripe subscription response to a normalized Subscription DTO."""
+    currency = (data.get("currency") or "").upper()
+    items = data.get("items", {}).get("data", [])
+
+    # Extract amount and interval from the first subscription item
+    amount = Decimal("0")
+    interval = SubscriptionInterval.MONTH
+    interval_count = 1
+    price_id = ""
+    if items:
+        price = items[0].get("price", {})
+        price_id = price.get("id", "")
+        amount_minor = price.get("unit_amount") or 0
+        amount = amount_from_stripe(amount_minor, currency)
+        recurring = price.get("recurring", {})
+        interval = STRIPE_INTERVAL_MAP.get(
+            recurring.get("interval", "month"), SubscriptionInterval.MONTH,
+        )
+        interval_count = recurring.get("interval_count", 1)
+
+    raw_status = data.get("status", "")
+
+    cancelled_at = None
+    if ts := data.get("canceled_at"):
+        cancelled_at = datetime.fromtimestamp(ts, tz=UTC)
+
+    trial_start = None
+    if ts := data.get("trial_start"):
+        trial_start = datetime.fromtimestamp(ts, tz=UTC)
+
+    trial_end = None
+    if ts := data.get("trial_end"):
+        trial_end = datetime.fromtimestamp(ts, tz=UTC)
+
+    created_at = None
+    if ts := data.get("created"):
+        created_at = datetime.fromtimestamp(ts, tz=UTC)
+
+    current_period_start = None
+    if ts := data.get("current_period_start"):
+        current_period_start = datetime.fromtimestamp(ts, tz=UTC)
+
+    current_period_end = None
+    if ts := data.get("current_period_end"):
+        current_period_end = datetime.fromtimestamp(ts, tz=UTC)
+
+    return Subscription(
+        subscription_id=data.get("id", ""),
+        status=STRIPE_SUBSCRIPTION_STATUS_MAP.get(raw_status, SubscriptionStatus.PENDING),
+        customer_id=data.get("customer") or "",
+        price_id=price_id,
+        amount=amount,
+        currency=currency,
+        interval=interval,
+        interval_count=interval_count,
+        current_period_start=current_period_start,
+        current_period_end=current_period_end,
+        cancel_at_period_end=data.get("cancel_at_period_end", False),
+        cancelled_at=cancelled_at,
+        trial_start=trial_start,
+        trial_end=trial_end,
+        created_at=created_at,
+        extra={"metadata": data.get("metadata", {})},
+        provider_meta=ProviderMeta(
+            provider="stripe",
+            raw_id=data.get("id", ""),
+            raw_payload=data,
+            fetched_at=datetime.now(UTC),
+        ),
+    )
+
+
+# ── Payment Method mapper ──
+
+STRIPE_CARD_BRAND_MAP: dict[str, CardBrand] = {
+    "visa": CardBrand.VISA,
+    "mastercard": CardBrand.MASTERCARD,
+    "amex": CardBrand.AMEX,
+    "discover": CardBrand.DISCOVER,
+    "diners": CardBrand.DINERS,
+    "jcb": CardBrand.JCB,
+    "unionpay": CardBrand.UNIONPAY,
+}
+
+
+def payment_method_from_stripe(data: dict, default_pm_id: str = "") -> SavedPaymentMethod:
+    """Map a Stripe PaymentMethod response to a normalized SavedPaymentMethod DTO."""
+    pm_type = data.get("type", "card")
+    card = data.get("card", {})
+
+    method_type = STRIPE_METHOD_MAP.get(pm_type, PaymentMethodType.OTHER)
+    brand = STRIPE_CARD_BRAND_MAP.get(card.get("brand", ""), CardBrand.UNKNOWN)
+
+    created_at = None
+    if ts := data.get("created"):
+        created_at = datetime.fromtimestamp(ts, tz=UTC)
+
+    return SavedPaymentMethod(
+        payment_method_id=data.get("id", ""),
+        customer_id=data.get("customer") or "",
+        method_type=method_type,
+        card_brand=brand,
+        last_four=card.get("last4", ""),
+        expiry_month=card.get("exp_month"),
+        expiry_year=card.get("exp_year"),
+        is_default=data.get("id", "") == default_pm_id,
+        created_at=created_at,
+        extra={
+            "fingerprint": card.get("fingerprint", ""),
+            "funding": card.get("funding", ""),
+            "country": card.get("country", ""),
+        },
+        provider_meta=ProviderMeta(
+            provider="stripe",
+            raw_id=data.get("id", ""),
+            raw_payload=data,
+            fetched_at=datetime.now(UTC),
+        ),
+    )
+
+
 # ── Webhook mapper ──
 
 STRIPE_WEBHOOK_EVENT_MAP: dict[str, WebhookEventType] = {
+    # One-off payments
     "checkout.session.completed": WebhookEventType.PAYMENT_COMPLETED,
     "payment_intent.succeeded": WebhookEventType.PAYMENT_COMPLETED,
     "payment_intent.payment_failed": WebhookEventType.PAYMENT_FAILED,
     "charge.refunded": WebhookEventType.PAYMENT_REFUNDED,
+    # Subscriptions
+    "customer.subscription.created": WebhookEventType.SUBSCRIPTION_CREATED,
+    "customer.subscription.updated": WebhookEventType.SUBSCRIPTION_UPDATED,
+    "customer.subscription.deleted": WebhookEventType.SUBSCRIPTION_CANCELLED,
+    # Subscription invoices (recurring payment success/failure)
+    "invoice.payment_succeeded": WebhookEventType.SUBSCRIPTION_PAYMENT_SUCCEEDED,
+    "invoice.payment_failed": WebhookEventType.SUBSCRIPTION_PAYMENT_FAILED,
 }
 
 

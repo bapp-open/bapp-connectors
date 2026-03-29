@@ -2,7 +2,7 @@
 Stripe provider manifest — declares capabilities, auth, rate limits, and webhook config.
 """
 
-from bapp_connectors.core.capabilities import WebhookCapability
+from bapp_connectors.core.capabilities import SavedPaymentCapability, SubscriptionCapability, WebhookCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -18,7 +18,7 @@ manifest = ProviderManifest(
     name="stripe",
     family=ProviderFamily.PAYMENT,
     display_name="Stripe",
-    description="Stripe payment processing — checkout sessions, payment intents, and refunds.",
+    description="Stripe payment processing — checkout sessions, payment intents, refunds, subscriptions, and saved cards.",
     base_url="https://api.stripe.com/v1/",
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
@@ -34,6 +34,8 @@ manifest = ProviderManifest(
     capabilities=[
         PaymentPort,
         WebhookCapability,
+        SubscriptionCapability,
+        SavedPaymentCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=25,
@@ -54,6 +56,11 @@ manifest = ProviderManifest(
             "payment_intent.succeeded",
             "payment_intent.payment_failed",
             "charge.refunded",
+            "customer.subscription.created",
+            "customer.subscription.updated",
+            "customer.subscription.deleted",
+            "invoice.payment_succeeded",
+            "invoice.payment_failed",
         ],
     ),
 )
