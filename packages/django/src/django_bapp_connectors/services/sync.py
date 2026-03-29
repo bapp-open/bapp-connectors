@@ -27,7 +27,9 @@ class SyncService:
     """Service layer for sync operations."""
 
     @staticmethod
-    def incremental_sync(connection, sync_state, resource_type: str, fetch_fn=None) -> SyncResult:
+    def incremental_sync(
+        connection, sync_state, resource_type: str, fetch_fn=None, *, _is_full_resync: bool = False,
+    ) -> SyncResult:
         """
         Resume from cursor, fetch new data, return SyncResult.
 
@@ -61,6 +63,19 @@ class SyncService:
                 cursor=result.cursor,
                 last_sync_at=timezone.now(),
             )
+
+            from django_bapp_connectors.signals import sync_completed
+
+            sync_completed.send_robust(
+                sender=type(sync_state),
+                connection=connection,
+                sync_state=sync_state,
+                sync_result=result,
+                resource_type=resource_type,
+                is_full_resync=_is_full_resync,
+                provider_family=connection.provider_family,
+                provider_name=connection.provider_name,
+            )
         except Exception as e:
             logger.exception("Sync failed for %s on connection %s", resource_type, connection.pk)
             sync_state.mark_failed(str(e))
@@ -73,4 +88,6 @@ class SyncService:
         """Reset cursor and run a full resync."""
         sync_state.cursor = ""
         sync_state.save(update_fields=["cursor", "updated_at"])
-        return SyncService.incremental_sync(connection, sync_state, resource_type, fetch_fn)
+        return SyncService.incremental_sync(
+            connection, sync_state, resource_type, fetch_fn, _is_full_resync=True,
+        )

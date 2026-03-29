@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from bapp_connectors.core.dto import (
     Address,
@@ -28,14 +29,36 @@ from bapp_connectors.core.dto import (
     ProviderMeta,
 )
 
-# ── Status mappings ──
+if TYPE_CHECKING:
+    from bapp_connectors.core.status_mapping import StatusMapper
+
+# ── Status mappings (defaults — tenants can override via connection config) ──
 
 GOMAG_ORDER_STATUS_MAP: dict[str, OrderStatus] = {
     "Comanda NEW": OrderStatus.PENDING,
+    "Comanda email": OrderStatus.PENDING,
+    "Comanda telefonica": OrderStatus.PENDING,
+    "Comanda in asteptare": OrderStatus.PENDING,
+    "Comanda depozitata": OrderStatus.ACCEPTED,
+    "Comanda depozit": OrderStatus.ACCEPTED,
     "In curs de procesare": OrderStatus.PROCESSING,
+    "Comanda in curs de livrare": OrderStatus.SHIPPED,
     "Livrata": OrderStatus.DELIVERED,
+    "Comanda incheiata": OrderStatus.DELIVERED,
     "Anulata": OrderStatus.CANCELLED,
     "Retur": OrderStatus.RETURNED,
+    "Returnata": OrderStatus.RETURNED,
+}
+
+ORDER_STATUS_TO_GOMAG: dict[OrderStatus, str] = {
+    OrderStatus.PENDING: "Comanda NEW",
+    OrderStatus.ACCEPTED: "Comanda depozitata",
+    OrderStatus.PROCESSING: "In curs de procesare",
+    OrderStatus.SHIPPED: "Comanda in curs de livrare",
+    OrderStatus.DELIVERED: "Livrata",
+    OrderStatus.CANCELLED: "Anulata",
+    OrderStatus.RETURNED: "Retur",
+    OrderStatus.REFUNDED: "Retur",
 }
 
 GOMAG_PAYMENT_METHOD_MAP: dict[str, PaymentType] = {
@@ -125,7 +148,7 @@ def _format_delivery_address(data: dict) -> str:
 # ── Order mappers ──
 
 
-def order_from_gomag(data: dict) -> Order:
+def order_from_gomag(data: dict, *, status_mapper: StatusMapper | None = None) -> Order:
     """Map a Gomag order response to a normalized Order DTO."""
     items = []
     for line in data.get("products", []):
@@ -155,7 +178,10 @@ def order_from_gomag(data: dict) -> Order:
                 order_date = datetime.strptime(ds, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
 
     raw_status = data.get("status_name", data.get("status", ""))
-    status = GOMAG_ORDER_STATUS_MAP.get(raw_status, OrderStatus.PENDING)
+    if status_mapper:
+        status = status_mapper.to_framework(raw_status)
+    else:
+        status = GOMAG_ORDER_STATUS_MAP.get(raw_status, OrderStatus.PENDING)
 
     payment_method = data.get("payment_method", "")
     payment_type = GOMAG_PAYMENT_METHOD_MAP.get(payment_method, PaymentType.OTHER)
@@ -166,6 +192,7 @@ def order_from_gomag(data: dict) -> Order:
         order_id=str(data.get("order_id", "")),
         external_id=str(data.get("order_id", "")) if data.get("order_id") else None,
         status=status,
+        raw_status=raw_status,
         payment_status=PaymentStatus.PAID if status == OrderStatus.DELIVERED else PaymentStatus.UNPAID,
         payment_type=payment_type,
         currency=data.get("currency_code", "RON"),
@@ -250,10 +277,12 @@ def _normalize_gomag_list(response: dict | list, key: str = "") -> list[dict]:
     return []
 
 
-def orders_from_gomag(response: dict | list, page: int = 1) -> PaginatedResult[Order]:
+def orders_from_gomag(
+    response: dict | list, page: int = 1, *, status_mapper: StatusMapper | None = None
+) -> PaginatedResult[Order]:
     """Map a Gomag orders response to PaginatedResult[Order]."""
     raw_orders = _normalize_gomag_list(response)
-    orders = [order_from_gomag(o) for o in raw_orders]
+    orders = [order_from_gomag(o, status_mapper=status_mapper) for o in raw_orders]
     has_more = len(raw_orders) > 0 and len(raw_orders) >= 100
     return PaginatedResult(
         items=orders,

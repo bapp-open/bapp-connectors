@@ -65,6 +65,11 @@ class GomagApiClient:
         }
         return self.http.call("GET", "order/status/json", params=params, **kwargs)
 
+    # ── Order Statuses ──
+
+    def get_order_statuses(self, **kwargs) -> dict:
+        return self.http.call("GET", "order/status/read/json", **kwargs)
+
     # ── Categories ──
 
     def get_categories(self, page: int = 1, limit: int = 100, **kwargs) -> dict:

@@ -143,22 +143,48 @@ try:
     @shared_task
     def process_webhook(webhook_event_id: int, app_label: str = "", model_name: str = ""):
         """Process a persisted webhook event."""
+        import json
+
         from django.apps import apps
+
+        from django_bapp_connectors.signals import webhook_event_processed
 
         WebhookEventModel = apps.get_model(app_label, model_name)
         event = WebhookEventModel.objects.get(pk=webhook_event_id)
         event.mark_processing()
 
+        connection = getattr(event, "connection", None) if hasattr(event, "connection") else None
+        parsed_dto = None
+
         try:
-            if hasattr(event, "connection") and event.connection:
-                adapter = event.connection.get_adapter()
+            if connection:
+                adapter = connection.get_adapter()
                 if hasattr(adapter, "parse_webhook"):
-                    adapter.parse_webhook(event.headers, event.payload)
+                    body = json.dumps(event.payload).encode() if isinstance(event.payload, dict) else b""
+                    parsed_dto = adapter.parse_webhook(event.headers or {}, body)
+
             event.mark_processed()
+
+            # Emit the critical signal with the parsed DTO
+            provider_family = getattr(connection, "provider_family", "") if connection else ""
+            provider_name = getattr(connection, "provider_name", "") if connection else ""
+            event_type = ""
+            if parsed_dto is not None:
+                event_type = parsed_dto.event_type.value if hasattr(parsed_dto.event_type, "value") else str(parsed_dto.event_type)
+
+            webhook_event_processed.send_robust(
+                sender=WebhookEventModel,
+                webhook_event=event,
+                webhook_dto=parsed_dto,
+                connection=connection,
+                event_type=event_type,
+                provider_family=provider_family,
+                provider_name=provider_name,
+            )
         except Exception as e:
             event.mark_failed(str(e))
-            if hasattr(event, "connection") and event.connection:
-                _handle_auth_error(event.connection, e)
+            if connection:
+                _handle_auth_error(connection, e)
             raise
 
 except ImportError:

@@ -81,6 +81,24 @@ class WebhookService:
             if connection is not None:
                 create_kwargs["connection"] = connection
 
-            return self.webhook_event_model.objects.create(**create_kwargs)
+            instance = self.webhook_event_model.objects.create(**create_kwargs)
+
+            from django_bapp_connectors.signals import webhook_event_received
+
+            provider_family = ""
+            provider_name = ""
+            if connection is not None:
+                provider_family = getattr(connection, "provider_family", "")
+                provider_name = getattr(connection, "provider_name", "")
+
+            webhook_event_received.send_robust(
+                sender=self.webhook_event_model,
+                webhook_event=instance,
+                connection=connection,
+                provider_family=provider_family,
+                provider_name=provider_name,
+            )
+
+            return instance
 
         return webhook_event

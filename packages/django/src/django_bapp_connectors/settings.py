@@ -17,6 +17,8 @@ DEFAULTS = {
     "ENCRYPTION_KEY": "",
     "WEBHOOK_BASE_URL": "",
     "DEFAULT_TIMEOUT": 10,
+    "CONNECTION_MODEL": "",  # e.g. "connectors.Connection"
+    "WEBHOOK_EVENT_MODEL": "",  # e.g. "connectors.WebhookEvent"
 }
 
 

@@ -17,9 +17,12 @@ from bapp_connectors.core.dto import (
 )
 from bapp_connectors.core.http import MultiHeaderAuth, ResilientHttpClient
 from bapp_connectors.core.ports import ShopPort
+from bapp_connectors.core.status_mapping import StatusMapper
 from bapp_connectors.providers.shop.gomag.client import GomagApiClient
 from bapp_connectors.providers.shop.gomag.manifest import manifest
 from bapp_connectors.providers.shop.gomag.mappers import (
+    GOMAG_ORDER_STATUS_MAP,
+    ORDER_STATUS_TO_GOMAG,
     order_from_gomag,
     orders_from_gomag,
     products_from_gomag,
@@ -59,6 +62,12 @@ class GomagShopAdapter(ShopPort):
 
         self.client = GomagApiClient(http_client=http_client)
 
+        self._status_mapper = StatusMapper.from_config(
+            default_inbound=GOMAG_ORDER_STATUS_MAP,
+            default_outbound=ORDER_STATUS_TO_GOMAG,
+            config=config,
+        )
+
     # ── BasePort ──
 
     def validate_credentials(self) -> bool:
@@ -80,7 +89,7 @@ class GomagShopAdapter(ShopPort):
     def get_orders(self, since: datetime | None = None, cursor: str | None = None) -> PaginatedResult[Order]:
         page = int(cursor) if cursor else 1
         response = self.client.get_orders(page=page)
-        return orders_from_gomag(response, page=page)
+        return orders_from_gomag(response, page=page, status_mapper=self._status_mapper)
 
     def get_order(self, order_id: str) -> Order:
         response = self.client.get_order(order_id)
@@ -101,7 +110,7 @@ class GomagShopAdapter(ShopPort):
                     data = response
         else:
             data = response
-        return order_from_gomag(data)
+        return order_from_gomag(data, status_mapper=self._status_mapper)
 
     def get_products(self, cursor: str | None = None) -> PaginatedResult[Product]:
         page = int(cursor) if cursor else 1
@@ -119,4 +128,8 @@ class GomagShopAdapter(ShopPort):
         raise NotImplementedError("Gomag API v1 does not support direct price updates.")
 
     def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
-        raise NotImplementedError("Order status update is not supported by this provider.")
+        gomag_status = self._status_mapper.to_provider(status)
+        if not gomag_status:
+            raise ValueError(f"Cannot map OrderStatus.{status} to a Gomag status")
+        self.client.update_order_status(order_id, gomag_status)
+        return self.get_order(order_id)

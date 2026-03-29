@@ -2,13 +2,14 @@
 eMAG provider manifest — declares capabilities, auth, rate limits, and webhook config.
 """
 
-from bapp_connectors.core.capabilities import BulkUpdateCapability, InvoiceAttachmentCapability
+from bapp_connectors.core.capabilities import BulkUpdateCapability, InvoiceAttachmentCapability, WebhookCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
+    WebhookConfig,
 )
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
@@ -47,6 +48,7 @@ manifest = ProviderManifest(
         ShopPort,
         BulkUpdateCapability,
         InvoiceAttachmentCapability,
+        WebhookCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,
@@ -57,5 +59,17 @@ manifest = ProviderManifest(
         backoff=BackoffStrategy.EXPONENTIAL,
         retryable_status_codes=[429, 500, 502, 503, 504],
         non_retryable_status_codes=[400, 401, 403, 404],
+    ),
+    webhooks=WebhookConfig(
+        supported=True,
+        signature_method=None,  # eMAG does not sign webhook payloads
+        events=[
+            "order.created",
+            "order.cancel",
+            "awb.update",
+            "return.created",
+            "product.created",
+            "product.approved",
+        ],
     ),
 )

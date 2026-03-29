@@ -100,12 +100,31 @@ class AbstractConnection(models.Model):
             self.record_auth_failure(result.message)
         return result
 
+    def _emit_status_changed(self, previous_connected: bool, previous_enabled: bool):
+        """Emit connection_status_changed signal if state actually changed."""
+        if self.is_connected != previous_connected or self.is_enabled != previous_enabled:
+            from django_bapp_connectors.signals import connection_status_changed
+
+            connection_status_changed.send_robust(
+                sender=type(self),
+                connection=self,
+                provider_family=self.provider_family,
+                provider_name=self.provider_name,
+                is_connected=self.is_connected,
+                is_enabled=self.is_enabled,
+                previous_connected=previous_connected,
+                previous_enabled=previous_enabled,
+            )
+
     def record_auth_failure(self, reason: str = ""):
         """
         Record an authentication failure. Auto-disables after threshold.
 
         Call this from your Celery tasks when you catch AuthenticationError.
         """
+        previous_connected = self.is_connected
+        previous_enabled = self.is_enabled
+
         self.auth_failure_count += 1
         self.last_auth_failure_at = timezone.now()
         self.is_connected = False
@@ -125,8 +144,25 @@ class AbstractConnection(models.Model):
 
         self.save(update_fields=update_fields)
 
+        self._emit_status_changed(previous_connected, previous_enabled)
+
+        if self.auth_failure_count >= AUTH_FAILURE_THRESHOLD:
+            from django_bapp_connectors.signals import connection_disabled
+
+            connection_disabled.send_robust(
+                sender=type(self),
+                connection=self,
+                provider_family=self.provider_family,
+                provider_name=self.provider_name,
+                auth_failure_count=self.auth_failure_count,
+                reason=self.disabled_reason,
+            )
+
     def mark_connected(self):
         """Mark connection as successful, reset failure counter."""
+        previous_connected = self.is_connected
+        previous_enabled = self.is_enabled
+
         self.is_connected = True
         self.auth_failure_count = 0
         self.last_auth_failure_at = None
@@ -136,9 +172,16 @@ class AbstractConnection(models.Model):
             "disabled_reason", "updated_at",
         ])
 
+        self._emit_status_changed(previous_connected, previous_enabled)
+
     def re_enable(self):
         """Manually re-enable a disabled connection (after fixing credentials)."""
+        previous_connected = self.is_connected
+        previous_enabled = self.is_enabled
+
         self.is_enabled = True
         self.auth_failure_count = 0
         self.disabled_reason = ""
         self.save(update_fields=["is_enabled", "auth_failure_count", "disabled_reason", "updated_at"])
+
+        self._emit_status_changed(previous_connected, previous_enabled)
