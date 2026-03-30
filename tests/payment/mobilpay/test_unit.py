@@ -11,6 +11,9 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 import pytest
+
+pyopenssl = pytest.importorskip("OpenSSL", reason="pyOpenSSL required for MobilPay tests")
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa

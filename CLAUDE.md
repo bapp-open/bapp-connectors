@@ -38,7 +38,7 @@ providers/{family}/{provider}/
 - **StoragePort mirrors Django's Storage API:** save, open, delete, exists, listdir, size
 - **MessagingPort.reply():** Concrete method that builds OutboundMessage with reply_to from InboundMessage
 - **LLM platform-key fallback:** `api_key` credential is `required=False`, adapter checks `credentials.api_key` OR `config.platform_api_key`
-- **Conditional registration:** SFTP and S3 providers only register if paramiko/boto3 are installed
+- **Conditional registration:** SFTP, S3, and MobilPay providers only register if paramiko/boto3/pyOpenSSL are installed
 
 ### Optional Capabilities
 
@@ -84,7 +84,7 @@ Each family has a `contract.py` with reusable tests that every provider must pas
 ## Build & CI
 
 - **Build:** `uv` with hatchling backend
-- **Extras:** `dev`, `sftp` (paramiko), `s3` (boto3), `oauth` (oauthlib)
+- **Extras:** `dev`, `sftp` (paramiko), `s3` (boto3), `mobilpay` (pyOpenSSL + cryptography), `oauth` (oauthlib)
 - **CI:** GitLab — unit tests + ruff on every push, publish on tags
 - **Pre-commit hook:** Auto-updates README.md providers table via `scripts/update_readme.py`
 
