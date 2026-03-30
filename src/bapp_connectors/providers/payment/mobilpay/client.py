@@ -13,7 +13,6 @@ import base64
 import logging
 import os
 from datetime import UTC, datetime
-from decimal import Decimal
 from urllib.parse import quote
 from xml.dom.minidom import Document, parseString
 
@@ -24,8 +23,13 @@ try:
     from cryptography.hazmat.decrepit.ciphers.algorithms import ARC4
 except ImportError:
     from cryptography.hazmat.primitives.ciphers.algorithms import ARC4
+from typing import TYPE_CHECKING
+
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from OpenSSL import crypto
+
+if TYPE_CHECKING:
+    from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 

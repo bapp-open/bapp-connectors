@@ -69,7 +69,7 @@ class MobilPayPaymentAdapter(PaymentPort, WebhookCapability):
             return ConnectionTestResult(success=False, message="Missing client_key, public_cert, or private_key")
         # Verify the cert/key are valid by attempting to load them
         try:
-            from bapp_connectors.providers.payment.mobilpay.client import _get_rsa_public_key, _get_rsa_private_key
+            from bapp_connectors.providers.payment.mobilpay.client import _get_rsa_private_key, _get_rsa_public_key
             _get_rsa_public_key(self._public_cert)
             _get_rsa_private_key(self._private_key)
         except Exception as e:

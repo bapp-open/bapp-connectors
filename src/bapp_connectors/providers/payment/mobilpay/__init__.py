@@ -8,8 +8,8 @@ __all__ = ["MobilPayPaymentAdapter", "manifest"]
 try:
     from OpenSSL import crypto  # noqa: F401
 
-    from bapp_connectors.providers.payment.mobilpay.adapter import MobilPayPaymentAdapter
     from bapp_connectors.core.registry import registry
+    from bapp_connectors.providers.payment.mobilpay.adapter import MobilPayPaymentAdapter
     registry.register(MobilPayPaymentAdapter)
 except ImportError:
     pass

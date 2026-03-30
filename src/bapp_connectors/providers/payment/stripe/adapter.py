@@ -182,8 +182,8 @@ class StripePaymentAdapter(PaymentPort, WebhookCapability, SubscriptionCapabilit
         response = self.client.update_subscription(
             subscription_id,
             **{
-                f"items[0][id]": item_id,
-                f"items[0][price]": price_id,
+                "items[0][id]": item_id,
+                "items[0][price]": price_id,
             },
         )
         return subscription_from_stripe(response)

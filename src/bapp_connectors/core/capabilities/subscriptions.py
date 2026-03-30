@@ -8,7 +8,6 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from decimal import Decimal
 
     from bapp_connectors.core.dto.payment import CheckoutSession
     from bapp_connectors.core.dto.subscription import Subscription
