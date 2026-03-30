@@ -97,6 +97,9 @@ def _serialize_provider(manifest: ProviderManifest) -> dict[str, Any]:
             "has_oauth": manifest.auth.oauth is not None,
             "oauth_display_name": manifest.auth.oauth.display_name if manifest.auth.oauth else "",
             "oauth_scopes": manifest.auth.oauth.scopes if manifest.auth.oauth else [],
+            "oauth_credential_fields": [
+                _serialize_credential_field(f) for f in manifest.auth.oauth.credential_fields
+            ] if manifest.auth.oauth else [],
         },
         "settings": [_serialize_settings_field(f) for f in manifest.settings.fields],
         "capabilities": [c.__name__ for c in manifest.capabilities],
