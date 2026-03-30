@@ -16,6 +16,7 @@ from bapp_connectors.core.capabilities import SavedPaymentCapability, Subscripti
 from bapp_connectors.core.dto import (
     CheckoutSession,
     ConnectionTestResult,
+    PaginatedResult,
     PaymentResult,
     Refund,
     SavedPaymentMethod,
@@ -28,6 +29,7 @@ from bapp_connectors.providers.payment.stripe.client import StripeApiClient
 from bapp_connectors.providers.payment.stripe.errors import StripeWebhookError
 from bapp_connectors.providers.payment.stripe.manifest import manifest
 from bapp_connectors.providers.payment.stripe.mappers import (
+    NORMALIZED_TO_STRIPE_STATUS,
     amount_to_stripe,
     checkout_session_from_stripe,
     payment_from_stripe,
@@ -132,6 +134,37 @@ class StripePaymentAdapter(PaymentPort, WebhookCapability, SubscriptionCapabilit
             reason=reason or None,
         )
         return refund_from_stripe(response)
+
+    def list_payments(
+        self,
+        *,
+        status: str | None = None,
+        created_after: int | None = None,
+        created_before: int | None = None,
+        limit: int = 25,
+        cursor: str | None = None,
+    ) -> PaginatedResult[PaymentResult]:
+        response = self.client.list_payment_intents(
+            limit=limit,
+            starting_after=cursor,
+            created_gte=created_after,
+            created_lte=created_before,
+        )
+        items = [payment_from_stripe(pi) for pi in response.get("data", [])]
+
+        # Client-side status filter (Stripe API doesn't support status filter natively)
+        if status:
+            stripe_status = NORMALIZED_TO_STRIPE_STATUS.get(status)
+            if stripe_status:
+                items = [p for p in items if p.extra.get("stripe_status") == stripe_status]
+            else:
+                items = [p for p in items if p.status == status]
+
+        return PaginatedResult(
+            items=items,
+            has_more=response.get("has_more", False),
+            cursor=items[-1].payment_id if items and response.get("has_more") else None,
+        )
 
     # ── SubscriptionCapability ──
 

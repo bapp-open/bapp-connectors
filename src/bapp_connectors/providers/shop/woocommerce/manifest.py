@@ -30,6 +30,7 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType,
 manifest = ProviderManifest(
     name="woocommerce",
     family=ProviderFamily.SHOP,
+    allow_multiple=True,
     display_name="WooCommerce",
     description="WooCommerce store integration for orders, products, and inventory management.",
     base_url="https://placeholder.local/wp-json/wc/v3/",  # overridden dynamically from credentials

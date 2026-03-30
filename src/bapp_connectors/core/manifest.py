@@ -146,6 +146,7 @@ class ProviderManifest:
     display_name: str = ""
     description: str = ""
     base_url: str = ""
+    allow_multiple: bool = False
 
     auth: AuthConfig = field(default_factory=AuthConfig)
     settings: SettingsConfig = field(default_factory=SettingsConfig)

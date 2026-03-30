@@ -18,6 +18,7 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFa
 manifest = ProviderManifest(
     name="okazii",
     family=ProviderFamily.SHOP,
+    allow_multiple=True,
     display_name="Okazii",
     description="Okazii marketplace integration for orders and product management.",
     base_url="https://api.okazii.ro/v2/",

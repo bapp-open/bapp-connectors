@@ -16,6 +16,7 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFa
 manifest = ProviderManifest(
     name="cel",
     family=ProviderFamily.SHOP,
+    allow_multiple=True,
     display_name="CEL.ro",
     description="CEL.ro marketplace integration for orders, products, and inventory management.",
     base_url="https://api-mp.cel.ro/market_api/",

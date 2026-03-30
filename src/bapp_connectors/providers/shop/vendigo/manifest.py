@@ -18,6 +18,7 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFa
 manifest = ProviderManifest(
     name="vendigo",
     family=ProviderFamily.SHOP,
+    allow_multiple=True,
     display_name="Vendigo",
     description="Vendigo marketplace integration for orders and product management.",
     base_url="https://my.vendigo.ro/api/v1/",

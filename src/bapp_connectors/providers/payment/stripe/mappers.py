@@ -109,6 +109,15 @@ STRIPE_STATUS_MAP: dict[str, str] = {
     "succeeded": "completed",
 }
 
+# Reverse: normalized status -> primary Stripe status (for list_payments filtering)
+NORMALIZED_TO_STRIPE_STATUS: dict[str, str] = {
+    "completed": "succeeded",
+    "cancelled": "canceled",
+    "processing": "processing",
+    "pending": "requires_payment_method",
+    "authorized": "requires_capture",
+}
+
 STRIPE_METHOD_MAP: dict[str, PaymentMethodType] = {
     "card": PaymentMethodType.CARD,
     "bank_transfer": PaymentMethodType.BANK_TRANSFER,

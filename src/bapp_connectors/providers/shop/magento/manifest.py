@@ -26,6 +26,7 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType,
 manifest = ProviderManifest(
     name="magento",
     family=ProviderFamily.SHOP,
+    allow_multiple=True,
     display_name="Magento",
     description="Magento 2 / Adobe Commerce integration for orders, products, categories, and inventory management.",
     base_url="https://placeholder.magento.com/rest/V1/",

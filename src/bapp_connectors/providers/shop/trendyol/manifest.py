@@ -17,6 +17,7 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFa
 manifest = ProviderManifest(
     name="trendyol",
     family=ProviderFamily.SHOP,
+    allow_multiple=True,
     display_name="Trendyol",
     description="Trendyol marketplace integration for orders, products, and inventory management.",
     base_url="https://apigw.trendyol.com/integration/",

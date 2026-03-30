@@ -16,6 +16,7 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFa
 manifest = ProviderManifest(
     name="gomag",
     family=ProviderFamily.SHOP,
+    allow_multiple=True,
     display_name="Gomag",
     description="Gomag e-commerce platform integration for orders, products, and inventory management.",
     base_url="https://api.gomag.ro/api/v1/",

@@ -27,6 +27,7 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType,
 manifest = ProviderManifest(
     name="prestashop",
     family=ProviderFamily.SHOP,
+    allow_multiple=True,
     display_name="PrestaShop",
     description="PrestaShop webservice integration for orders, products, categories, and inventory management.",
     base_url="https://placeholder.prestashop.com/api/",

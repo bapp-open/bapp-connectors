@@ -74,6 +74,24 @@ class StripeApiClient:
         """Retrieve a payment intent by ID."""
         return self._call("GET", f"payment_intents/{payment_intent_id}")
 
+    def list_payment_intents(
+        self,
+        *,
+        limit: int = 25,
+        starting_after: str | None = None,
+        created_gte: int | None = None,
+        created_lte: int | None = None,
+    ) -> dict:
+        """List payment intents with optional filters."""
+        params: dict[str, Any] = {"limit": str(limit)}
+        if starting_after:
+            params["starting_after"] = starting_after
+        if created_gte is not None:
+            params["created[gte]"] = str(created_gte)
+        if created_lte is not None:
+            params["created[lte]"] = str(created_lte)
+        return self._call("GET", "payment_intents", params=params)
+
     # ── Refunds ──
 
     def create_refund(

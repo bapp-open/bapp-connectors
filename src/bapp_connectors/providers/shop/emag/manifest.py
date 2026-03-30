@@ -26,6 +26,7 @@ EMAG_BASE_URLS: dict[str, str] = {
 manifest = ProviderManifest(
     name="emag",
     family=ProviderFamily.SHOP,
+    allow_multiple=True,
     display_name="eMAG",
     description="eMAG marketplace integration for orders, products, and inventory management.",
     base_url=EMAG_BASE_URLS["RO"],

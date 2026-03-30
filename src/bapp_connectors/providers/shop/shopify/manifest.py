@@ -28,6 +28,7 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType,
 manifest = ProviderManifest(
     name="shopify",
     family=ProviderFamily.SHOP,
+    allow_multiple=True,
     display_name="Shopify",
     description="Shopify Admin REST API integration for orders, products, variants, and inventory management.",
     base_url="https://placeholder.myshopify.com/admin/api/2024-01/",
