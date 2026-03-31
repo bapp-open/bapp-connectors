@@ -32,11 +32,11 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Shop** | CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce | 10 |
 | **Courier** | Colete Online, GLS, Sameday | 3 |
 | **Payment** | Cardinity, EuPlatesc, LibraPay, Netopia, PayPal, Stripe, Utrust | 7 |
-| **Messaging** | GoIP, Matrix, Facebook Messenger, RoboSMS, SMTP Email, Telegram, WhatsApp | 7 |
+| **Messaging** | Discord, GoIP, Matrix, Facebook Messenger, RoboSMS, SMTP Email, Telegram, WhatsApp | 8 |
 | **Storage** | Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV | 7 |
 | **LLM** | Anthropic, Google Gemini, Ollama, OpenAI | 4 |
 | **Feed** | Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro | 4 |
-| | **Total** | **42** |
+| | **Total** | **43** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -237,7 +237,7 @@ packages/connectors/
 │       ├── shop/          # CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce
 │       ├── courier/       # Colete Online, GLS, Sameday
 │       ├── payment/       # Cardinity, EuPlatesc, LibraPay, Netopia, PayPal, Stripe, Utrust
-│       ├── messaging/     # GoIP, Matrix, Facebook Messenger, RoboSMS, SMTP Email, Telegram, WhatsApp
+│       ├── messaging/     # Discord, GoIP, Matrix, Facebook Messenger, RoboSMS, SMTP Email, Telegram, WhatsApp
 │       ├── storage/       # Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV
 │       ├── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
 │       └── feed/          # Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro
