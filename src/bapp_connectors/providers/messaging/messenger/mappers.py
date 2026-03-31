@@ -156,16 +156,50 @@ def inbound_message_from_messenger(messaging: dict) -> InboundMessage | None:
         except (ValueError, OSError):
             pass
 
+    # Build normalized attachments and location
+    type_map = {"image": "image", "video": "video", "audio": "audio", "file": "document"}
+    attachments = []
+    location = None
+    for att in msg.get("attachments", []):
+        raw_type = att.get("type", "")
+        payload = att.get("payload", {})
+
+        if raw_type == "location":
+            coords = payload.get("coordinates", {})
+            location = MessageLocation(
+                latitude=coords.get("lat", 0.0),
+                longitude=coords.get("long", 0.0),
+            )
+            continue
+
+        att_type = type_map.get(raw_type)
+        if not att_type:
+            continue
+        attachments.append(MessageAttachment(
+            type=att_type,
+            url=payload.get("url", ""),
+            media_id=payload.get("sticker_id", ""),
+            file_size=payload.get("size"),
+        ))
+
+    msg_type = "text"
+    if attachments:
+        msg_type = attachments[0].type
+    elif location:
+        msg_type = "location"
+
     return InboundMessage(
         message_id=msg.get("mid", ""),
         channel=MessageChannel.OTHER,
         sender=sender,
         body=body,
         received_at=timestamp,
+        attachments=attachments,
+        location=location,
         extra={
+            "message_type": msg_type,
             "sender_id": sender,
             "recipient_id": messaging.get("recipient", {}).get("id", ""),
-            "attachments": msg.get("attachments", []),
             "quick_reply": msg.get("quick_reply", {}),
             "reply_to": msg.get("reply_to", {}),
             "raw_messaging": messaging,

@@ -12,7 +12,10 @@ from bapp_connectors.core.dto import (
     DeliveryReport,
     DeliveryStatus,
     InboundMessage,
+    MessageAttachment,
     MessageChannel,
+    MessageContact,
+    MessageLocation,
     OutboundMessage,
     ProviderMeta,
 )
@@ -60,17 +63,66 @@ def inbound_message_from_telegram(update: dict) -> InboundMessage | None:
     if ts := msg.get("date"):
         timestamp = datetime.fromtimestamp(ts, tz=UTC)
 
+    # Build normalized attachments, location, contacts
+    msg_type = _detect_message_type(msg)
+    attachments = []
+    location = None
+    contacts = []
+
+    if msg_type in ("photo", "document", "video", "audio", "voice", "sticker", "animation", "video_note"):
+        media_id = ""
+        mime_type = ""
+        filename = ""
+        file_size = None
+        if msg_type == "photo":
+            photos = msg.get("photo", [])
+            if photos:
+                media_id = photos[-1].get("file_id", "")
+                file_size = photos[-1].get("file_size")
+        else:
+            media_obj = msg.get(msg_type, {})
+            if isinstance(media_obj, dict):
+                media_id = media_obj.get("file_id", "")
+                mime_type = media_obj.get("mime_type", "")
+                filename = media_obj.get("file_name", "")
+                file_size = media_obj.get("file_size")
+        if media_id:
+            attachments.append(MessageAttachment(
+                type=msg_type,
+                media_id=media_id,
+                mime_type=mime_type,
+                filename=filename,
+                caption=msg.get("caption", ""),
+                file_size=file_size,
+            ))
+    elif msg_type == "location":
+        loc = msg.get("location", {})
+        location = MessageLocation(
+            latitude=loc.get("latitude", 0.0),
+            longitude=loc.get("longitude", 0.0),
+        )
+    elif msg_type == "contact":
+        c = msg.get("contact", {})
+        contacts.append(MessageContact(
+            name=c.get("first_name", ""),
+            phone=c.get("phone_number", ""),
+        ))
+
+    sender_name = " ".join(filter(None, [sender.get("first_name"), sender.get("last_name")])) or sender.get("username", "")
+
     return InboundMessage(
         message_id=str(msg.get("message_id", "")),
         channel=MessageChannel.OTHER,
         sender=str(chat.get("id", sender.get("id", ""))),
+        sender_name=sender_name,
         body=body,
         received_at=timestamp,
+        attachments=attachments,
+        location=location,
+        contacts=contacts,
         extra={
-            "update_id": update.get("update_id"),
-            "from": sender,
+            "message_type": msg_type,
             "chat": chat,
-            "message_type": _detect_message_type(msg),
             "raw_message": msg,
         },
         provider_meta=ProviderMeta(

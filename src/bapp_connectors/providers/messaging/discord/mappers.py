@@ -118,18 +118,40 @@ def inbound_message_from_discord(event: dict) -> InboundMessage | None:
         except (ValueError, AttributeError):
             pass
 
+    # Build normalized attachments
+    attachments = []
+    for att in event.get("attachments", []):
+        att_type = "document"
+        ct = att.get("content_type", "")
+        if ct.startswith("image/"):
+            att_type = "image"
+        elif ct.startswith("video/"):
+            att_type = "video"
+        elif ct.startswith("audio/"):
+            att_type = "audio"
+        attachments.append(MessageAttachment(
+            type=att_type,
+            url=att.get("url", ""),
+            media_id=att.get("id", ""),
+            mime_type=ct,
+            filename=att.get("filename", ""),
+            file_size=att.get("size"),
+        ))
+
     return InboundMessage(
         message_id=event.get("id", ""),
         channel=MessageChannel.OTHER,
         sender=sender,
+        sender_name=global_name or username,
         body=content,
         received_at=timestamp,
+        attachments=attachments,
         extra={
             "channel_id": channel_id,
             "guild_id": event.get("guild_id", ""),
             "username": username,
             "global_name": global_name,
-            "attachments": event.get("attachments", []),
+            "message_type": "text" if not attachments else attachments[0].type,
             "embeds": event.get("embeds", []),
             "message_reference": event.get("message_reference"),
             "raw_event": event,

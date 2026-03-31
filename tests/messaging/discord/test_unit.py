@@ -205,18 +205,17 @@ class TestAttachments:
     def test_image_and_document(self):
         msg = inbound_message_from_discord(SAMPLE_ATTACHMENT_EVENT)
         assert msg is not None
-        attachments = get_attachments_from_discord(msg)
-        assert len(attachments) == 2
-        assert attachments[0].type == "image"
-        assert attachments[0].filename == "photo.jpg"
-        assert attachments[0].file_size == 102400
-        assert attachments[1].type == "document"
-        assert attachments[1].filename == "document.pdf"
+        assert len(msg.attachments) == 2
+        assert msg.attachments[0].type == "image"
+        assert msg.attachments[0].filename == "photo.jpg"
+        assert msg.attachments[0].file_size == 102400
+        assert msg.attachments[1].type == "document"
+        assert msg.attachments[1].filename == "document.pdf"
 
     def test_text_has_no_attachments(self):
         msg = inbound_message_from_discord(SAMPLE_MESSAGE_EVENT)
         assert msg is not None
-        assert get_attachments_from_discord(msg) == []
+        assert msg.attachments == []
 
 
 # ── Webhook Event Parsing ──

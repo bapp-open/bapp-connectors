@@ -266,16 +266,15 @@ class TestAttachments:
         messaging = SAMPLE_ATTACHMENT_WEBHOOK["entry"][0]["messaging"][0]
         msg = inbound_message_from_messenger(messaging)
         assert msg is not None
-        attachments = get_attachments_from_messenger(msg)
-        assert len(attachments) == 1
-        assert attachments[0].type == "image"
-        assert attachments[0].url == "https://cdn.example.com/photo.jpg"
+        assert len(msg.attachments) == 1
+        assert msg.attachments[0].type == "image"
+        assert msg.attachments[0].url == "https://cdn.example.com/photo.jpg"
 
     def test_text_has_no_attachments(self):
         messaging = SAMPLE_MESSAGE_WEBHOOK["entry"][0]["messaging"][0]
         msg = inbound_message_from_messenger(messaging)
         assert msg is not None
-        assert get_attachments_from_messenger(msg) == []
+        assert msg.attachments == []
 
 
 # ── Location Extraction ──
@@ -287,10 +286,9 @@ class TestLocation:
         messaging = SAMPLE_LOCATION_WEBHOOK["entry"][0]["messaging"][0]
         msg = inbound_message_from_messenger(messaging)
         assert msg is not None
-        loc = get_location_from_messenger(msg)
-        assert loc is not None
-        assert loc.latitude == pytest.approx(44.4268)
-        assert loc.longitude == pytest.approx(26.1025)
+        assert msg.location is not None
+        assert msg.location.latitude == pytest.approx(44.4268)
+        assert msg.location.longitude == pytest.approx(26.1025)
 
     def test_text_has_no_location(self):
         messaging = SAMPLE_MESSAGE_WEBHOOK["entry"][0]["messaging"][0]

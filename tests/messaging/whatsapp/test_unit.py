@@ -196,7 +196,7 @@ class TestInboundMessage:
         assert result.sender == "40721000000"
         assert result.body == "Hello!"
         assert result.message_id == "wamid.123"
-        assert result.extra["sender_name"] == "Test User"
+        assert result.sender_name == "Test User"
         assert result.extra["message_type"] == "text"
 
     def test_image_message_with_caption(self):
@@ -242,7 +242,7 @@ class TestInboundMessage:
             "text": {"body": "test"},
         }
         result = inbound_message_from_whatsapp(msg)
-        assert result.extra["sender_name"] == ""
+        assert result.sender_name == ""
 
 
 # ── Webhook Event Parsing ──

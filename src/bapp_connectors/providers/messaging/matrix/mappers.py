@@ -111,15 +111,48 @@ def inbound_message_from_matrix(event: dict) -> InboundMessage | None:
         except (ValueError, OSError):
             pass
 
+    # Build normalized attachments and location
+    type_map = {"m.image": "image", "m.file": "document", "m.video": "video", "m.audio": "audio"}
+    attachments = []
+    location = None
+
+    att_type = type_map.get(msgtype)
+    if att_type:
+        info = content.get("info", {})
+        attachments.append(MessageAttachment(
+            type=att_type,
+            media_id=content.get("url", ""),
+            mime_type=info.get("mimetype", ""),
+            filename=content.get("filename", content.get("body", "")),
+            file_size=info.get("size"),
+        ))
+    elif msgtype == "m.location":
+        geo_uri = content.get("geo_uri", "")
+        if geo_uri.startswith("geo:"):
+            coords = geo_uri[4:].split(",")
+            if len(coords) >= 2:
+                try:
+                    location = MessageLocation(
+                        latitude=float(coords[0]),
+                        longitude=float(coords[1]),
+                        name=content.get("body", ""),
+                    )
+                except (ValueError, IndexError):
+                    pass
+
     return InboundMessage(
         message_id=event.get("event_id", ""),
         channel=MessageChannel.OTHER,
         sender=sender,
+        sender_name=sender.split(":")[0].lstrip("@") if ":" in sender else sender,
         body=body,
         received_at=timestamp,
+        attachments=attachments,
+        location=location,
         extra={
             "room_id": room_id,
             "msgtype": msgtype,
+            "message_type": att_type or ("location" if location else "text"),
             "content": content,
             "raw_event": event,
         },

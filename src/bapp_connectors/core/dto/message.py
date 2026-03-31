@@ -25,6 +25,19 @@ class DeliveryStatus(StrEnum):
     REJECTED = "rejected"
 
 
+class MessageAttachment(BaseDTO):
+    """Normalized attachment from an inbound message."""
+
+    type: str  # "image", "document", "video", "audio", "voice", "sticker", "animation"
+    media_id: str = ""
+    url: str = ""
+    mime_type: str = ""
+    filename: str = ""
+    caption: str = ""
+    file_size: int | None = None
+    extra: dict = {}
+
+
 class OutboundMessage(BaseDTO):
     """Normalized outbound message."""
 
@@ -38,30 +51,6 @@ class OutboundMessage(BaseDTO):
     template_id: str = ""
     template_vars: dict = {}
     attachments: list[dict] = []
-    extra: dict = {}
-
-
-class InboundMessage(BaseDTO):
-    """Normalized inbound message (webhook-received)."""
-
-    message_id: str
-    channel: MessageChannel
-    sender: str = ""
-    body: str = ""
-    received_at: datetime | None = None
-    extra: dict = {}
-
-
-class MessageAttachment(BaseDTO):
-    """Normalized attachment from an inbound message."""
-
-    type: str  # "image", "document", "video", "audio", "voice", "sticker", "animation"
-    media_id: str = ""
-    url: str = ""
-    mime_type: str = ""
-    filename: str = ""
-    caption: str = ""
-    file_size: int | None = None
     extra: dict = {}
 
 
@@ -81,6 +70,21 @@ class MessageContact(BaseDTO):
     name: str = ""
     phone: str = ""
     email: str = ""
+    extra: dict = {}
+
+
+class InboundMessage(BaseDTO):
+    """Normalized inbound message (webhook-received)."""
+
+    message_id: str
+    channel: MessageChannel
+    sender: str = ""
+    sender_name: str = ""
+    body: str = ""
+    received_at: datetime | None = None
+    attachments: list[MessageAttachment] = []
+    location: MessageLocation | None = None
+    contacts: list[MessageContact] = []
     extra: dict = {}
 
 

@@ -12,6 +12,7 @@ from bapp_connectors.core.dto import (
     DeliveryReport,
     DeliveryStatus,
     InboundMessage,
+    MessageAttachment,
     MessageChannel,
     OutboundMessage,
     ProviderMeta,
@@ -235,14 +236,29 @@ def inbound_message_from_whatsapp(msg: dict, contacts: list[dict] | None = None)
                 sender_name = c.get("profile", {}).get("name", "")
                 break
 
+    # Build normalized attachments
+    attachments = []
+    if msg_type in ("image", "video", "audio", "document", "sticker", "voice"):
+        media = msg.get(msg_type, {})
+        if media:
+            attachments.append(MessageAttachment(
+                type=msg_type,
+                media_id=media.get("id", ""),
+                mime_type=media.get("mime_type", ""),
+                filename=media.get("filename", ""),
+                caption=media.get("caption", ""),
+                file_size=media.get("file_size"),
+            ))
+
     return InboundMessage(
         message_id=msg.get("id", ""),
         channel=MessageChannel.OTHER,
         sender=sender,
+        sender_name=sender_name,
         body=body,
         received_at=timestamp,
+        attachments=attachments,
         extra={
-            "sender_name": sender_name,
             "message_type": msg_type,
             "context": msg.get("context", {}),
             "raw_message": msg,
