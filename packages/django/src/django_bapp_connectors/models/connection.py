@@ -80,15 +80,12 @@ class AbstractConnection(models.Model):
         Instantiate the matching bapp_connectors adapter.
 
         Returns a configured adapter instance ready for API calls.
+        Execution logging is automatically attached when the
+        ``django_bapp_connectors`` service layer is available.
         """
-        from bapp_connectors.core.registry import registry
+        from django_bapp_connectors.services.connection import ConnectionService
 
-        return registry.create_adapter(
-            family=self.provider_family,
-            provider=self.provider_name,
-            credentials=self.credentials,
-            config=self.config,
-        )
+        return ConnectionService.get_adapter(self)
 
     def test_connection(self):
         """Test the connection and update is_connected status."""

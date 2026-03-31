@@ -114,14 +114,31 @@ class ConnectionService:
     """Service layer for managing connector connections."""
 
     @staticmethod
-    def get_adapter(connection) -> BasePort:
-        """Instantiate the right adapter from a Connection model instance."""
-        return registry.create_adapter(
+    def get_adapter(connection, log_execution: bool = True) -> BasePort:
+        """Instantiate the right adapter from a Connection model instance.
+
+        When ``log_execution`` is True (the default), every HTTP request made
+        through this adapter is persisted to the ExecutionLog model.
+        """
+        adapter = registry.create_adapter(
             family=connection.provider_family,
             provider=connection.provider_name,
             credentials=connection.credentials,
             config=connection.config,
         )
+        if log_execution:
+            try:
+                from django_bapp_connectors.callbacks import make_execution_log_callback
+                # Resolve the ResilientHttpClient — adapters store it as adapter.client.http
+                http_client = getattr(getattr(adapter, 'client', None), 'http', None)
+                if http_client and hasattr(http_client, 'middleware'):
+                    execution_log_model = connection.execution_logs.model
+                    on_response, on_error = make_execution_log_callback(execution_log_model, connection)
+                    http_client.middleware.add_on_response(on_response)
+                    http_client.middleware.add_on_error(on_error)
+            except Exception:
+                logger.debug("Could not attach execution log callbacks", exc_info=True)
+        return adapter
 
     @staticmethod
     def test_connection(connection) -> ConnectionTestResult:
