@@ -15,6 +15,7 @@ from __future__ import annotations
 import binascii
 import json
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from bapp_connectors.core.capabilities import WebhookCapability
 from bapp_connectors.core.dto import (
@@ -24,6 +25,9 @@ from bapp_connectors.core.dto import (
     Refund,
     WebhookEvent,
 )
+
+if TYPE_CHECKING:
+    from bapp_connectors.core.dto import BillingDetails
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
 from bapp_connectors.providers.payment.euplatesc.client import (
@@ -102,6 +106,7 @@ class EuPlatescPaymentAdapter(PaymentPort, WebhookCapability):
         success_url: str | None = None,
         cancel_url: str | None = None,
         client_email: str | None = None,
+        billing: BillingDetails | None = None,
     ) -> CheckoutSession:
         """Build EuPlatesc checkout form data with HMAC signature.
 
@@ -112,8 +117,9 @@ class EuPlatescPaymentAdapter(PaymentPort, WebhookCapability):
         """
         back_url = success_url or self._back_url or ""
         client_data = {}
-        if client_email:
-            client_data["email"] = client_email
+        _email = (billing.email if billing else None) or client_email
+        if _email:
+            client_data["email"] = _email
 
         form_data = build_checkout_form(
             amount=float(amount),

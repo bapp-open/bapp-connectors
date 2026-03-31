@@ -31,7 +31,7 @@ from .message import (
 )
 from .order import Order, OrderItem, OrderStatus, PaymentStatus, PaymentType
 from .partner import Address, Contact
-from .payment import CheckoutSession, PaymentMethodType, PaymentResult, Refund
+from .payment import BillingDetails, CheckoutSession, PaymentMethodType, PaymentResult, Refund
 from .product import (
     AttributeDefinition,
     AttributeValue,
@@ -54,6 +54,7 @@ __all__ = [
     "AttributeDefinition",
     "AttributeValue",
     "BaseDTO",
+    "BillingDetails",
     "BulkResult",
     "CardBrand",
     "ChatMessage",

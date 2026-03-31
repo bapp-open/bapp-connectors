@@ -42,6 +42,8 @@ from bapp_connectors.providers.payment.stripe.mappers import (
 if TYPE_CHECKING:
     from decimal import Decimal
 
+    from bapp_connectors.core.dto import BillingDetails
+
 
 class StripePaymentAdapter(PaymentPort, WebhookCapability, SubscriptionCapability, SavedPaymentCapability):
     """
@@ -100,11 +102,13 @@ class StripePaymentAdapter(PaymentPort, WebhookCapability, SubscriptionCapabilit
         success_url: str | None = None,
         cancel_url: str | None = None,
         client_email: str | None = None,
+        billing: BillingDetails | None = None,
     ) -> CheckoutSession:
         stripe_amount = amount_to_stripe(amount, currency)
         # Stripe requires success_url for hosted checkout sessions
         if not success_url:
             success_url = "https://example.com/return"
+        _email = (billing.email if billing else None) or client_email
         response = self.client.create_checkout_session(
             amount=stripe_amount,
             currency=currency,
@@ -112,7 +116,7 @@ class StripePaymentAdapter(PaymentPort, WebhookCapability, SubscriptionCapabilit
             identifier=identifier,
             success_url=success_url,
             cancel_url=cancel_url,
-            customer_email=client_email,
+            customer_email=_email,
         )
         return checkout_session_from_stripe(response)
 

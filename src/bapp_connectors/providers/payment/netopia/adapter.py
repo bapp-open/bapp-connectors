@@ -34,6 +34,8 @@ from bapp_connectors.providers.payment.netopia.mappers import (
 if TYPE_CHECKING:
     from decimal import Decimal
 
+    from bapp_connectors.core.dto import BillingDetails
+
 
 class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
     """
@@ -112,13 +114,17 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
         success_url: str | None = None,
         cancel_url: str | None = None,
         client_email: str | None = None,
+        billing: BillingDetails | None = None,
     ) -> CheckoutSession:
+        _email = (billing.email if billing else None) or client_email or ""
+        _phone = billing.phone if billing else ""
         response = self.client.start_payment(
             amount=float(amount),
             currency=currency,
             description=description,
             order_id=identifier,
-            client_email=client_email or "",
+            client_email=_email,
+            client_phone=_phone,
             cancel_url=cancel_url or "",
             success_url=success_url or "",
         )

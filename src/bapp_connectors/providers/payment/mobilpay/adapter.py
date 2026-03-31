@@ -8,6 +8,7 @@ Uses pycryptodome and pyopenssl for cryptographic operations.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
 from bapp_connectors.core.capabilities import WebhookCapability
@@ -18,6 +19,9 @@ from bapp_connectors.core.dto import (
     Refund,
     WebhookEvent,
 )
+
+if TYPE_CHECKING:
+    from bapp_connectors.core.dto import BillingDetails
 from bapp_connectors.core.errors import WebhookVerificationError
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
@@ -90,7 +94,9 @@ class MobilPayPaymentAdapter(PaymentPort, WebhookCapability):
         success_url: str | None = None,
         cancel_url: str | None = None,
         client_email: str | None = None,
+        billing: BillingDetails | None = None,
     ) -> CheckoutSession:
+        _email = (billing.email if billing else None) or client_email or ""
         xml_bytes = build_order_xml(
             client_key=self._client_key,
             order_id=identifier,
@@ -99,7 +105,7 @@ class MobilPayPaymentAdapter(PaymentPort, WebhookCapability):
             description=description,
             confirm_url=success_url or "",
             return_url=success_url or "",
-            client_email=client_email or "",
+            client_email=_email,
         )
 
         enc_data, env_key = encrypt_xml(xml_bytes, self._public_cert)

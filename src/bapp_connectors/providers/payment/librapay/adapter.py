@@ -10,6 +10,7 @@ from __future__ import annotations
 import binascii
 import json
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from bapp_connectors.core.capabilities import WebhookCapability
 from bapp_connectors.core.dto import (
@@ -19,6 +20,9 @@ from bapp_connectors.core.dto import (
     Refund,
     WebhookEvent,
 )
+
+if TYPE_CHECKING:
+    from bapp_connectors.core.dto import BillingDetails
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
 from bapp_connectors.providers.payment.librapay.client import (
@@ -91,6 +95,7 @@ class LibraPayPaymentAdapter(PaymentPort, WebhookCapability):
         success_url: str | None = None,
         cancel_url: str | None = None,
         client_email: str | None = None,
+        billing: BillingDetails | None = None,
     ) -> CheckoutSession:
         back_url = success_url or self._back_url or ""
 

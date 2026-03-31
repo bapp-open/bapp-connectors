@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from bapp_connectors.core.capabilities import WebhookCapability
 from bapp_connectors.core.dto import (
@@ -17,6 +18,9 @@ from bapp_connectors.core.dto import (
     Refund,
     WebhookEvent,
 )
+
+if TYPE_CHECKING:
+    from bapp_connectors.core.dto import BillingDetails
 from bapp_connectors.core.errors import WebhookVerificationError
 from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
@@ -83,7 +87,12 @@ class UtrustPaymentAdapter(PaymentPort, WebhookCapability):
         success_url: str | None = None,
         cancel_url: str | None = None,
         client_email: str | None = None,
+        billing: BillingDetails | None = None,
     ) -> CheckoutSession:
+        _email = (billing.email if billing else None) or client_email or ""
+        _first = billing.first_name if billing else ""
+        _last = billing.last_name if billing else ""
+        _country = billing.country if billing else ""
         response = self._client.create_order(
             reference=identifier,
             amount=float(amount),
@@ -92,7 +101,10 @@ class UtrustPaymentAdapter(PaymentPort, WebhookCapability):
             return_url=success_url or "",
             cancel_url=cancel_url or "",
             callback_url=success_url or "",
-            customer_email=client_email or "",
+            customer_email=_email,
+            customer_first_name=_first,
+            customer_last_name=_last,
+            customer_country=_country,
         )
         return checkout_session_from_utrust(response, identifier, amount, currency)
 

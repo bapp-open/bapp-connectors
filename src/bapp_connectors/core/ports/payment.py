@@ -12,7 +12,7 @@ from bapp_connectors.core.ports.base import BasePort
 if TYPE_CHECKING:
     from decimal import Decimal
 
-    from bapp_connectors.core.dto import CheckoutSession, PaginatedResult, PaymentResult, Refund
+    from bapp_connectors.core.dto import BillingDetails, CheckoutSession, PaginatedResult, PaymentResult, Refund
 
 
 class PaymentPort(BasePort):
@@ -32,8 +32,21 @@ class PaymentPort(BasePort):
         success_url: str | None = None,
         cancel_url: str | None = None,
         client_email: str | None = None,
+        billing: BillingDetails | None = None,
     ) -> CheckoutSession:
-        """Create a payment checkout session / payment link."""
+        """Create a payment checkout session / payment link.
+
+        Args:
+            amount: Payment amount.
+            currency: ISO 4217 currency code (e.g. "RON", "EUR").
+            description: Human-readable description of the payment.
+            identifier: Your order/invoice ID.
+            success_url: Redirect URL after successful payment.
+            cancel_url: Redirect URL if user cancels.
+            client_email: Shorthand for billing email (deprecated, use billing).
+            billing: Client billing details (name, phone, address, tax ID).
+                Providers use what they support and ignore the rest.
+        """
         ...
 
     @abstractmethod

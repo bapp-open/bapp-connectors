@@ -19,6 +19,23 @@ class PaymentMethodType(StrEnum):
     OTHER = "other"
 
 
+class BillingDetails(BaseDTO):
+    """Client billing details for checkout sessions and invoicing."""
+
+    email: str = ""
+    phone: str = ""
+    first_name: str = ""
+    last_name: str = ""
+    company: str = ""
+    tax_id: str = ""  # CUI/CIF/VAT number
+    address_line1: str = ""
+    address_line2: str = ""
+    city: str = ""
+    state: str = ""
+    postal_code: str = ""
+    country: str = ""  # ISO 3166-1 alpha-2 (e.g. "RO")
+
+
 class CheckoutSession(BaseDTO):
     """A payment checkout session / payment link."""
 
