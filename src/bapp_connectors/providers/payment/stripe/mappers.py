@@ -340,6 +340,7 @@ STRIPE_WEBHOOK_EVENT_MAP: dict[str, WebhookEventType] = {
     # One-off payments
     "checkout.session.completed": WebhookEventType.PAYMENT_COMPLETED,
     "payment_intent.succeeded": WebhookEventType.PAYMENT_COMPLETED,
+    "charge.succeeded": WebhookEventType.PAYMENT_COMPLETED,
     "payment_intent.payment_failed": WebhookEventType.PAYMENT_FAILED,
     "charge.refunded": WebhookEventType.PAYMENT_REFUNDED,
     # Subscriptions

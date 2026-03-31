@@ -19,13 +19,33 @@ class SignatureVerifier(ABC):
 
 
 class HmacSha256Verifier(SignatureVerifier):
-    """HMAC-SHA256 signature verification (used by Stripe, Dropbox, etc.)."""
+    """HMAC-SHA256 signature verification.
+
+    Supports multiple header formats:
+    - Raw hex: ``abcdef123456...``
+    - Prefixed: ``sha256=abcdef123456...``
+    - Stripe-style: ``t=1616346610,v1=abcdef123456...``
+    """
 
     def verify(self, body: bytes, signature: str, secret: str) -> bool:
+        # Stripe format: "t=<timestamp>,v1=<sig>,..."
+        if signature.startswith("t="):
+            return self._verify_stripe(body, signature, secret)
         expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-        # Handle common prefix formats: "sha256=..." or raw hex
         actual = signature.removeprefix("sha256=").strip()
         return hmac.compare_digest(expected, actual)
+
+    @staticmethod
+    def _verify_stripe(body: bytes, signature: str, secret: str) -> bool:
+        """Stripe signs ``timestamp.body`` and puts the result in the v1= field."""
+        parts = dict(p.split("=", 1) for p in signature.split(",") if "=" in p)
+        timestamp = parts.get("t", "")
+        sig_hex = parts.get("v1", "")
+        if not timestamp or not sig_hex:
+            return False
+        signed_payload = f"{timestamp}.".encode() + body
+        expected = hmac.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, sig_hex)
 
 
 class HmacSha1Verifier(SignatureVerifier):

@@ -1,6 +1,6 @@
 [project]
 name = "bapp-connectors"
-version = "0.15.0"
+version = "0.16.0"
 description = "Reusable integration framework for external service connectors (shops, couriers, payments, messaging, storage)"
 readme = "README.md"
 requires-python = ">=3.11"
