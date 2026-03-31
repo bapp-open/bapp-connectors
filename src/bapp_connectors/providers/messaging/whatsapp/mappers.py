@@ -197,10 +197,10 @@ def build_payload(message: OutboundMessage) -> dict:
 # ── Webhook / Inbound mappers ──
 
 WHATSAPP_STATUS_MAP: dict[str, WebhookEventType] = {
-    "sent": WebhookEventType.UNKNOWN,
-    "delivered": WebhookEventType.UNKNOWN,
-    "read": WebhookEventType.UNKNOWN,
-    "failed": WebhookEventType.UNKNOWN,
+    "sent": WebhookEventType.MESSAGE_DELIVERED,
+    "delivered": WebhookEventType.MESSAGE_DELIVERED,
+    "read": WebhookEventType.MESSAGE_DELIVERED,
+    "failed": WebhookEventType.MESSAGE_FAILED,
 }
 
 
@@ -276,10 +276,11 @@ def webhook_event_from_whatsapp(data: dict) -> WebhookEvent:
 
     # Determine event type
     if messages:
-        event_type = WebhookEventType.UNKNOWN  # "message_received" — no standard enum
+        event_type = WebhookEventType.MESSAGE_RECEIVED
         provider_event_type = "messages"
     elif statuses:
-        event_type = WebhookEventType.UNKNOWN
+        first_status = statuses[0].get("status", "") if statuses else ""
+        event_type = WHATSAPP_STATUS_MAP.get(first_status, WebhookEventType.UNKNOWN)
         provider_event_type = "message_status"
     else:
         event_type = WebhookEventType.UNKNOWN

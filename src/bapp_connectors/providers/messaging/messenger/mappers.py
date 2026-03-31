@@ -233,10 +233,10 @@ def get_location_from_messenger(message: InboundMessage) -> MessageLocation | No
 
 
 MESSENGER_WEBHOOK_EVENT_MAP: dict[str, WebhookEventType] = {
-    "messages": WebhookEventType.UNKNOWN,
-    "messaging_postbacks": WebhookEventType.UNKNOWN,
-    "message_deliveries": WebhookEventType.UNKNOWN,
-    "message_reads": WebhookEventType.UNKNOWN,
+    "messages": WebhookEventType.MESSAGE_RECEIVED,
+    "messaging_postbacks": WebhookEventType.MESSAGE_RECEIVED,
+    "message_deliveries": WebhookEventType.MESSAGE_DELIVERED,
+    "message_reads": WebhookEventType.MESSAGE_DELIVERED,
 }
 
 

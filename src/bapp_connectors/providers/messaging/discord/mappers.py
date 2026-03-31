@@ -217,7 +217,7 @@ def webhook_event_from_discord(data: dict) -> WebhookEvent:
 
     return WebhookEvent(
         event_id=event_id,
-        event_type=WebhookEventType.UNKNOWN,
+        event_type=WebhookEventType.MESSAGE_RECEIVED,
         provider="discord",
         provider_event_type="MESSAGE_CREATE",
         payload=data,

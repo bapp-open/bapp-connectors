@@ -189,7 +189,7 @@ def get_location_from_matrix(message: InboundMessage) -> MessageLocation | None:
 
 
 MATRIX_WEBHOOK_EVENT_MAP: dict[str, WebhookEventType] = {
-    "m.room.message": WebhookEventType.UNKNOWN,
+    "m.room.message": WebhookEventType.MESSAGE_RECEIVED,
     "m.room.member": WebhookEventType.UNKNOWN,
 }
 
