@@ -19,7 +19,16 @@ from .llm import (
     ToolDefinition,
     TranscriptionResult,
 )
-from .message import DeliveryReport, DeliveryStatus, InboundMessage, MessageChannel, OutboundMessage
+from .message import (
+    DeliveryReport,
+    DeliveryStatus,
+    InboundMessage,
+    MessageAttachment,
+    MessageChannel,
+    MessageContact,
+    MessageLocation,
+    OutboundMessage,
+)
 from .order import Order, OrderItem, OrderStatus, PaymentStatus, PaymentType
 from .partner import Address, Contact
 from .payment import CheckoutSession, PaymentMethodType, PaymentResult, Refund
@@ -65,7 +74,10 @@ __all__ = [
     "InboundMessage",
     "LLMChunk",
     "LLMResponse",
+    "MessageAttachment",
     "MessageChannel",
+    "MessageContact",
+    "MessageLocation",
     "ModelInfo",
     "ModelPricing",
     "Order",

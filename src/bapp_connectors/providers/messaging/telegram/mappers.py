@@ -167,6 +167,55 @@ def build_media_payload(message: OutboundMessage, parse_mode: str = "HTML") -> t
     return api_method, payload
 
 
+def build_location_payload(message: OutboundMessage) -> tuple[str, dict] | None:
+    """Build a Telegram sendLocation or sendVenue payload from extra.location."""
+    if not message.extra:
+        return None
+    loc = message.extra.get("location")
+    if not loc:
+        return None
+
+    payload: dict = {
+        "chat_id": message.to,
+        "latitude": loc["latitude"],
+        "longitude": loc["longitude"],
+    }
+    if rp := _reply_params(message.reply_to):
+        payload["reply_parameters"] = rp
+
+    # If name/address provided, use sendVenue
+    if loc.get("name") or loc.get("address"):
+        payload["title"] = loc.get("name", "")
+        payload["address"] = loc.get("address", "")
+        return "sendVenue", payload
+
+    return "sendLocation", payload
+
+
+def build_contact_payload(message: OutboundMessage) -> tuple[str, dict] | None:
+    """Build a Telegram sendContact payload from extra.contact."""
+    if not message.extra:
+        return None
+    contact = message.extra.get("contact")
+    if not contact:
+        return None
+
+    name = contact.get("name", "")
+    parts = name.split(" ", 1)
+
+    payload: dict = {
+        "chat_id": message.to,
+        "phone_number": contact.get("phone", ""),
+        "first_name": parts[0],
+    }
+    if len(parts) > 1:
+        payload["last_name"] = parts[1]
+    if rp := _reply_params(message.reply_to):
+        payload["reply_parameters"] = rp
+
+    return "sendContact", payload
+
+
 def build_payload(message: OutboundMessage, default_parse_mode: str = "HTML") -> tuple[str, dict]:
     """Build the appropriate Telegram API method + payload.
 
@@ -175,6 +224,18 @@ def build_payload(message: OutboundMessage, default_parse_mode: str = "HTML") ->
     # Media message
     if message.extra and message.extra.get("media_type"):
         result = build_media_payload(message, default_parse_mode)
+        if result:
+            return result
+
+    # Location / venue
+    if message.extra and message.extra.get("location"):
+        result = build_location_payload(message)
+        if result:
+            return result
+
+    # Contact
+    if message.extra and message.extra.get("contact"):
+        result = build_contact_payload(message)
         if result:
             return result
 

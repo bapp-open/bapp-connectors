@@ -17,6 +17,10 @@ from bapp_connectors.core.dto import (
     ConnectionTestResult,
     DeliveryReport,
     DeliveryStatus,
+    InboundMessage,
+    MessageAttachment,
+    MessageContact,
+    MessageLocation,
     OutboundMessage,
     WebhookEvent,
 )
@@ -119,6 +123,58 @@ class WhatsAppMessagingAdapter(MessagingPort, WebhookCapability):
         is sent individually.
         """
         return [self.send(message) for message in messages]
+
+    # ── Inbound message parsing ──
+
+    def get_attachments(self, message: InboundMessage) -> list[MessageAttachment]:
+        raw = message.extra.get("raw_message", {})
+        msg_type = message.extra.get("message_type", "")
+        if msg_type not in ("image", "document", "video", "audio", "voice", "sticker"):
+            return []
+
+        media = raw.get(msg_type, {})
+        if not media:
+            return []
+
+        return [MessageAttachment(
+            type=msg_type,
+            media_id=media.get("id", ""),
+            mime_type=media.get("mime_type", ""),
+            filename=media.get("filename", ""),
+            caption=media.get("caption", ""),
+            file_size=media.get("file_size"),
+            extra={"sha256": media.get("sha256", "")},
+        )]
+
+    def get_location(self, message: InboundMessage) -> MessageLocation | None:
+        raw = message.extra.get("raw_message", {})
+        loc = raw.get("location")
+        if not loc:
+            return None
+        return MessageLocation(
+            latitude=loc.get("latitude", 0.0),
+            longitude=loc.get("longitude", 0.0),
+            name=loc.get("name", ""),
+            address=loc.get("address", ""),
+        )
+
+    def get_contacts(self, message: InboundMessage) -> list[MessageContact]:
+        raw = message.extra.get("raw_message", {})
+        contacts = raw.get("contacts", [])
+        result = []
+        for c in contacts:
+            name_parts = c.get("name", {})
+            name = name_parts.get("formatted_name", "")
+            phone = ""
+            phones = c.get("phones", [])
+            if phones:
+                phone = phones[0].get("phone", "")
+            email = ""
+            emails = c.get("emails", [])
+            if emails:
+                email = emails[0].get("email", "")
+            result.append(MessageContact(name=name, phone=phone, email=email, extra=c))
+        return result
 
     # ── WebhookCapability ──
 

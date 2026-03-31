@@ -117,6 +117,56 @@ def _apply_reply_context(payload: dict, reply_to: str) -> dict:
     return payload
 
 
+def build_location_payload(message: OutboundMessage) -> dict | None:
+    """Build a WhatsApp location message payload from extra.location."""
+    if not message.extra:
+        return None
+    loc = message.extra.get("location")
+    if not loc:
+        return None
+    return {
+        "messaging_product": "whatsapp",
+        "to": message.to,
+        "type": "location",
+        "location": {
+            "latitude": str(loc["latitude"]),
+            "longitude": str(loc["longitude"]),
+            "name": loc.get("name", ""),
+            "address": loc.get("address", ""),
+        },
+    }
+
+
+def build_contact_payload(message: OutboundMessage) -> dict | None:
+    """Build a WhatsApp contacts message payload from extra.contact."""
+    if not message.extra:
+        return None
+    contact = message.extra.get("contact")
+    if not contact:
+        return None
+
+    name = contact.get("name", "")
+    # Split name for WhatsApp's structured name format
+    parts = name.split(" ", 1)
+    first = parts[0]
+    last = parts[1] if len(parts) > 1 else ""
+
+    wa_contact: dict = {
+        "name": {"formatted_name": name, "first_name": first, "last_name": last},
+    }
+    if phone := contact.get("phone"):
+        wa_contact["phones"] = [{"phone": phone, "type": "CELL"}]
+    if email := contact.get("email"):
+        wa_contact["emails"] = [{"email": email, "type": "WORK"}]
+
+    return {
+        "messaging_product": "whatsapp",
+        "to": message.to,
+        "type": "contacts",
+        "contacts": [wa_contact],
+    }
+
+
 def build_payload(message: OutboundMessage) -> dict:
     """Build the appropriate WhatsApp payload based on the message content."""
     # Template message
@@ -125,6 +175,16 @@ def build_payload(message: OutboundMessage) -> dict:
     # Media message
     elif message.extra and message.extra.get("media_type"):
         payload = build_media_payload(message)
+        if payload is None:
+            payload = build_text_payload(message)
+    # Location message
+    elif message.extra and message.extra.get("location"):
+        payload = build_location_payload(message)
+        if payload is None:
+            payload = build_text_payload(message)
+    # Contact message
+    elif message.extra and message.extra.get("contact"):
+        payload = build_contact_payload(message)
         if payload is None:
             payload = build_text_payload(message)
     # Default: text message

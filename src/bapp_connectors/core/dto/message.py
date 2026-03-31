@@ -52,6 +52,38 @@ class InboundMessage(BaseDTO):
     extra: dict = {}
 
 
+class MessageAttachment(BaseDTO):
+    """Normalized attachment from an inbound message."""
+
+    type: str  # "image", "document", "video", "audio", "voice", "sticker", "animation"
+    media_id: str = ""
+    url: str = ""
+    mime_type: str = ""
+    filename: str = ""
+    caption: str = ""
+    file_size: int | None = None
+    extra: dict = {}
+
+
+class MessageLocation(BaseDTO):
+    """Normalized location from an inbound message."""
+
+    latitude: float
+    longitude: float
+    name: str = ""
+    address: str = ""
+    extra: dict = {}
+
+
+class MessageContact(BaseDTO):
+    """Normalized contact shared via a message."""
+
+    name: str = ""
+    phone: str = ""
+    email: str = ""
+    extra: dict = {}
+
+
 class DeliveryReport(BaseDTO):
     """Delivery status report for a sent message."""
 

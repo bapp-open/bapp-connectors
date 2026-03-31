@@ -13,6 +13,10 @@ from bapp_connectors.core.dto import (
     ConnectionTestResult,
     DeliveryReport,
     DeliveryStatus,
+    InboundMessage,
+    MessageAttachment,
+    MessageContact,
+    MessageLocation,
     OutboundMessage,
 )
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
@@ -111,3 +115,64 @@ class TelegramMessagingAdapter(MessagingPort):
         Telegram Bot API does not support batch sending.
         """
         return [self.send(message) for message in messages]
+
+    # ── Inbound message parsing ──
+
+    def get_attachments(self, message: InboundMessage) -> list[MessageAttachment]:
+        raw = message.extra.get("raw_message", {})
+        msg_type = message.extra.get("message_type", "")
+
+        if msg_type == "photo":
+            # Telegram sends an array of sizes; pick the largest
+            photos = raw.get("photo", [])
+            if not photos:
+                return []
+            best = max(photos, key=lambda p: p.get("file_size", 0))
+            return [MessageAttachment(
+                type="image",
+                media_id=best.get("file_id", ""),
+                caption=raw.get("caption", ""),
+                file_size=best.get("file_size"),
+                extra={"file_unique_id": best.get("file_unique_id", "")},
+            )]
+
+        if msg_type in ("document", "video", "audio", "voice", "sticker", "animation"):
+            media = raw.get(msg_type, {})
+            if not media:
+                return []
+            return [MessageAttachment(
+                type=msg_type,
+                media_id=media.get("file_id", ""),
+                mime_type=media.get("mime_type", ""),
+                filename=media.get("file_name", ""),
+                caption=raw.get("caption", ""),
+                file_size=media.get("file_size"),
+                extra={"file_unique_id": media.get("file_unique_id", "")},
+            )]
+
+        return []
+
+    def get_location(self, message: InboundMessage) -> MessageLocation | None:
+        raw = message.extra.get("raw_message", {})
+        loc = raw.get("location")
+        if not loc:
+            return None
+        venue = raw.get("venue", {})
+        return MessageLocation(
+            latitude=loc.get("latitude", 0.0),
+            longitude=loc.get("longitude", 0.0),
+            name=venue.get("title", ""),
+            address=venue.get("address", ""),
+        )
+
+    def get_contacts(self, message: InboundMessage) -> list[MessageContact]:
+        raw = message.extra.get("raw_message", {})
+        contact = raw.get("contact")
+        if not contact:
+            return []
+        name = " ".join(filter(None, [contact.get("first_name", ""), contact.get("last_name", "")]))
+        return [MessageContact(
+            name=name,
+            phone=contact.get("phone_number", ""),
+            extra={"user_id": contact.get("user_id"), "vcard": contact.get("vcard", "")},
+        )]
