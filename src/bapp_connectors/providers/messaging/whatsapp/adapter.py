@@ -1,5 +1,5 @@
 """
-WhatsApp Cloud API messaging adapter — implements MessagingPort + WebhookCapability.
+WhatsApp Cloud API messaging adapter — implements MessagingPort + RichMessagingCapability + WebhookCapability.
 
 Uses Meta's WhatsApp Business Cloud API (Graph API) for sending
 text, template, media, interactive, and location messages.
@@ -12,7 +12,7 @@ import hashlib
 import hmac
 import json
 
-from bapp_connectors.core.capabilities import WebhookCapability
+from bapp_connectors.core.capabilities import RichMessagingCapability, WebhookCapability
 from bapp_connectors.core.dto import (
     ConnectionTestResult,
     DeliveryReport,
@@ -36,12 +36,13 @@ from bapp_connectors.providers.messaging.whatsapp.mappers import (
 )
 
 
-class WhatsAppMessagingAdapter(MessagingPort, WebhookCapability):
+class WhatsAppMessagingAdapter(MessagingPort, RichMessagingCapability, WebhookCapability):
     """
     WhatsApp Business Cloud API adapter.
 
     Implements:
     - MessagingPort: send, send_bulk
+    - RichMessagingCapability: attachments, locations, contacts (inbound + outbound)
     - WebhookCapability: verify_webhook, parse_webhook, verify_challenge
 
     Supports via OutboundMessage.extra:

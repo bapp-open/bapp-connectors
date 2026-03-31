@@ -14,6 +14,7 @@ from .product_management import (
     RelatedProductCapability,
     VariantManagementCapability,
 )
+from .rich_messaging import RichMessagingCapability
 from .saved_payment import SavedPaymentCapability
 from .streaming import StreamingCapability
 from .subscriptions import SubscriptionCapability
@@ -36,6 +37,7 @@ __all__ = [
     "ProductFeedCapability",
     "ProductFullUpdateCapability",
     "RelatedProductCapability",
+    "RichMessagingCapability",
     "SavedPaymentCapability",
     "StreamingCapability",
     "SubscriptionCapability",

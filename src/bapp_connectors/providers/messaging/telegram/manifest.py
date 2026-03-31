@@ -4,6 +4,7 @@ Telegram Bot API provider manifest — declares capabilities, auth, rate limits.
 Uses Telegram Bot API (https://core.telegram.org/bots/api).
 """
 
+from bapp_connectors.core.capabilities import RichMessagingCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -48,6 +49,7 @@ manifest = ProviderManifest(
     ),
     capabilities=[
         MessagingPort,
+        RichMessagingCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=30,

@@ -4,7 +4,7 @@ WhatsApp Cloud API provider manifest — declares capabilities, auth, rate limit
 Uses Meta's WhatsApp Business Cloud API (Graph API).
 """
 
-from bapp_connectors.core.capabilities import WebhookCapability
+from bapp_connectors.core.capabilities import RichMessagingCapability, WebhookCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -68,6 +68,7 @@ manifest = ProviderManifest(
     ),
     capabilities=[
         MessagingPort,
+        RichMessagingCapability,
         WebhookCapability,
     ],
     rate_limit=RateLimitConfig(

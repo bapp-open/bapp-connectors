@@ -9,6 +9,7 @@ Auth: bot token embedded in the base URL path.
 
 from __future__ import annotations
 
+from bapp_connectors.core.capabilities import RichMessagingCapability
 from bapp_connectors.core.dto import (
     ConnectionTestResult,
     DeliveryReport,
@@ -29,12 +30,13 @@ from bapp_connectors.providers.messaging.telegram.mappers import (
 )
 
 
-class TelegramMessagingAdapter(MessagingPort):
+class TelegramMessagingAdapter(MessagingPort, RichMessagingCapability):
     """
     Telegram Bot API adapter.
 
     Implements:
     - MessagingPort: send, send_bulk (reply inherited from MessagingPort)
+    - RichMessagingCapability: attachments, locations, contacts (inbound + outbound)
 
     Supports via OutboundMessage:
     - Text messages (default) with HTML/Markdown parsing
