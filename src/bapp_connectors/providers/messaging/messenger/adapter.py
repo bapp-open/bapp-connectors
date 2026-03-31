@@ -69,6 +69,7 @@ class MessengerMessagingAdapter(MessagingPort, RichMessagingCapability, WebhookC
             )
         else:
             http_client.base_url = base_url.rstrip("/") + "/"
+            http_client.auth = BearerAuth(self._page_access_token)
 
         self.client = MessengerApiClient(
             http_client=http_client,

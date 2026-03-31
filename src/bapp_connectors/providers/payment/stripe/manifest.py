@@ -29,6 +29,13 @@ manifest = ProviderManifest(
                 sensitive=True,
                 help_text="Stripe secret key (sk_live_... or sk_test_...)",
             ),
+            CredentialField(
+                name="webhook_secret",
+                label="Webhook Signing Secret",
+                sensitive=True,
+                required=False,
+                help_text="Stripe webhook endpoint signing secret (whsec_...). Required for webhook signature verification.",
+            ),
         ],
     ),
     capabilities=[
