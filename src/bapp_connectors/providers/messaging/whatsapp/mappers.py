@@ -6,10 +6,17 @@ Converts between raw WhatsApp Cloud API payloads and normalized framework DTOs.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from bapp_connectors.core.dto import (
     DeliveryReport,
     DeliveryStatus,
+    InboundMessage,
+    MessageChannel,
     OutboundMessage,
+    ProviderMeta,
+    WebhookEvent,
+    WebhookEventType,
 )
 
 
@@ -125,3 +132,127 @@ def build_payload(message: OutboundMessage) -> dict:
         payload = build_text_payload(message)
 
     return _apply_reply_context(payload, message.reply_to)
+
+
+# ── Webhook / Inbound mappers ──
+
+WHATSAPP_STATUS_MAP: dict[str, WebhookEventType] = {
+    "sent": WebhookEventType.UNKNOWN,
+    "delivered": WebhookEventType.UNKNOWN,
+    "read": WebhookEventType.UNKNOWN,
+    "failed": WebhookEventType.UNKNOWN,
+}
+
+
+def _detect_message_type(msg: dict) -> str:
+    """Detect the WhatsApp message type."""
+    return msg.get("type", "unknown")
+
+
+def inbound_message_from_whatsapp(msg: dict, contacts: list[dict] | None = None) -> InboundMessage:
+    """Parse a single WhatsApp webhook message into an InboundMessage DTO."""
+    sender = msg.get("from", "")
+    body = ""
+    msg_type = msg.get("type", "text")
+
+    if msg_type == "text":
+        body = msg.get("text", {}).get("body", "")
+    elif msg_type in ("image", "video", "audio", "document", "sticker"):
+        body = msg.get(msg_type, {}).get("caption", "")
+
+    timestamp = None
+    if ts := msg.get("timestamp"):
+        try:
+            timestamp = datetime.fromtimestamp(int(ts), tz=UTC)
+        except (ValueError, OSError):
+            pass
+
+    # Enrich sender name from contacts list
+    sender_name = ""
+    if contacts:
+        for c in contacts:
+            if c.get("wa_id") == sender:
+                sender_name = c.get("profile", {}).get("name", "")
+                break
+
+    return InboundMessage(
+        message_id=msg.get("id", ""),
+        channel=MessageChannel.OTHER,
+        sender=sender,
+        body=body,
+        received_at=timestamp,
+        extra={
+            "sender_name": sender_name,
+            "message_type": msg_type,
+            "context": msg.get("context", {}),
+            "raw_message": msg,
+        },
+        provider_meta=ProviderMeta(
+            provider="whatsapp",
+            raw_id=msg.get("id", ""),
+            raw_payload=msg,
+            fetched_at=datetime.now(UTC),
+        ),
+    )
+
+
+def webhook_event_from_whatsapp(data: dict) -> WebhookEvent:
+    """Parse a Meta webhook payload into a normalized WebhookEvent.
+
+    Meta wraps everything in: { object, entry: [{ changes: [{ value, field }] }] }
+    """
+    # Extract the first change value
+    entries = data.get("entry", [])
+    value = {}
+    if entries:
+        changes = entries[0].get("changes", [])
+        if changes:
+            value = changes[0].get("value", {})
+
+    messages = value.get("messages", [])
+    statuses = value.get("statuses", [])
+    contacts = value.get("contacts", [])
+    metadata = value.get("metadata", {})
+
+    # Determine event type
+    if messages:
+        event_type = WebhookEventType.UNKNOWN  # "message_received" — no standard enum
+        provider_event_type = "messages"
+    elif statuses:
+        event_type = WebhookEventType.UNKNOWN
+        provider_event_type = "message_status"
+    else:
+        event_type = WebhookEventType.UNKNOWN
+        provider_event_type = "unknown"
+
+    # Build inbound messages for the payload
+    inbound = [inbound_message_from_whatsapp(m, contacts) for m in messages]
+
+    # Use first message/status ID as event ID
+    event_id = ""
+    if messages:
+        event_id = messages[0].get("id", "")
+    elif statuses:
+        event_id = statuses[0].get("id", "")
+
+    return WebhookEvent(
+        event_id=event_id,
+        event_type=event_type,
+        provider="whatsapp",
+        provider_event_type=provider_event_type,
+        payload=value,
+        idempotency_key=event_id,
+        received_at=datetime.now(UTC),
+        extra={
+            "metadata": metadata,
+            "contacts": contacts,
+            "inbound_messages": [m.model_dump() for m in inbound],
+            "statuses": statuses,
+        },
+        provider_meta=ProviderMeta(
+            provider="whatsapp",
+            raw_id=event_id,
+            raw_payload=data,
+            fetched_at=datetime.now(UTC),
+        ),
+    )

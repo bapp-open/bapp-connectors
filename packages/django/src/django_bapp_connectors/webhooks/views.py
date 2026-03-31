@@ -10,16 +10,45 @@ import logging
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
 
 logger = logging.getLogger(__name__)
 
 
+def _handle_verify_challenge(request: HttpRequest, connection_id: int) -> HttpResponse:
+    """Handle webhook URL verification challenges (e.g. Meta hub.verify_token).
+
+    Adapters that support verification challenges implement a ``verify_challenge(params)``
+    method that returns the challenge string on success or None on failure.
+    """
+    try:
+        from django_bapp_connectors.settings import get_setting
+
+        connection_model_path = get_setting("CONNECTION_MODEL")
+        if connection_model_path:
+            from django.apps import apps
+
+            ConnectionModel = apps.get_model(connection_model_path)
+            connection = ConnectionModel.objects.filter(pk=connection_id).first()
+            if connection:
+                adapter = connection.get_adapter()
+                if hasattr(adapter, "verify_challenge"):
+                    result = adapter.verify_challenge(request.GET.dict())
+                    if result is not None:
+                        return HttpResponse(result, content_type="text/plain")
+    except Exception:
+        logger.exception("Webhook verify challenge failed for connection %s", connection_id)
+
+    return HttpResponse(status=403)
+
+
 @csrf_exempt
-@require_POST
 def webhook_receiver(request: HttpRequest, connection_id: int, action: str) -> HttpResponse:
     """
     Generic webhook receiver.
+
+    Handles both:
+    - GET requests: webhook URL verification challenges (e.g. Meta's hub.verify_token flow)
+    - POST requests: incoming webhook events
 
     Receives webhooks, persists them via WebhookService, and dispatches
     async processing via Celery. Emits ``webhook_event_received`` signal
@@ -30,6 +59,13 @@ def webhook_receiver(request: HttpRequest, connection_id: int, action: str) -> H
     ``BAPP_CONNECTORS["WEBHOOK_EVENT_MODEL"]`` in settings, or override
     this view for custom model resolution.
     """
+    # ── GET: webhook verification challenge ──
+    if request.method == "GET":
+        return _handle_verify_challenge(request, connection_id)
+
+    if request.method != "POST":
+        return HttpResponse(status=405)
+
     body = request.body
     headers = dict(request.headers)
 

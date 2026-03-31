@@ -4,6 +4,7 @@ WhatsApp Cloud API provider manifest — declares capabilities, auth, rate limit
 Uses Meta's WhatsApp Business Cloud API (Graph API).
 """
 
+from bapp_connectors.core.capabilities import WebhookCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -38,6 +39,20 @@ manifest = ProviderManifest(
                 sensitive=False,
                 help_text="Phone number ID from Meta WhatsApp Business dashboard.",
             ),
+            CredentialField(
+                name="app_secret",
+                label="App Secret",
+                sensitive=True,
+                required=False,
+                help_text="Meta App Secret — used to verify webhook signatures (X-Hub-Signature-256).",
+            ),
+            CredentialField(
+                name="webhook_verify_token",
+                label="Webhook Verify Token",
+                sensitive=True,
+                required=False,
+                help_text="Custom token for Meta's webhook URL verification challenge (GET hub.verify_token).",
+            ),
         ],
     ),
     settings=SettingsConfig(
@@ -53,6 +68,7 @@ manifest = ProviderManifest(
     ),
     capabilities=[
         MessagingPort,
+        WebhookCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=80,
