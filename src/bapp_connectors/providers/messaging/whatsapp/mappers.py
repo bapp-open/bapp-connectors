@@ -14,6 +14,8 @@ from bapp_connectors.core.dto import (
     InboundMessage,
     MessageAttachment,
     MessageChannel,
+    MessageContact,
+    MessageLocation,
     OutboundMessage,
     ProviderMeta,
     WebhookEvent,
@@ -236,8 +238,11 @@ def inbound_message_from_whatsapp(msg: dict, contacts: list[dict] | None = None)
                 sender_name = c.get("profile", {}).get("name", "")
                 break
 
-    # Build normalized attachments
+    # Build normalized attachments, location, contacts
     attachments = []
+    location = None
+    contacts = []
+
     if msg_type in ("image", "video", "audio", "document", "sticker", "voice"):
         media = msg.get(msg_type, {})
         if media:
@@ -249,6 +254,23 @@ def inbound_message_from_whatsapp(msg: dict, contacts: list[dict] | None = None)
                 caption=media.get("caption", ""),
                 file_size=media.get("file_size"),
             ))
+    elif msg_type == "location":
+        loc = msg.get("location", {})
+        location = MessageLocation(
+            latitude=loc.get("latitude", 0.0),
+            longitude=loc.get("longitude", 0.0),
+            name=loc.get("name", ""),
+            address=loc.get("address", ""),
+        )
+    elif msg_type == "contacts":
+        for wa_contact in msg.get("contacts", []):
+            name_obj = wa_contact.get("name", {})
+            phones = wa_contact.get("phones", [])
+            contacts.append(MessageContact(
+                name=name_obj.get("formatted_name", ""),
+                phone=phones[0].get("phone", "") if phones else "",
+                extra=wa_contact,
+            ))
 
     return InboundMessage(
         message_id=msg.get("id", ""),
@@ -258,6 +280,8 @@ def inbound_message_from_whatsapp(msg: dict, contacts: list[dict] | None = None)
         body=body,
         received_at=timestamp,
         attachments=attachments,
+        location=location,
+        contacts=contacts,
         extra={
             "message_type": msg_type,
             "context": msg.get("context", {}),
