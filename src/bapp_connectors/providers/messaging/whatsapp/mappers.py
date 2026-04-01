@@ -212,7 +212,7 @@ def _detect_message_type(msg: dict) -> str:
     return msg.get("type", "unknown")
 
 
-def inbound_message_from_whatsapp(msg: dict, contacts: list[dict] | None = None) -> InboundMessage:
+def inbound_message_from_whatsapp(msg: dict, wa_contacts: list[dict] | None = None) -> InboundMessage:
     """Parse a single WhatsApp webhook message into an InboundMessage DTO."""
     sender = msg.get("from", "")
     body = ""
@@ -232,8 +232,8 @@ def inbound_message_from_whatsapp(msg: dict, contacts: list[dict] | None = None)
 
     # Enrich sender name from contacts list
     sender_name = ""
-    if contacts:
-        for c in contacts:
+    if wa_contacts:
+        for c in wa_contacts:
             if c.get("wa_id") == sender:
                 sender_name = c.get("profile", {}).get("name", "")
                 break
