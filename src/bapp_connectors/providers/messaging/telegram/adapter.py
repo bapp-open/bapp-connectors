@@ -9,6 +9,8 @@ Auth: bot token embedded in the base URL path.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from bapp_connectors.core.capabilities import RichMessagingCapability
 from bapp_connectors.core.dto import (
     ConnectionTestResult,
@@ -109,7 +111,7 @@ class TelegramMessagingAdapter(MessagingPort, RichMessagingCapability):
                 media_key = {"image": "photo"}.get(message.extra["media_type"], message.extra["media_type"])
                 payload.pop(media_key, None)  # remove URL value — file upload replaces it
                 filename = message.extra.get("filename", "file")
-                with open(local_file_path, "rb") as f:
+                with Path(local_file_path).open("rb") as f:
                     files = {media_key: (filename, f)}
                     response = self.client._call_multipart(api_method, files=files, **payload)
             else:
