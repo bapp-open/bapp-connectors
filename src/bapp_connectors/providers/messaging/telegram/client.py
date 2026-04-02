@@ -39,6 +39,20 @@ class TelegramApiClient:
             return response["result"]
         return response
 
+    def _call_multipart(self, method: str, files: dict, **params) -> dict:
+        """Call a Telegram Bot API method with multipart file upload.
+
+        Args:
+            method: Telegram API method name (e.g. 'sendDocument').
+            files: dict of {field_name: (filename, file_obj_or_bytes, content_type)}.
+            **params: Other parameters sent as form data.
+        """
+        payload = {k: v for k, v in params.items() if v is not None}
+        response = self.http.call("POST", method, data=payload, files=files)
+        if isinstance(response, dict) and "result" in response:
+            return response["result"]
+        return response
+
     # ── Auth / Connection Test ──
 
     def get_me(self) -> dict:

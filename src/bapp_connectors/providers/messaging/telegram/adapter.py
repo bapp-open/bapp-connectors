@@ -102,7 +102,19 @@ class TelegramMessagingAdapter(MessagingPort, RichMessagingCapability):
                 return delivery_report_from_telegram(response, original_message_id=message.message_id)
 
             api_method, payload = build_payload(message, default_parse_mode=self._parse_mode)
-            response = self.client._call(api_method, **payload)
+
+            # Upload local files directly via multipart (Telegram can't fetch from private URLs)
+            local_file_path = message.extra.get("local_file_path") if message.extra else None
+            if local_file_path and message.extra.get("media_type"):
+                media_key = {"image": "photo"}.get(message.extra["media_type"], message.extra["media_type"])
+                payload.pop(media_key, None)  # remove URL value — file upload replaces it
+                filename = message.extra.get("filename", "file")
+                with open(local_file_path, "rb") as f:
+                    files = {media_key: (filename, f)}
+                    response = self.client._call_multipart(api_method, files=files, **payload)
+            else:
+                response = self.client._call(api_method, **payload)
+
             return delivery_report_from_telegram(response, original_message_id=message.message_id)
         except Exception as e:
             return DeliveryReport(

@@ -170,20 +170,26 @@ def build_text_payload(message: OutboundMessage, parse_mode: str = "HTML") -> di
     return payload
 
 
+def _normalize_media_type(media_type: str) -> str:
+    """Normalize generic media types to Telegram-specific types."""
+    return {"image": "photo"}.get(media_type, media_type)
+
+
 def build_media_payload(message: OutboundMessage, parse_mode: str = "HTML") -> tuple[str, dict] | None:
     """Build a Telegram media send payload.
 
     Returns (api_method, payload) or None if not a media message.
 
     Supports via message.extra:
-      - extra.media_type: "photo" | "document" | "video" | "audio" | "voice" | "sticker" | "animation"
+      - extra.media_type: "photo"/"image" | "document" | "video" | "audio" | "voice" | "sticker" | "animation"
       - extra.media_url or extra.media_id: the media source
       - extra.caption: optional caption
+      - extra.local_file_path: local path for direct upload (set by build but used by adapter)
     """
     if not message.extra:
         return None
 
-    media_type = message.extra.get("media_type")
+    media_type = _normalize_media_type(message.extra.get("media_type", ""))
     method_map = {
         "photo": "sendPhoto",
         "document": "sendDocument",
@@ -198,13 +204,15 @@ def build_media_payload(message: OutboundMessage, parse_mode: str = "HTML") -> t
         return None
 
     media_value = message.extra.get("media_id") or message.extra.get("media_url")
-    if not media_value:
+    if not media_value and not message.extra.get("local_file_path"):
         return None
 
     payload: dict = {
         "chat_id": message.to,
-        media_type: media_value,
     }
+    # media_value may be empty when local_file_path is used (adapter handles file upload)
+    if media_value:
+        payload[media_type] = media_value
 
     # Stickers don't support captions
     if media_type != "sticker":
