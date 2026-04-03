@@ -2,6 +2,7 @@
 SMTP email provider manifest — declares capabilities, auth, and configuration.
 """
 
+from bapp_connectors.core.capabilities import InboxCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -16,7 +17,7 @@ manifest = ProviderManifest(
     name="smtp",
     family=ProviderFamily.MESSAGING,
     display_name="SMTP Email",
-    description="SMTP email integration for sending email messages.",
+    description="SMTP email integration for sending and receiving email messages.",
     base_url="smtp://localhost",
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
@@ -55,9 +56,32 @@ manifest = ProviderManifest(
                 required=False,
                 default="30",
             ),
+            # ── IMAP (inbox) ──
+            CredentialField(
+                name="imap_host",
+                label="IMAP Host",
+                sensitive=False,
+                required=False,
+                help_text="Required for inbox capabilities. Defaults to SMTP host if not set.",
+            ),
+            CredentialField(
+                name="imap_port",
+                label="IMAP Port",
+                sensitive=False,
+                required=False,
+                default="993",
+            ),
+            CredentialField(
+                name="imap_use_ssl",
+                label="IMAP Use SSL",
+                sensitive=False,
+                required=False,
+                default="true",
+                choices=["true", "false"],
+            ),
         ],
     ),
-    capabilities=[MessagingPort],
+    capabilities=[MessagingPort, InboxCapability],
     rate_limit=RateLimitConfig(
         requests_per_second=10,
         burst=20,

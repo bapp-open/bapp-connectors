@@ -3,6 +3,7 @@ Normalized data transfer objects for cross-provider communication.
 """
 
 from .base import BaseDTO, BulkResult, ConnectionTestResult, PaginatedResult, ProviderMeta
+from .email import EmailAddress, EmailAttachmentContent, EmailAttachmentInfo, EmailDetail, EmailSummary
 from .feed import FeedResult, FeedUploadResult, FeedValidationError, FeedValidationResult, FeedWarning
 from .llm import (
     ChatMessage,
@@ -64,6 +65,11 @@ __all__ = [
     "Contact",
     "DeliveryReport",
     "DeliveryStatus",
+    "EmailAddress",
+    "EmailAttachmentContent",
+    "EmailAttachmentInfo",
+    "EmailDetail",
+    "EmailSummary",
     "EmbeddingResult",
     "FeedResult",
     "FeedUploadResult",

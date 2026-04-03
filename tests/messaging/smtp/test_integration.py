@@ -18,7 +18,6 @@ from urllib.request import Request, urlopen
 import pytest
 
 from bapp_connectors.core.dto import (
-    DeliveryReport,
     DeliveryStatus,
     MessageChannel,
     OutboundMessage,

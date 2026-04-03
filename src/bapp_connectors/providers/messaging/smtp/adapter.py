@@ -1,37 +1,49 @@
 """
-SMTP email adapter — implements MessagingPort.
+SMTP email adapter — implements MessagingPort + InboxCapability.
 
 This is the main entry point for the SMTP email integration.
-Uses Python's smtplib directly, not ResilientHttpClient.
+Uses Python's smtplib for sending and imaplib for inbox reading.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
+from bapp_connectors.core.capabilities import InboxCapability
 from bapp_connectors.core.dto import (
     ConnectionTestResult,
     DeliveryReport,
     DeliveryStatus,
+    EmailAttachmentContent,
+    EmailDetail,
+    EmailSummary,
     OutboundMessage,
 )
 from bapp_connectors.core.ports import MessagingPort
-from bapp_connectors.providers.messaging.smtp.client import SMTPClient
+from bapp_connectors.providers.messaging.smtp.client import IMAPClient, SMTPClient
+from bapp_connectors.providers.messaging.smtp.errors import classify_imap_error
 from bapp_connectors.providers.messaging.smtp.manifest import manifest
+from bapp_connectors.providers.messaging.smtp.mappers import (
+    extract_attachment_content,
+    headers_to_summary,
+    message_to_detail,
+)
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 
-class SMTPMessagingAdapter(MessagingPort):
+class SMTPMessagingAdapter(MessagingPort, InboxCapability):
     """
     SMTP email adapter.
 
     Implements:
     - MessagingPort: send, send_bulk
+    - InboxCapability: fetch_messages, get_message, download_attachment (requires IMAP credentials)
 
-    Note: This adapter uses smtplib directly. The http_client parameter is
-    accepted for interface compatibility but not used.
+    Note: This adapter uses smtplib/imaplib directly. The http_client parameter
+    is accepted for interface compatibility but not used.
     """
 
     manifest = manifest
@@ -55,6 +67,20 @@ class SMTPMessagingAdapter(MessagingPort):
             from_email=credentials.get("from_email", ""),
         )
 
+        # IMAP client — only created if IMAP credentials are provided
+        imap_host = credentials.get("imap_host", "") or host
+        if imap_host:
+            self.imap_client: IMAPClient | None = IMAPClient(
+                host=imap_host,
+                port=int(credentials.get("imap_port", 993)),
+                username=credentials.get("username", ""),
+                password=credentials.get("password", ""),
+                use_ssl=str(credentials.get("imap_use_ssl", "true")).lower() == "true",
+                timeout=int(credentials.get("timeout", 30)),
+            )
+        else:
+            self.imap_client = None
+
     # ── BasePort ──
 
     def validate_credentials(self) -> bool:
@@ -63,10 +89,18 @@ class SMTPMessagingAdapter(MessagingPort):
 
     def test_connection(self) -> ConnectionTestResult:
         try:
-            success = self.client.test_auth()
+            smtp_ok = self.client.test_auth()
+            if not smtp_ok:
+                return ConnectionTestResult(success=False, message="SMTP authentication failed")
+
+            imap_msg = ""
+            if self.imap_client:
+                imap_ok = self.imap_client.test_auth()
+                imap_msg = " | IMAP: OK" if imap_ok else " | IMAP: authentication failed"
+
             return ConnectionTestResult(
-                success=success,
-                message="Connection successful" if success else "Authentication failed",
+                success=True,
+                message=f"SMTP: OK{imap_msg}",
             )
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
@@ -120,3 +154,63 @@ class SMTPMessagingAdapter(MessagingPort):
             report = self.send(message)
             reports.append(report)
         return reports
+
+    # ── InboxCapability ──
+
+    def _require_imap(self) -> IMAPClient:
+        """Return the IMAP client or raise if inbox is not configured."""
+        if self.imap_client is None:
+            msg = "Inbox capabilities require IMAP credentials (imap_host)"
+            raise classify_imap_error(ValueError(msg))
+        return self.imap_client
+
+    def fetch_messages(
+        self,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        folder: str = "INBOX",
+        limit: int = 50,
+    ) -> list[EmailSummary]:
+        """Fetch email summaries from a mailbox folder within a time window."""
+        imap = self._require_imap()
+        try:
+            uids = imap.fetch_uids(since=since, until=until, folder=folder, limit=limit)
+            if not uids:
+                return []
+
+            header_results = imap.fetch_headers(uids, folder=folder)
+            return [
+                headers_to_summary(uid, msg, flags, folder, has_attachments=has_att)
+                for uid, msg, flags, has_att in header_results
+            ]
+        except Exception as e:
+            raise classify_imap_error(e) from e
+
+    def get_message(self, message_id: str, *, folder: str = "INBOX") -> EmailDetail:
+        """Fetch the full structure of a single email."""
+        imap = self._require_imap()
+        try:
+            msg = imap.fetch_message(message_id, folder=folder)
+            return message_to_detail(message_id, msg, folder)
+        except Exception as e:
+            raise classify_imap_error(e) from e
+
+    def download_attachment(
+        self,
+        message_id: str,
+        attachment_id: str,
+        *,
+        folder: str = "INBOX",
+    ) -> EmailAttachmentContent:
+        """Download a single attachment from an email."""
+        imap = self._require_imap()
+        try:
+            msg = imap.fetch_message(message_id, folder=folder)
+            result = extract_attachment_content(message_id, attachment_id, msg)
+            if result is None:
+                msg_text = f"Attachment {attachment_id} not found in message {message_id}"
+                raise ValueError(msg_text)
+            return result
+        except Exception as e:
+            raise classify_imap_error(e) from e

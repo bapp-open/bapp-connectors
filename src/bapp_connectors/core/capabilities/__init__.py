@@ -3,6 +3,7 @@
 from .bulk_operations import BulkImportCapability, BulkUpdateCapability
 from .embedding import EmbeddingCapability
 from .image_generation import ImageGenerationCapability
+from .inbox import InboxCapability
 from .invoice_attach import InvoiceAttachmentCapability
 from .oauth import OAuthCapability, OAuthTokens
 from .product_feed import FeedFormat, FeedUploadCapability, ProductFeedCapability
@@ -30,6 +31,7 @@ __all__ = [
     "FeedFormat",
     "FeedUploadCapability",
     "ImageGenerationCapability",
+    "InboxCapability",
     "InvoiceAttachmentCapability",
     "OAuthCapability",
     "OAuthTokens",
