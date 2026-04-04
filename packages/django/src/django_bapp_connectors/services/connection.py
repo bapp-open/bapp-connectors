@@ -9,6 +9,8 @@ import logging
 import pkgutil
 from typing import TYPE_CHECKING, Any
 
+from django.utils.translation import gettext_lazy as _
+
 from bapp_connectors.core.registry import registry
 from bapp_connectors.core.types import ProviderFamily
 
@@ -23,15 +25,15 @@ _providers_loaded = False
 
 # Default display metadata per family.  Projects may override via
 # ``ConnectionService.get_available_providers(family_meta={...})``.
-FAMILY_DEFAULTS: dict[str, dict[str, str]] = {
-    ProviderFamily.SHOP:      {"label": "E-commerce & Shops",   "icon": "fad fa-store",            "color": "#ec4899"},
-    ProviderFamily.COURIER:   {"label": "Courier & Shipping",   "icon": "fad fa-truck",            "color": "#f59e0b"},
-    ProviderFamily.PAYMENT:   {"label": "Payment Gateways",     "icon": "fad fa-credit-card",      "color": "#10b981"},
-    ProviderFamily.MESSAGING: {"label": "Messaging",            "icon": "fad fa-comment-dots",     "color": "#3b82f6"},
-    ProviderFamily.EMAIL:     {"label": "Email",                "icon": "fad fa-envelope",         "color": "#0ea5e9"},
-    ProviderFamily.STORAGE:   {"label": "File Storage",         "icon": "fad fa-cloud-upload-alt", "color": "#8b5cf6"},
-    ProviderFamily.LLM:       {"label": "AI & Language Models", "icon": "fad fa-brain",            "color": "#6366f1"},
-    ProviderFamily.FEED:      {"label": "Product Feeds",        "icon": "fad fa-rss",              "color": "#ef4444"},
+FAMILY_DEFAULTS: dict[str, dict] = {
+    ProviderFamily.SHOP:      {"label": _("E-commerce & Shops"),   "icon": "fad fa-store",            "color": "#ec4899"},
+    ProviderFamily.COURIER:   {"label": _("Courier & Shipping"),   "icon": "fad fa-truck",            "color": "#f59e0b"},
+    ProviderFamily.PAYMENT:   {"label": _("Payment Gateways"),     "icon": "fad fa-credit-card",      "color": "#10b981"},
+    ProviderFamily.MESSAGING: {"label": _("Messaging"),            "icon": "fad fa-comment-dots",     "color": "#3b82f6"},
+    ProviderFamily.EMAIL:     {"label": _("Email"),                "icon": "fad fa-envelope",         "color": "#0ea5e9"},
+    ProviderFamily.STORAGE:   {"label": _("File Storage"),         "icon": "fad fa-cloud-upload-alt", "color": "#8b5cf6"},
+    ProviderFamily.LLM:       {"label": _("AI & Language Models"), "icon": "fad fa-brain",            "color": "#6366f1"},
+    ProviderFamily.FEED:      {"label": _("Product Feeds"),        "icon": "fad fa-rss",              "color": "#ef4444"},
 }
 
 

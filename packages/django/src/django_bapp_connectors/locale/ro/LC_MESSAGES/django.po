@@ -1,0 +1,48 @@
+# django-bapp-connectors — Romanian translations
+# Copyright (C) 2026 BAPP
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: django-bapp-connectors 0.18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-04 00:00+0200\n"
+"PO-Revision-Date: 2026-04-04 00:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: Romanian\n"
+"Language: ro\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n==0 || (n!=1 && n%100>=1 && n%100<=19) ? 1 : 2);\n"
+
+#: services/connection.py
+msgid "E-commerce & Shops"
+msgstr "E-commerce & Magazine"
+
+#: services/connection.py
+msgid "Courier & Shipping"
+msgstr "Curierat & Livrare"
+
+#: services/connection.py
+msgid "Payment Gateways"
+msgstr "Procesatoare de plăți"
+
+#: services/connection.py
+msgid "Messaging"
+msgstr "Mesagerie"
+
+#: services/connection.py
+msgid "Email"
+msgstr "Email"
+
+#: services/connection.py
+msgid "File Storage"
+msgstr "Stocare fișiere"
+
+#: services/connection.py
+msgid "AI & Language Models"
+msgstr "AI & Modele de limbaj"
+
+#: services/connection.py
+msgid "Product Feeds"
+msgstr "Fluxuri de produse"

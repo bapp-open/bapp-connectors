@@ -1,0 +1,48 @@
+# django-bapp-connectors — English translations
+# Copyright (C) 2026 BAPP
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: django-bapp-connectors 0.18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-04 00:00+0200\n"
+"PO-Revision-Date: 2026-04-04 00:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: services/connection.py
+msgid "E-commerce & Shops"
+msgstr "E-commerce & Shops"
+
+#: services/connection.py
+msgid "Courier & Shipping"
+msgstr "Courier & Shipping"
+
+#: services/connection.py
+msgid "Payment Gateways"
+msgstr "Payment Gateways"
+
+#: services/connection.py
+msgid "Messaging"
+msgstr "Messaging"
+
+#: services/connection.py
+msgid "Email"
+msgstr "Email"
+
+#: services/connection.py
+msgid "File Storage"
+msgstr "File Storage"
+
+#: services/connection.py
+msgid "AI & Language Models"
+msgstr "AI & Language Models"
+
+#: services/connection.py
+msgid "Product Feeds"
+msgstr "Product Feeds"
