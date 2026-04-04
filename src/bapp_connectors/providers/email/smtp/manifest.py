@@ -10,12 +10,12 @@ from bapp_connectors.core.manifest import (
     RateLimitConfig,
     RetryConfig,
 )
-from bapp_connectors.core.ports import MessagingPort
+from bapp_connectors.core.ports import EmailPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
 
 manifest = ProviderManifest(
     name="smtp",
-    family=ProviderFamily.MESSAGING,
+    family=ProviderFamily.EMAIL,
     display_name="SMTP Email",
     description="SMTP email integration for sending and receiving email messages.",
     base_url="smtp://localhost",
@@ -81,7 +81,7 @@ manifest = ProviderManifest(
             ),
         ],
     ),
-    capabilities=[MessagingPort, InboxCapability],
+    capabilities=[EmailPort, InboxCapability],
     rate_limit=RateLimitConfig(
         requests_per_second=10,
         burst=20,

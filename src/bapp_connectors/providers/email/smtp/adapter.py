@@ -1,5 +1,5 @@
 """
-SMTP email adapter — implements MessagingPort + InboxCapability.
+SMTP email adapter — implements EmailPort + InboxCapability.
 
 This is the main entry point for the SMTP email integration.
 Uses Python's smtplib for sending and imaplib for inbox reading.
@@ -20,11 +20,11 @@ from bapp_connectors.core.dto import (
     EmailSummary,
     OutboundMessage,
 )
-from bapp_connectors.core.ports import MessagingPort
-from bapp_connectors.providers.messaging.smtp.client import IMAPClient, SMTPClient
-from bapp_connectors.providers.messaging.smtp.errors import classify_imap_error
-from bapp_connectors.providers.messaging.smtp.manifest import manifest
-from bapp_connectors.providers.messaging.smtp.mappers import (
+from bapp_connectors.core.ports import EmailPort
+from bapp_connectors.providers.email.smtp.client import IMAPClient, SMTPClient
+from bapp_connectors.providers.email.smtp.errors import classify_imap_error
+from bapp_connectors.providers.email.smtp.manifest import manifest
+from bapp_connectors.providers.email.smtp.mappers import (
     extract_attachment_content,
     headers_to_summary,
     message_to_detail,
@@ -34,12 +34,12 @@ if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 
-class SMTPMessagingAdapter(MessagingPort, InboxCapability):
+class SMTPEmailAdapter(EmailPort, InboxCapability):
     """
     SMTP email adapter.
 
     Implements:
-    - MessagingPort: send, send_bulk
+    - EmailPort: send, send_bulk
     - InboxCapability: fetch_messages, get_message, download_attachment (requires IMAP credentials)
 
     Note: This adapter uses smtplib/imaplib directly. The http_client parameter

@@ -14,6 +14,7 @@ class ProviderFamily(StrEnum):
     COURIER = "courier"
     PAYMENT = "payment"
     MESSAGING = "messaging"
+    EMAIL = "email"
     STORAGE = "storage"
     LLM = "llm"
     FEED = "feed"

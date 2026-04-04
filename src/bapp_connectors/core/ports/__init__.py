@@ -2,6 +2,7 @@
 
 from .base import BasePort
 from .courier import CourierPort
+from .email import EmailPort
 from .feed import FeedPort
 from .llm import LLMPort
 from .messaging import MessagingPort
@@ -9,4 +10,4 @@ from .payment import PaymentPort
 from .shop import ShopPort
 from .storage import FileInfo, StoragePort
 
-__all__ = ["BasePort", "CourierPort", "FeedPort", "FileInfo", "LLMPort", "MessagingPort", "PaymentPort", "ShopPort", "StoragePort"]
+__all__ = ["BasePort", "CourierPort", "EmailPort", "FeedPort", "FileInfo", "LLMPort", "MessagingPort", "PaymentPort", "ShopPort", "StoragePort"]

@@ -16,7 +16,7 @@ from bapp_connectors.core.dto import (
     EmailDetail,
     EmailSummary,
 )
-from bapp_connectors.providers.messaging.smtp.client import _decode_header_value
+from bapp_connectors.providers.email.smtp.client import _decode_header_value
 
 logger = logging.getLogger(__name__)
 

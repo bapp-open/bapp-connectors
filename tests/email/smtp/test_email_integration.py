@@ -21,8 +21,8 @@ from bapp_connectors.core.dto import (
     MessageChannel,
     OutboundMessage,
 )
-from bapp_connectors.providers.messaging.smtp.adapter import SMTPMessagingAdapter
-from tests.messaging.conftest import (
+from bapp_connectors.providers.email.smtp.adapter import SMTPEmailAdapter
+from tests.email.conftest import (
     EMAIL_TEST_IMAP_HOST,
     EMAIL_TEST_IMAP_PORT,
     EMAIL_TEST_PASSWORD,
@@ -38,7 +38,7 @@ pytestmark = [pytest.mark.integration, skip_unless_email]
 
 @pytest.fixture
 def adapter():
-    return SMTPMessagingAdapter(
+    return SMTPEmailAdapter(
         credentials={
             "host": EMAIL_TEST_SMTP_HOST,
             "port": str(EMAIL_TEST_SMTP_PORT),

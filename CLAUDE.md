@@ -6,14 +6,15 @@ This file provides context for Claude Code when working in this repository.
 
 Ports-and-adapters integration framework. Zero Django dependencies in the core package.
 
-### Provider Families (7)
+### Provider Families (8)
 
 | Family | Port | Providers |
 |--------|------|-----------|
 | shop | `ShopPort` | CEL.ro, eMAG, Gomag, Okazii, PrestaShop, Trendyol, Vendigo, WooCommerce |
 | courier | `CourierPort` | Colete Online, GLS, Sameday |
 | payment | `PaymentPort` | Netopia, Stripe |
-| messaging | `MessagingPort` | GoIP, RoboSMS, SMTP, Telegram, WhatsApp |
+| messaging | `MessagingPort` | GoIP, RoboSMS, Telegram, WhatsApp |
+| email | `EmailPort` | SMTP, Gmail, Mailchimp Transactional, Amazon SES |
 | storage | `StoragePort` | Dropbox, FTP, SFTP, S3, WebDAV |
 | llm | `LLMPort` | OpenAI, Anthropic, Ollama, Gemini |
 | feed | `FeedPort` | Google Merchant, Facebook Commerce, Compari.ro |

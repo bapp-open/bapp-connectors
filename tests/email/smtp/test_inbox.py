@@ -21,8 +21,8 @@ from bapp_connectors.core.dto import (
     EmailDetail,
     EmailSummary,
 )
-from bapp_connectors.providers.messaging.smtp.adapter import SMTPMessagingAdapter
-from bapp_connectors.providers.messaging.smtp.mappers import (
+from bapp_connectors.providers.email.smtp.adapter import SMTPEmailAdapter
+from bapp_connectors.providers.email.smtp.mappers import (
     extract_attachment_content,
     headers_to_summary,
     message_to_detail,
@@ -74,7 +74,7 @@ def _build_mime_message(
     return msg
 
 
-def _make_adapter(*, with_imap: bool = True) -> SMTPMessagingAdapter:
+def _make_adapter(*, with_imap: bool = True) -> SMTPEmailAdapter:
     """Create an adapter with optionally mocked IMAP client."""
     creds = {
         "host": "smtp.example.com",
@@ -89,8 +89,8 @@ def _make_adapter(*, with_imap: bool = True) -> SMTPMessagingAdapter:
         creds["imap_port"] = "993"
         creds["imap_use_ssl"] = "true"
 
-    with patch("bapp_connectors.providers.messaging.smtp.adapter.SMTPClient"):
-        adapter = SMTPMessagingAdapter(credentials=creds)
+    with patch("bapp_connectors.providers.email.smtp.adapter.SMTPClient"):
+        adapter = SMTPEmailAdapter(credentials=creds)
 
     return adapter
 
@@ -109,7 +109,7 @@ class TestInboxCapabilityDeclaration:
         assert adapter.supports(InboxCapability)
 
     def test_manifest_declares_inbox_capability(self):
-        from bapp_connectors.providers.messaging.smtp.manifest import manifest
+        from bapp_connectors.providers.email.smtp.manifest import manifest
 
         assert InboxCapability in manifest.capabilities
 
@@ -122,8 +122,8 @@ class TestInboxCapabilityDeclaration:
             "use_tls": "false",
             "use_ssl": "false",
         }
-        with patch("bapp_connectors.providers.messaging.smtp.adapter.SMTPClient"):
-            adapter = SMTPMessagingAdapter(credentials=creds)
+        with patch("bapp_connectors.providers.email.smtp.adapter.SMTPClient"):
+            adapter = SMTPEmailAdapter(credentials=creds)
         assert adapter.imap_client is None
 
     def test_imap_host_defaults_to_smtp_host(self):
@@ -135,8 +135,8 @@ class TestInboxCapabilityDeclaration:
             "use_tls": "true",
             "use_ssl": "false",
         }
-        with patch("bapp_connectors.providers.messaging.smtp.adapter.SMTPClient"):
-            adapter = SMTPMessagingAdapter(credentials=creds)
+        with patch("bapp_connectors.providers.email.smtp.adapter.SMTPClient"):
+            adapter = SMTPEmailAdapter(credentials=creds)
         assert adapter.imap_client is not None
         assert adapter.imap_client.host == "mail.example.com"
 

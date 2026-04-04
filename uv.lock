@@ -44,7 +44,7 @@ wheels = [
 
 [[package]]
 name = "bapp-connectors"
-version = "0.19.1"
+version = "0.20.0"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
@@ -68,6 +68,9 @@ oauth = [
 s3 = [
     { name = "boto3" },
 ]
+ses = [
+    { name = "boto3" },
+]
 sftp = [
     { name = "paramiko" },
 ]
@@ -75,6 +78,7 @@ sftp = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", marker = "extra == 's3'", specifier = ">=1.28" },
+    { name = "boto3", marker = "extra == 'ses'", specifier = ">=1.28" },
     { name = "cryptography", marker = "extra == 'mobilpay'", specifier = ">=41.0" },
     { name = "oauthlib", marker = "extra == 'oauth'", specifier = ">=3.0" },
     { name = "paramiko", marker = "extra == 'sftp'", specifier = ">=3.0" },
@@ -86,7 +90,7 @@ requires-dist = [
     { name = "responses", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
 ]
-provides-extras = ["oauth", "sftp", "s3", "mobilpay", "dev"]
+provides-extras = ["oauth", "sftp", "s3", "ses", "mobilpay", "dev"]
 
 [[package]]
 name = "bcrypt"

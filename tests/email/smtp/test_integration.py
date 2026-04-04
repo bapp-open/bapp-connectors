@@ -22,8 +22,8 @@ from bapp_connectors.core.dto import (
     MessageChannel,
     OutboundMessage,
 )
-from bapp_connectors.providers.messaging.smtp.adapter import SMTPMessagingAdapter
-from tests.messaging.conftest import (
+from bapp_connectors.providers.email.smtp.adapter import SMTPEmailAdapter
+from tests.email.conftest import (
     MAILHOG_API_PORT,
     MAILHOG_HOST,
     MAILHOG_SMTP_PORT,
@@ -56,7 +56,7 @@ def _mailhog_delete_messages():
 
 @pytest.fixture
 def adapter():
-    return SMTPMessagingAdapter(
+    return SMTPEmailAdapter(
         credentials={
             "host": MAILHOG_HOST,
             "port": str(MAILHOG_SMTP_PORT),
@@ -86,9 +86,9 @@ def test_recipient():
 
 
 class TestSMTPContract:
-    from tests.messaging.contract import MessagingContractTests
+    from tests.email.contract import EmailContractTests
 
-    for _name, _method in vars(MessagingContractTests).items():
+    for _name, _method in vars(EmailContractTests).items():
         if _name.startswith("test_"):
             locals()[_name] = _method
 
