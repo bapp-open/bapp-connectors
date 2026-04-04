@@ -11,6 +11,7 @@ Key differences from OpenAI/Anthropic:
 
 from __future__ import annotations
 
+import base64
 import json
 from datetime import UTC, datetime
 
@@ -19,6 +20,7 @@ from bapp_connectors.core.dto import (
     ChatRole,
     EmbeddingResult,
     FinishReason,
+    ImageResult,
     LLMResponse,
     ModelInfo,
     ProviderMeta,
@@ -33,6 +35,30 @@ _FINISH_MAP: dict[str, FinishReason] = {
     "SAFETY": FinishReason.CONTENT_FILTER,
     "RECITATION": FinishReason.CONTENT_FILTER,
 }
+
+
+def _content_block_to_gemini_part(block: dict) -> dict:
+    """Convert a multimodal content block to a Gemini part dict."""
+    block_type = block.get("type")
+
+    if block_type == "text":
+        return {"text": block["text"]}
+
+    if block_type == "image":
+        b64 = base64.b64encode(block["data"]).decode("ascii")
+        return {"inlineData": {"mimeType": block.get("mime_type", "image/jpeg"), "data": b64}}
+
+    if block_type == "image_url":
+        url: str = block["url"]
+        if url.startswith("data:"):
+            # data:image/jpeg;base64,<data>
+            header, _, data = url.partition(",")
+            mime = header.split(";")[0].removeprefix("data:")
+            return {"inlineData": {"mimeType": mime, "data": data}}
+        return {"fileData": {"mimeUri": url, "mimeType": block.get("mime_type", "image/jpeg")}}
+
+    # Fallback: return block as-is
+    return block
 
 
 def gemini_contents_from_chat(messages: list[ChatMessage]) -> tuple[dict | None, list[dict]]:
@@ -59,7 +85,8 @@ def gemini_contents_from_chat(messages: list[ChatMessage]) -> tuple[dict | None,
         if isinstance(msg.content, str) and msg.content:
             parts.append({"text": msg.content})
         elif isinstance(msg.content, list):
-            parts.extend(msg.content)
+            for block in msg.content:
+                parts.append(_content_block_to_gemini_part(block))
 
         # Tool calls (assistant → functionCall parts)
         if msg.role == ChatRole.ASSISTANT and msg.tool_calls:
@@ -166,4 +193,28 @@ def embedding_result_from_gemini(raw: dict) -> EmbeddingResult:
     return EmbeddingResult(
         embeddings=[values] if values else [],
         model="",
+    )
+
+
+def image_result_from_gemini(raw: dict) -> ImageResult:
+    """Map a Gemini generateContent response containing an image to an ImageResult DTO."""
+    candidates = raw.get("candidates", [])
+    parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
+
+    b64_data = ""
+    mime_type = ""
+    text_parts: list[str] = []
+
+    for part in parts:
+        if "inlineData" in part:
+            inline = part["inlineData"]
+            b64_data = inline.get("data", "")
+            mime_type = inline.get("mimeType", "")
+        elif "text" in part:
+            text_parts.append(part["text"])
+
+    return ImageResult(
+        b64_data=b64_data,
+        mime_type=mime_type,
+        revised_prompt="\n".join(text_parts),
     )

@@ -37,9 +37,12 @@ class GeminiApiClient:
         except Exception:
             return False
 
-    def generate_content(self, model: str, payload: dict) -> dict:
+    def generate_content(self, model: str, payload: dict, timeout: int | None = None) -> dict:
         """POST /models/{model}:generateContent — generate a response."""
-        return self.http.call("POST", f"models/{model}:generateContent", json=payload)
+        kwargs: dict = {"json": payload}
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return self.http.call("POST", f"models/{model}:generateContent", **kwargs)
 
     def list_models(self) -> dict:
         """GET /models — list available models."""

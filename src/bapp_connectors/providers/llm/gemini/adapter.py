@@ -1,16 +1,19 @@
 """
-Google Gemini LLM adapter — implements LLMPort + EmbeddingCapability.
+Google Gemini LLM adapter — implements LLMPort + EmbeddingCapability + ImageGenerationCapability.
 
 Auth via x-goog-api-key header using MultiHeaderAuth.
 """
 
 from __future__ import annotations
 
-from bapp_connectors.core.capabilities import EmbeddingCapability
+import base64
+
+from bapp_connectors.core.capabilities import EmbeddingCapability, ImageGenerationCapability
 from bapp_connectors.core.dto import (
     ChatMessage,
     ConnectionTestResult,
     EmbeddingResult,
+    ImageResult,
     LLMResponse,
     ModelInfo,
 )
@@ -22,18 +25,20 @@ from bapp_connectors.providers.llm.gemini.mappers import (
     embedding_result_from_gemini,
     gemini_contents_from_chat,
     gemini_tools_from_definitions,
+    image_result_from_gemini,
     llm_response_from_gemini,
     model_info_from_gemini,
 )
 
 
-class GeminiLLMAdapter(LLMPort, EmbeddingCapability):
+class GeminiLLMAdapter(LLMPort, EmbeddingCapability, ImageGenerationCapability):
     """
     Google Gemini adapter.
 
     Implements:
     - LLMPort: complete, list_models
     - EmbeddingCapability: embed
+    - ImageGenerationCapability: generate_image, edit_image
     """
 
     manifest = manifest
@@ -76,7 +81,7 @@ class GeminiLLMAdapter(LLMPort, EmbeddingCapability):
     # ── LLMPort ──
 
     def complete(self, messages: list[ChatMessage], model: str | None = None, **kwargs) -> LLMResponse:
-        model = model or self.config.get("default_model", "gemini-2.0-flash")
+        model = model or self.config.get("default_model", "gemini-2.5-flash")
         temperature = kwargs.pop("temperature", float(self.config.get("temperature", 1.0)))
         max_tokens = kwargs.pop("max_tokens", kwargs.pop("maxOutputTokens", None))
         tools_defs = kwargs.pop("tools", None)
@@ -106,9 +111,54 @@ class GeminiLLMAdapter(LLMPort, EmbeddingCapability):
     # ── EmbeddingCapability ──
 
     def embed(self, texts: list[str], model: str | None = None) -> EmbeddingResult:
-        model = model or "text-embedding-004"
+        model = model or "gemini-embedding-001"
         # Gemini embedContent takes a single content, batch by calling multiple times
         # For simplicity, embed the first text (batch support can be added later)
         payload = {"content": {"parts": [{"text": t} for t in texts]}}
         raw = self.client.embed_content(model, payload)
         return embedding_result_from_gemini(raw)
+
+    # ── ImageGenerationCapability ──
+
+    def generate_image(
+        self,
+        prompt: str,
+        model: str | None = None,
+        size: str = "1024x1024",
+        **kwargs,
+    ) -> ImageResult:
+        model = model or "gemini-2.5-flash"
+        payload: dict = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"responseModalities": ["IMAGE"]},
+        }
+        aspect_ratio = kwargs.pop("aspect_ratio", None)
+        if aspect_ratio:
+            payload["generationConfig"]["imageConfig"] = {"aspectRatio": aspect_ratio}
+        raw = self.client.generate_content(model, payload, timeout=60)
+        return image_result_from_gemini(raw)
+
+    def edit_image(
+        self,
+        prompt: str,
+        image: bytes,
+        *,
+        model: str | None = None,
+        size: str = "1024x1024",
+        **kwargs,
+    ) -> ImageResult:
+        model = model or "gemini-2.5-flash"
+        b64_image = base64.b64encode(image).decode("ascii")
+        mime_type = kwargs.pop("mime_type", "image/jpeg")
+        payload: dict = {
+            "contents": [{"role": "user", "parts": [
+                {"text": prompt},
+                {"inlineData": {"mimeType": mime_type, "data": b64_image}},
+            ]}],
+            "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
+        }
+        aspect_ratio = kwargs.pop("aspect_ratio", None)
+        if aspect_ratio:
+            payload["generationConfig"]["imageConfig"] = {"aspectRatio": aspect_ratio}
+        raw = self.client.generate_content(model, payload, timeout=60)
+        return image_result_from_gemini(raw)

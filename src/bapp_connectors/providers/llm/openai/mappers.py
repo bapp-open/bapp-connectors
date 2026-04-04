@@ -6,11 +6,13 @@ Converts between raw OpenAI API payloads and normalized framework DTOs.
 
 from __future__ import annotations
 
+import base64
 from datetime import UTC, datetime
 
 from bapp_connectors.core.dto import (
     EmbeddingResult,
     FinishReason,
+    ImageResult,
     LLMResponse,
     ModelInfo,
     ProviderMeta,
@@ -33,11 +35,31 @@ _FINISH_MAP: dict[str, FinishReason] = {
 # ── Request mappers ──
 
 
+def _content_block_to_openai(block: dict) -> dict:
+    """Convert a multimodal content block to OpenAI's content part format."""
+    block_type = block.get("type", "")
+    if block_type == "text":
+        return {"type": "text", "text": block.get("text", "")}
+    if block_type == "image":
+        data = block.get("data", b"")
+        mime = block.get("mime_type", "image/jpeg")
+        if isinstance(data, bytes):
+            data = base64.b64encode(data).decode("ascii")
+        return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
+    if block_type == "image_url":
+        return {"type": "image_url", "image_url": {"url": block.get("url", "")}}
+    return block
+
+
 def openai_messages_from_chat(messages) -> list[dict]:
     """Convert ChatMessage DTOs to OpenAI message format."""
     result = []
     for msg in messages:
-        entry: dict = {"role": msg.role.value, "content": msg.content}
+        if isinstance(msg.content, list):
+            content = [_content_block_to_openai(block) for block in msg.content]
+        else:
+            content = msg.content
+        entry: dict = {"role": msg.role.value, "content": content}
         if msg.name:
             entry["name"] = msg.name
         if msg.tool_call_id:
@@ -162,4 +184,18 @@ def transcription_result_from_openai(raw: dict | str) -> TranscriptionResult:
             raw_payload=raw if isinstance(raw, dict) else {"text": raw},
             fetched_at=datetime.now(UTC),
         ),
+    )
+
+
+def image_result_from_openai(raw: dict) -> ImageResult:
+    """Map an OpenAI image generation response to an ImageResult DTO."""
+    data = raw.get("data", [])
+    if not data:
+        return ImageResult()
+    item = data[0]
+    return ImageResult(
+        url=item.get("url", ""),
+        b64_data=item.get("b64_json", ""),
+        revised_prompt=item.get("revised_prompt", ""),
+        provider_meta=ProviderMeta(provider="openai", raw_payload=raw, fetched_at=datetime.now(UTC)),
     )

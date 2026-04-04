@@ -1,5 +1,6 @@
-"""Tests for LLM mappers — OpenAI and Anthropic."""
+"""Tests for LLM mappers — OpenAI, Anthropic, Gemini."""
 
+import base64
 import json
 
 from bapp_connectors.core.dto import (
@@ -15,8 +16,15 @@ from bapp_connectors.providers.llm.anthropic.mappers import (
     hardcoded_models,
     llm_response_from_anthropic,
 )
+from bapp_connectors.providers.llm.gemini.mappers import (
+    _content_block_to_gemini_part,
+    gemini_contents_from_chat,
+    image_result_from_gemini,
+)
 from bapp_connectors.providers.llm.openai.mappers import (
+    _content_block_to_openai,
     embedding_result_from_openai,
+    image_result_from_openai,
     llm_response_from_openai,
     openai_messages_from_chat,
     openai_tools_from_definitions,
@@ -223,3 +231,159 @@ class TestAnthropicModels:
         assert "claude-opus-4-20250514" in ids
         assert all(m.pricing is not None for m in models)
         assert all(m.context_window == 200000 for m in models)
+
+
+# ── OpenAI Image + Multimodal Mappers ──
+
+
+class TestOpenAIImageResult:
+    def test_b64_json_response(self):
+        raw = {"data": [{"b64_json": "abc123", "revised_prompt": "a cat"}]}
+        result = image_result_from_openai(raw)
+        assert result.b64_data == "abc123"
+        assert result.revised_prompt == "a cat"
+
+    def test_url_response(self):
+        raw = {"data": [{"url": "https://example.com/img.png"}]}
+        result = image_result_from_openai(raw)
+        assert result.url == "https://example.com/img.png"
+
+    def test_empty_data(self):
+        raw = {"data": []}
+        result = image_result_from_openai(raw)
+        assert result.url == ""
+        assert result.b64_data == ""
+
+
+class TestOpenAIMultimodalMessages:
+    def test_image_bytes_content(self):
+        msg = ChatMessage(
+            role=ChatRole.USER,
+            content=[
+                {"type": "text", "text": "What is this?"},
+                {"type": "image", "data": b"\x89PNG", "mime_type": "image/png"},
+            ],
+        )
+        result = openai_messages_from_chat([msg])
+        content = result[0]["content"]
+        assert content[0] == {"type": "text", "text": "What is this?"}
+        assert content[1]["type"] == "image_url"
+        b64 = base64.b64encode(b"\x89PNG").decode()
+        assert content[1]["image_url"]["url"] == f"data:image/png;base64,{b64}"
+
+    def test_image_url_content(self):
+        msg = ChatMessage(
+            role=ChatRole.USER,
+            content=[{"type": "image_url", "url": "https://example.com/img.jpg"}],
+        )
+        result = openai_messages_from_chat([msg])
+        assert result[0]["content"][0]["image_url"]["url"] == "https://example.com/img.jpg"
+
+    def test_text_only_passthrough(self):
+        msg = ChatMessage(role=ChatRole.USER, content="Hello")
+        result = openai_messages_from_chat([msg])
+        assert result[0]["content"] == "Hello"
+
+
+class TestContentBlockToOpenAI:
+    def test_text_block(self):
+        assert _content_block_to_openai({"type": "text", "text": "hi"}) == {"type": "text", "text": "hi"}
+
+    def test_image_block(self):
+        result = _content_block_to_openai({"type": "image", "data": b"x", "mime_type": "image/jpeg"})
+        assert result["type"] == "image_url"
+        assert result["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+    def test_image_url_block(self):
+        result = _content_block_to_openai({"type": "image_url", "url": "https://test.com/a.png"})
+        assert result["image_url"]["url"] == "https://test.com/a.png"
+
+    def test_unknown_passthrough(self):
+        block = {"type": "custom", "value": 42}
+        assert _content_block_to_openai(block) == block
+
+
+# ── Gemini Image + Multimodal Mappers ──
+
+
+class TestGeminiImageResult:
+    def test_inline_data_response(self):
+        raw = {
+            "candidates": [{
+                "content": {
+                    "parts": [{"inlineData": {"mimeType": "image/png", "data": "iVBOR"}}]
+                }
+            }]
+        }
+        result = image_result_from_gemini(raw)
+        assert result.b64_data == "iVBOR"
+        assert result.mime_type == "image/png"
+
+    def test_text_and_image_response(self):
+        raw = {
+            "candidates": [{
+                "content": {
+                    "parts": [
+                        {"text": "Here is the image:"},
+                        {"inlineData": {"mimeType": "image/jpeg", "data": "abc"}},
+                    ]
+                }
+            }]
+        }
+        result = image_result_from_gemini(raw)
+        assert result.b64_data == "abc"
+        assert result.revised_prompt == "Here is the image:"
+
+    def test_empty_candidates(self):
+        raw = {"candidates": []}
+        result = image_result_from_gemini(raw)
+        assert result.b64_data == ""
+
+
+class TestGeminiMultimodalMessages:
+    def test_image_bytes_in_content(self):
+        msg = ChatMessage(
+            role=ChatRole.USER,
+            content=[
+                {"type": "text", "text": "Describe this"},
+                {"type": "image", "data": b"\xff\xd8", "mime_type": "image/jpeg"},
+            ],
+        )
+        _, contents = gemini_contents_from_chat([msg])
+        parts = contents[0]["parts"]
+        assert parts[0] == {"text": "Describe this"}
+        assert parts[1]["inlineData"]["mimeType"] == "image/jpeg"
+        assert parts[1]["inlineData"]["data"] == base64.b64encode(b"\xff\xd8").decode()
+
+    def test_image_url_remote(self):
+        msg = ChatMessage(
+            role=ChatRole.USER,
+            content=[{"type": "image_url", "url": "https://example.com/img.jpg"}],
+        )
+        _, contents = gemini_contents_from_chat([msg])
+        parts = contents[0]["parts"]
+        assert parts[0]["fileData"]["mimeUri"] == "https://example.com/img.jpg"
+
+    def test_image_url_data_uri(self):
+        msg = ChatMessage(
+            role=ChatRole.USER,
+            content=[{"type": "image_url", "url": "data:image/png;base64,iVBOR"}],
+        )
+        _, contents = gemini_contents_from_chat([msg])
+        parts = contents[0]["parts"]
+        assert parts[0]["inlineData"]["mimeType"] == "image/png"
+        assert parts[0]["inlineData"]["data"] == "iVBOR"
+
+
+class TestContentBlockToGemini:
+    def test_text_block(self):
+        assert _content_block_to_gemini_part({"type": "text", "text": "hello"}) == {"text": "hello"}
+
+    def test_image_block(self):
+        result = _content_block_to_gemini_part({"type": "image", "data": b"x", "mime_type": "image/png"})
+        assert result["inlineData"]["mimeType"] == "image/png"
+        assert result["inlineData"]["data"] == base64.b64encode(b"x").decode()
+
+    def test_unknown_passthrough(self):
+        block = {"functionCall": {"name": "f"}}
+        assert _content_block_to_gemini_part(block) == block

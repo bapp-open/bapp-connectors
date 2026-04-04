@@ -1,14 +1,15 @@
 """
-OpenAI LLM adapter — implements LLMPort + EmbeddingCapability + TranscriptionCapability.
+OpenAI LLM adapter — implements LLMPort + EmbeddingCapability + TranscriptionCapability + ImageGenerationCapability.
 """
 
 from __future__ import annotations
 
-from bapp_connectors.core.capabilities import EmbeddingCapability, TranscriptionCapability
+from bapp_connectors.core.capabilities import EmbeddingCapability, ImageGenerationCapability, TranscriptionCapability
 from bapp_connectors.core.dto import (
     ChatMessage,
     ConnectionTestResult,
     EmbeddingResult,
+    ImageResult,
     LLMResponse,
     ModelInfo,
     TranscriptionResult,
@@ -19,6 +20,7 @@ from bapp_connectors.providers.llm.openai.client import OpenAIApiClient
 from bapp_connectors.providers.llm.openai.manifest import manifest
 from bapp_connectors.providers.llm.openai.mappers import (
     embedding_result_from_openai,
+    image_result_from_openai,
     llm_response_from_openai,
     model_info_from_openai,
     openai_messages_from_chat,
@@ -27,7 +29,7 @@ from bapp_connectors.providers.llm.openai.mappers import (
 )
 
 
-class OpenAILLMAdapter(LLMPort, EmbeddingCapability, TranscriptionCapability):
+class OpenAILLMAdapter(LLMPort, EmbeddingCapability, TranscriptionCapability, ImageGenerationCapability):
     """
     OpenAI adapter.
 
@@ -35,6 +37,7 @@ class OpenAILLMAdapter(LLMPort, EmbeddingCapability, TranscriptionCapability):
     - LLMPort: complete, list_models
     - EmbeddingCapability: embed
     - TranscriptionCapability: transcribe (Whisper)
+    - ImageGenerationCapability: generate_image, edit_image
     """
 
     manifest = manifest
@@ -110,3 +113,23 @@ class OpenAILLMAdapter(LLMPort, EmbeddingCapability, TranscriptionCapability):
         model = model or "whisper-1"
         raw = self.client.create_transcription(audio, model=model, language=language, **kwargs)
         return transcription_result_from_openai(raw)
+
+    # ── ImageGenerationCapability ──
+
+    def generate_image(self, prompt: str, model: str | None = None, size: str = "1024x1024", **kwargs) -> ImageResult:
+        model = model or "dall-e-3"
+        payload: dict = {
+            "model": model,
+            "prompt": prompt,
+            "size": size,
+            "response_format": "b64_json",
+            "n": 1,
+        }
+        payload.update(kwargs)
+        raw = self.client.create_image(payload)
+        return image_result_from_openai(raw)
+
+    def edit_image(self, prompt: str, image: bytes, *, model: str | None = None, size: str = "1024x1024", **kwargs) -> ImageResult:
+        model = model or "gpt-image-1"
+        raw = self.client.edit_image(image=image, prompt=prompt, model=model, size=size, **kwargs)
+        return image_result_from_openai(raw)

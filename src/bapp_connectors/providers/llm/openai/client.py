@@ -22,6 +22,8 @@ class OpenAIApiClient:
         GET  /models
         POST /embeddings
         POST /audio/transcriptions
+        POST /images/generations
+        POST /images/edits
     """
 
     def __init__(self, http_client: ResilientHttpClient):
@@ -66,3 +68,14 @@ class OpenAIApiClient:
             data["language"] = language
         data.update(kwargs)
         return self.http.call("POST", "audio/transcriptions", files=files, data=data)
+
+    def create_image(self, payload: dict) -> dict:
+        """POST /images/generations — generate an image from a prompt."""
+        return self.http.call("POST", "images/generations", json=payload, timeout=60)
+
+    def edit_image(self, image: bytes, prompt: str, model: str = "gpt-image-1", size: str = "1024x1024", **kwargs) -> dict:
+        """POST /images/edits — edit an image with a prompt (multipart form data)."""
+        files = {"image": ("image.png", image, "image/png")}
+        data: dict = {"prompt": prompt, "model": model, "size": size}
+        data.update(kwargs)
+        return self.http.call("POST", "images/edits", files=files, data=data, timeout=60)

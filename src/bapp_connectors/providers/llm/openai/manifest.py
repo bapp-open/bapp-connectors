@@ -2,7 +2,7 @@
 OpenAI LLM provider manifest.
 """
 
-from bapp_connectors.core.capabilities import EmbeddingCapability, TranscriptionCapability
+from bapp_connectors.core.capabilities import EmbeddingCapability, ImageGenerationCapability, TranscriptionCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -59,7 +59,7 @@ manifest = ProviderManifest(
             ),
         ],
     ),
-    capabilities=[LLMPort, EmbeddingCapability, TranscriptionCapability],
+    capabilities=[LLMPort, EmbeddingCapability, TranscriptionCapability, ImageGenerationCapability],
     rate_limit=RateLimitConfig(
         requests_per_second=50,
         burst=100,

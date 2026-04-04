@@ -5,7 +5,7 @@ Uses the Gemini API (generativelanguage.googleapis.com).
 Auth via API key in header (x-goog-api-key).
 """
 
-from bapp_connectors.core.capabilities import EmbeddingCapability
+from bapp_connectors.core.capabilities import EmbeddingCapability, ImageGenerationCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -62,7 +62,7 @@ manifest = ProviderManifest(
             ),
         ],
     ),
-    capabilities=[LLMPort, EmbeddingCapability],
+    capabilities=[LLMPort, EmbeddingCapability, ImageGenerationCapability],
     rate_limit=RateLimitConfig(
         requests_per_second=15,
         burst=30,

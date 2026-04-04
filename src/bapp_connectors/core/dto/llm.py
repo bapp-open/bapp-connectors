@@ -116,3 +116,4 @@ class ImageResult(BaseDTO):
     url: str = ""
     b64_data: str = ""
     revised_prompt: str = ""
+    mime_type: str = ""
