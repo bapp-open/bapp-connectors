@@ -15,10 +15,16 @@ import pytest
 # ── LLM integration test credentials (from .env or environment) ──
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 # ── Markers ──
 
 skip_unless_gemini = pytest.mark.skipif(
     not GEMINI_API_KEY,
     reason="GEMINI_API_KEY env var not set. Export it or source .env",
+)
+
+skip_unless_openai = pytest.mark.skipif(
+    not OPENAI_API_KEY,
+    reason="OPENAI_API_KEY env var not set. Export it or source .env",
 )
