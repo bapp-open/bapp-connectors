@@ -2,6 +2,7 @@
 
 from .bulk_operations import BulkImportCapability, BulkUpdateCapability
 from .embedding import EmbeddingCapability
+from .financial import FinancialCapability
 from .image_generation import ImageGenerationCapability
 from .inbox import InboxCapability
 from .invoice_attach import InvoiceAttachmentCapability
@@ -17,6 +18,7 @@ from .product_management import (
 )
 from .rich_messaging import RichMessagingCapability
 from .saved_payment import SavedPaymentCapability
+from .shipping import ShippingCapability
 from .streaming import StreamingCapability
 from .subscriptions import SubscriptionCapability
 from .transcription import TranscriptionCapability
@@ -30,6 +32,7 @@ __all__ = [
     "EmbeddingCapability",
     "FeedFormat",
     "FeedUploadCapability",
+    "FinancialCapability",
     "ImageGenerationCapability",
     "InboxCapability",
     "InvoiceAttachmentCapability",
@@ -41,6 +44,7 @@ __all__ = [
     "RelatedProductCapability",
     "RichMessagingCapability",
     "SavedPaymentCapability",
+    "ShippingCapability",
     "StreamingCapability",
     "SubscriptionCapability",
     "TranscriptionCapability",

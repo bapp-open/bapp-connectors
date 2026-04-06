@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.capabilities import InvoiceAttachmentCapability
+from bapp_connectors.core.capabilities import InvoiceAttachmentCapability, ShippingCapability
 from bapp_connectors.core.dto import (
+    AWBLabel,
     ConnectionTestResult,
     Order,
     OrderStatus,
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
     from decimal import Decimal
 
 
-class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability):
+class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability, ShippingCapability):
     """
     Okazii marketplace adapter.
 
@@ -106,3 +107,27 @@ class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability):
             return True
         except Exception:
             return False
+
+    # ── ShippingCapability ──
+
+    def get_order_awbs(self, order_id: str) -> list[AWBLabel]:
+        order_data = self.client.get_order(order_id)
+        awbs = []
+        for bid in order_data.get("bids", []):
+            shipment = bid.get("shipment") or {}
+            awb_code = shipment.get("awbCode", "")
+            if not awb_code:
+                continue
+            awbs.append(AWBLabel(
+                tracking_number=awb_code,
+                extra={
+                    "awb_type": shipment.get("awbType", ""),
+                    "courier": shipment.get("courier", ""),
+                    "status": shipment.get("status", ""),
+                },
+            ))
+        return awbs
+
+    def get_awb_pdf(self, awb_id: str) -> bytes:
+        """Download AWB label PDF. awb_id is the AWB tracking code."""
+        return self.client.get_gdl_awb_pdf(awb_id)

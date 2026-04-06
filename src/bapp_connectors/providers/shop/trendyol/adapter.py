@@ -1,31 +1,43 @@
 """
-Trendyol shop adapter — implements ShopPort + BulkUpdateCapability + InvoiceAttachmentCapability.
+Trendyol shop adapter — implements ShopPort + BulkUpdateCapability + InvoiceAttachmentCapability + WebhookCapability.
 
 This is the main entry point for the Trendyol integration.
 """
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.capabilities import BulkUpdateCapability, InvoiceAttachmentCapability
+from bapp_connectors.core.capabilities import (
+    BulkUpdateCapability,
+    FinancialCapability,
+    InvoiceAttachmentCapability,
+    ShippingCapability,
+    WebhookCapability,
+)
 from bapp_connectors.core.dto import (
+    AWBLabel,
     BulkResult,
     ConnectionTestResult,
+    FinancialTransaction,
     Order,
     OrderStatus,
     PaginatedResult,
     Product,
     ProductUpdate,
+    WebhookEvent,
 )
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.providers.shop.trendyol.client import TrendyolApiClient
-from bapp_connectors.providers.shop.trendyol.manifest import manifest
+from bapp_connectors.providers.shop.trendyol.manifest import TRENDYOL_LIVE_URL, TRENDYOL_STAGING_URL, manifest
 from bapp_connectors.providers.shop.trendyol.mappers import (
     order_from_trendyol,
     orders_from_trendyol,
     products_from_trendyol,
+    settlements_from_trendyol,
+    webhook_event_from_trendyol,
 )
 
 if TYPE_CHECKING:
@@ -33,7 +45,7 @@ if TYPE_CHECKING:
     from decimal import Decimal
 
 
-class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapability):
+class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapability, WebhookCapability, FinancialCapability, ShippingCapability):
     """
     Trendyol marketplace adapter.
 
@@ -41,6 +53,8 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
     - ShopPort: orders, products, stock/price updates
     - BulkUpdateCapability: batch product updates
     - InvoiceAttachmentCapability: attach invoices to orders
+    - WebhookCapability: register, list, and parse webhooks
+    - FinancialCapability: settlements and financial transactions
     """
 
     manifest = manifest
@@ -49,15 +63,20 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
         self.credentials = credentials
         self.seller_id = str(credentials.get("seller_id", ""))
         self.country = credentials.get("country", "RO")
+        self.sandbox = str(credentials.get("sandbox", "false")).lower() in ("true", "1", "yes")
+
+        base_url = TRENDYOL_STAGING_URL if self.sandbox else TRENDYOL_LIVE_URL
 
         if http_client is None:
             from bapp_connectors.core.http import BasicAuth
 
             http_client = ResilientHttpClient(
-                base_url=self.manifest.base_url,
+                base_url=base_url,
                 auth=BasicAuth(credentials.get("username", ""), credentials.get("password", "")),
                 provider_name="trendyol",
             )
+        else:
+            http_client.base_url = base_url.rstrip("/") + "/"
 
         self.client = TrendyolApiClient(
             http_client=http_client,
@@ -159,6 +178,27 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
             errors=errors,
         )
 
+    # ── ShippingCapability ──
+
+    def get_order_awbs(self, order_id: str) -> list[AWBLabel]:
+        data = self.client.get_order(order_id)
+        tracking = data.get("cargoTrackingNumber")
+        if not tracking:
+            return []
+        return [AWBLabel(
+            tracking_number=str(tracking),
+            label_url=data.get("cargoTrackingLink", ""),
+            extra={
+                "courier": data.get("cargoProviderName", ""),
+                "sender_number": data.get("cargoSenderNumber", ""),
+                "shipment_package_id": data.get("shipmentPackageId"),
+            },
+        )]
+
+    def get_awb_pdf(self, awb_id: str) -> bytes:
+        """Download AWB label PDF. awb_id is the shipmentPackageId."""
+        return self.client.read_awb(int(awb_id))
+
     # ── InvoiceAttachmentCapability ──
 
     def attach_invoice(self, order_id: str, invoice_url: str) -> bool:
@@ -167,3 +207,130 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
             return True
         except Exception:
             return False
+
+    # ── FinancialCapability ──
+
+    SETTLEMENT_TYPES = ("Sale", "Return")
+    OTHER_FINANCIAL_TYPES = ("PaymentOrder", "DeductionInvoices", "CreditNote", "CommissionInvocie")
+    ALL_FINANCIAL_TYPES = SETTLEMENT_TYPES + OTHER_FINANCIAL_TYPES
+
+    def get_financial_transactions(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        transaction_type: str | None = None,
+        cursor: str | None = None,
+    ) -> PaginatedResult[FinancialTransaction]:
+        """Fetch financial transactions.
+
+        Args:
+            transaction_type: "Sale", "Return" (settlements) or
+                "PaymentOrder", "DeductionInvoices", "CreditNote", "CommissionInvocie" (other financials).
+                Defaults to "Sale".
+        """
+        tx_type = transaction_type or "Sale"
+        if tx_type not in self.ALL_FINANCIAL_TYPES:
+            raise ValueError(
+                f"Invalid transaction_type '{tx_type}'. "
+                f"Must be one of: {', '.join(self.ALL_FINANCIAL_TYPES)}"
+            )
+        if tx_type in self.SETTLEMENT_TYPES:
+            return self.get_settlements(tx_type, start_date, end_date, cursor=cursor)
+        return self.get_other_financials(tx_type, start_date, end_date, cursor=cursor)
+
+    def get_settlements(
+        self,
+        transaction_type: str,
+        start_date: datetime,
+        end_date: datetime,
+        cursor: str | None = None,
+        size: int = 500,
+    ) -> PaginatedResult[FinancialTransaction]:
+        """Fetch settlement transactions (Sale or Return).
+
+        Args:
+            transaction_type: "Sale" or "Return".
+            start_date: Start of date range (max 15-day span).
+            end_date: End of date range.
+            cursor: Page number as string.
+            size: Page size (500 or 1000).
+        """
+        if transaction_type not in self.SETTLEMENT_TYPES:
+            raise ValueError(f"Invalid settlement type '{transaction_type}'. Must be one of: {', '.join(self.SETTLEMENT_TYPES)}")
+        page = int(cursor) if cursor else 0
+        response = self.client.get_settlements(
+            transaction_type=transaction_type,
+            start_date=int(start_date.timestamp() * 1000),
+            end_date=int(end_date.timestamp() * 1000),
+            page=page,
+            size=size,
+        )
+        return settlements_from_trendyol(response, query_type=transaction_type)
+
+    def get_other_financials(
+        self,
+        transaction_type: str,
+        start_date: datetime,
+        end_date: datetime,
+        cursor: str | None = None,
+        size: int = 500,
+    ) -> PaginatedResult[FinancialTransaction]:
+        """Fetch other financial transactions.
+
+        Args:
+            transaction_type: "PaymentOrder", "DeductionInvoices", "CreditNote", or "CommissionInvocie".
+            start_date: Start of date range (max 15-day span).
+            end_date: End of date range.
+            cursor: Page number as string.
+            size: Page size (500 or 1000).
+        """
+        if transaction_type not in self.OTHER_FINANCIAL_TYPES:
+            raise ValueError(
+                f"Invalid financial type '{transaction_type}'. "
+                f"Must be one of: {', '.join(self.OTHER_FINANCIAL_TYPES)}"
+            )
+        page = int(cursor) if cursor else 0
+        response = self.client.get_other_financials(
+            transaction_type=transaction_type,
+            start_date=int(start_date.timestamp() * 1000),
+            end_date=int(end_date.timestamp() * 1000),
+            page=page,
+            size=size,
+        )
+        return settlements_from_trendyol(response, query_type=transaction_type)
+
+    # ── WebhookCapability ──
+
+    def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
+        # Trendyol does not sign webhook payloads — authentication is done
+        # via BASIC_AUTHENTICATION or API_KEY on the receiving endpoint.
+        return True
+
+    def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
+        payload = json.loads(body) if body else {}
+        return webhook_event_from_trendyol(payload)
+
+    def register_webhook(self, url: str, events: list[str] | None = None) -> dict:
+        statuses = events or [
+            "CREATED", "PICKING", "INVOICED", "SHIPPED", "CANCELLED",
+            "DELIVERED", "UNDELIVERED", "RETURNED", "UNSUPPLIED", "AWAITING",
+        ]
+        webhook_data: dict = {
+            "url": url,
+            "authenticationType": "BASIC_AUTHENTICATION",
+            "subscribedStatuses": statuses,
+        }
+        # Forward auth credentials for the webhook callback endpoint if provided
+        config = getattr(self, "_webhook_config", None) or {}
+        if config.get("api_key"):
+            webhook_data["authenticationType"] = "API_KEY"
+            webhook_data["apiKey"] = config["api_key"]
+        elif config.get("username"):
+            webhook_data["username"] = config["username"]
+            webhook_data["password"] = config.get("password", "")
+        result = self.client.create_webhook(webhook_data)
+        return result if isinstance(result, dict) else {"id": result}
+
+    def list_webhooks(self) -> list[dict]:
+        result = self.client.list_webhooks()
+        return result if isinstance(result, list) else [result]

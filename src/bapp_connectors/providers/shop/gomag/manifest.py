@@ -2,6 +2,14 @@
 Gomag provider manifest — declares capabilities, auth, rate limits, and webhook config.
 """
 
+from bapp_connectors.core.capabilities import (
+    AttributeManagementCapability,
+    BulkUpdateCapability,
+    CategoryManagementCapability,
+    ProductCreationCapability,
+    ProductFullUpdateCapability,
+    ShippingCapability,
+)
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -29,15 +37,21 @@ manifest = ProviderManifest(
     ),
     capabilities=[
         ShopPort,
+        ProductCreationCapability,
+        ProductFullUpdateCapability,
+        BulkUpdateCapability,
+        CategoryManagementCapability,
+        AttributeManagementCapability,
+        ShippingCapability,
     ],
     rate_limit=RateLimitConfig(
-        requests_per_second=5,
-        burst=10,
+        requests_per_second=1,
+        burst=2,
     ),
     retry=RetryConfig(
         max_retries=3,
         backoff=BackoffStrategy.EXPONENTIAL,
-        retryable_status_codes=[429, 500, 502, 503, 504],
+        retryable_status_codes=[428, 429, 500, 502, 503, 504],
         non_retryable_status_codes=[400, 401, 403, 404],
     ),
     webhooks=WebhookConfig(

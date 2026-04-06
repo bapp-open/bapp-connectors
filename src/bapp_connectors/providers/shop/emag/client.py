@@ -253,7 +253,84 @@ class EmagApiClient:
             return response.content
         return b""
 
-    # ── Invoice / Attachments ──
+    # ── Invoice API ──
+    # Invoice endpoints return {total_results, invoices} instead of the standard
+    # {isError, results} wrapper, so they use _call directly.
+
+    def get_invoice_categories(self) -> dict:
+        """Fetch invoice categories (e.g. FC=Commission)."""
+        data = _json_encode({})
+        return self._call("POST", "invoice/categories", data=data)
+
+    def get_invoices(
+        self,
+        category: str | None = None,
+        number: str | None = None,
+        date_start: str | None = None,
+        date_end: str | None = None,
+        page: int = 1,
+        per_page: int = 100,
+    ) -> dict:
+        """Fetch eMAG-to-seller invoices (commissions, settlements).
+
+        Args:
+            category: Invoice category code (e.g. "FC").
+            number: Invoice series+number filter.
+            date_start: Start date (YYYY-MM-DD).
+            date_end: End date (YYYY-MM-DD).
+        """
+        payload: dict[str, Any] = {
+            "currentPage": page,
+            "itemsPerPage": per_page,
+        }
+        if category:
+            payload["category"] = category
+        if number:
+            payload["number"] = number
+        if date_start:
+            payload["date_start"] = date_start
+        if date_end:
+            payload["date_end"] = date_end
+        data = _json_encode(payload)
+        return self._call("POST", "invoice/read", data=data)
+
+    def get_customer_invoices(
+        self,
+        category: str | None = None,
+        order_id: int | None = None,
+        number: str | None = None,
+        date_start: str | None = None,
+        date_end: str | None = None,
+        page: int = 1,
+        per_page: int = 100,
+    ) -> dict:
+        """Fetch seller-to-customer invoices.
+
+        Args:
+            category: "normal" or "storno".
+            order_id: Filter by order ID.
+            number: Invoice series+number filter.
+            date_start: Start date (YYYY-MM-DD).
+            date_end: End date (YYYY-MM-DD).
+        """
+        payload: dict[str, Any] = {
+            "currentPage": page,
+            "itemsPerPage": per_page,
+        }
+        if category:
+            payload["category"] = category
+        if order_id is not None:
+            payload["order_id"] = order_id
+        if number:
+            payload["number"] = number
+        if date_start:
+            payload["date_start"] = date_start
+        if date_end:
+            payload["date_end"] = date_end
+        data = _json_encode(payload)
+        return self._call("POST", "customer-invoice/read", data=data)
+
+    # ── Order Attachments ──
 
     def order_attachment_save(
         self,

@@ -13,6 +13,9 @@ from decimal import Decimal
 from bapp_connectors.core.dto import (
     CardBrand,
     CheckoutSession,
+    FinancialTransaction,
+    FinancialTransactionType,
+    PaginatedResult,
     PaymentMethodType,
     PaymentResult,
     ProviderMeta,
@@ -351,6 +354,103 @@ STRIPE_WEBHOOK_EVENT_MAP: dict[str, WebhookEventType] = {
     "invoice.payment_succeeded": WebhookEventType.SUBSCRIPTION_PAYMENT_SUCCEEDED,
     "invoice.payment_failed": WebhookEventType.SUBSCRIPTION_PAYMENT_FAILED,
 }
+
+
+# ── Financial / Payout mappers ──
+
+STRIPE_BALANCE_TX_TYPE_MAP: dict[str, FinancialTransactionType] = {
+    "charge": FinancialTransactionType.SALE,
+    "payment": FinancialTransactionType.SALE,
+    "refund": FinancialTransactionType.REFUND,
+    "adjustment": FinancialTransactionType.OTHER,
+    "payout": FinancialTransactionType.PAYMENT,
+    "stripe_fee": FinancialTransactionType.COMMISSION,
+    "application_fee": FinancialTransactionType.COMMISSION,
+}
+
+
+def transaction_from_stripe_balance(data: dict) -> FinancialTransaction:
+    """Map a Stripe balance_transaction to a normalized FinancialTransaction."""
+    currency = (data.get("currency") or "").upper()
+    amount = amount_from_stripe(data.get("amount", 0), currency)
+    fee = amount_from_stripe(data.get("fee", 0), currency)
+    net = amount_from_stripe(data.get("net", 0), currency)
+
+    raw_type = data.get("type", "")
+    tx_type = STRIPE_BALANCE_TX_TYPE_MAP.get(raw_type, FinancialTransactionType.OTHER)
+
+    created_at = None
+    if ts := data.get("created"):
+        created_at = datetime.fromtimestamp(ts, tz=UTC)
+
+    # Extract billing details from expanded source (charge)
+    source = data.get("source")
+    customer_name = ""
+    customer_email = ""
+    customer_vat_id = ""
+    description = data.get("description") or ""
+
+    if isinstance(source, dict):
+        billing = source.get("billing_details") or {}
+        customer_name = billing.get("name") or ""
+        customer_email = billing.get("email") or ""
+        description = description or source.get("description") or ""
+
+        # Customer tax IDs from expanded customer
+        customer = source.get("customer")
+        if isinstance(customer, dict):
+            customer_name = customer_name or customer.get("name") or ""
+            customer_email = customer_email or customer.get("email") or ""
+            tax_ids = customer.get("tax_ids", {}).get("data", [])
+            if tax_ids:
+                customer_vat_id = tax_ids[0].get("value", "")
+
+    debit = abs(amount) if amount < 0 else Decimal("0")
+    credit = amount if amount > 0 else Decimal("0")
+
+    return FinancialTransaction(
+        transaction_id=data.get("id", ""),
+        transaction_type=tx_type,
+        raw_transaction_type=raw_type,
+        transaction_date=created_at,
+        description=description,
+        currency=currency,
+        debit=debit,
+        credit=credit,
+        net_amount=net,
+        commission_amount=fee if fee else None,
+        invoice_number=data.get("source", "") if isinstance(data.get("source"), str) else "",
+        provider_meta=ProviderMeta(
+            provider="stripe",
+            raw_id=data.get("id", ""),
+            raw_payload=data,
+            fetched_at=datetime.now(UTC),
+        ),
+        extra={
+            k: v for k, v in {
+                "customer_name": customer_name,
+                "customer_email": customer_email,
+                "customer_vat_id": customer_vat_id,
+                "fee": str(fee),
+                "fee_details": data.get("fee_details"),
+                "source_id": data.get("source") if isinstance(data.get("source"), str) else None,
+                "payout_id": data.get("payout") if isinstance(data.get("payout"), str) else None,
+            }.items()
+            if v
+        },
+    )
+
+
+def transactions_from_stripe_balance(response: dict) -> PaginatedResult[FinancialTransaction]:
+    """Map Stripe balance_transactions list to PaginatedResult."""
+    items = [transaction_from_stripe_balance(bt) for bt in response.get("data", [])]
+    has_more = response.get("has_more", False)
+    return PaginatedResult(
+        items=items,
+        has_more=has_more,
+        cursor=items[-1].transaction_id if items and has_more else None,
+        total=None,
+    )
 
 
 def webhook_event_from_stripe(data: dict) -> WebhookEvent:

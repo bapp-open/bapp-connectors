@@ -15,6 +15,10 @@ from typing import TYPE_CHECKING
 from bapp_connectors.core.dto import (
     Address,
     Contact,
+    FinancialInvoice,
+    FinancialInvoiceLine,
+    FinancialTransaction,
+    FinancialTransactionType,
     Order,
     OrderItem,
     OrderStatus,
@@ -428,4 +432,125 @@ def webhook_event_from_emag(event_code: str, payload: dict) -> WebhookEvent:
         payload=payload,
         idempotency_key=f"emag:{event_code}:{event_id}" if event_id else "",
         received_at=datetime.now(UTC),
+    )
+
+
+# ── Invoice / Financial mappers ──
+
+
+def _parse_date(date_str: str | None) -> datetime | None:
+    if not date_str:
+        return None
+    with contextlib.suppress(ValueError):
+        return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)
+    return None
+
+
+def _map_invoice_lines(lines: list[dict]) -> list[FinancialInvoiceLine]:
+    result = []
+    for line in lines:
+        unit_price = Decimal(str(line.get("unit_price", 0)))
+        quantity = Decimal(str(line.get("quantity", 1)))
+        result.append(
+            FinancialInvoiceLine(
+                description=line.get("product_name", ""),
+                quantity=quantity,
+                unit_price=unit_price,
+                vat_rate=Decimal(str(line.get("vat_rate", 0))),
+                amount=Decimal(str(line.get("value", 0))) if line.get("value") else unit_price * quantity,
+                unit_of_measure=line.get("unit_of_measure", ""),
+            )
+        )
+    return result
+
+
+def invoice_from_emag(data: dict) -> FinancialInvoice:
+    """Map an eMAG invoice response to a normalized FinancialInvoice."""
+    supplier = data.get("supplier", {})
+    customer = data.get("customer", {})
+    lines = _map_invoice_lines(data.get("lines", []))
+
+    # Use pre-calculated totals from eMAG when available
+    total_amount = Decimal(str(data["total_without_vat"])) if data.get("total_without_vat") is not None else sum(
+        line.amount for line in lines
+    )
+    total_vat = Decimal(str(data["total_vat_value"])) if data.get("total_vat_value") is not None else Decimal("0")
+
+    return FinancialInvoice(
+        invoice_number=data.get("number", ""),
+        category=data.get("category", ""),
+        date=_parse_date(data.get("date")),
+        is_storno=bool(data.get("is_storno")),
+        reversal_for=data.get("reversal_for", ""),
+        currency=data.get("currency", ""),
+        supplier_name=supplier.get("name", ""),
+        supplier_tax_id=supplier.get("cif", ""),
+        customer_name=customer.get("name", ""),
+        customer_tax_id=customer.get("cif", ""),
+        total_amount=total_amount,
+        total_vat=total_vat,
+        lines=lines,
+        order_id=str(data.get("order_id", "")) if data.get("order_id") else "",
+        provider_meta=ProviderMeta(
+            provider="emag",
+            raw_id=data.get("number", ""),
+            raw_payload=data,
+            fetched_at=datetime.now(UTC),
+        ),
+    )
+
+
+def invoices_from_emag(response: dict) -> PaginatedResult[FinancialInvoice]:
+    """Map eMAG invoice response to PaginatedResult.
+
+    Invoice endpoints return {isError, results: {total_results, invoices}}.
+    """
+    results = response.get("results", response)
+    if isinstance(results, dict):
+        invoice_list = results.get("invoices", [])
+        total = results.get("total_results", len(invoice_list))
+    else:
+        invoice_list = results
+        total = len(invoice_list)
+
+    invoices = [invoice_from_emag(inv) for inv in invoice_list]
+    return PaginatedResult(
+        items=invoices,
+        has_more=len(invoices) > 0 and len(invoices) >= 100,
+        total=total,
+    )
+
+
+EMAG_INVOICE_CATEGORY_TRANSACTION_TYPE: dict[str, FinancialTransactionType] = {
+    "FC": FinancialTransactionType.COMMISSION,
+    "FP": FinancialTransactionType.PAYMENT,
+}
+
+
+def transactions_from_emag_invoices(response: dict) -> PaginatedResult[FinancialTransaction]:
+    """Convert eMAG invoices to normalized FinancialTransactions."""
+    invoice_result = invoices_from_emag(response)
+    transactions = []
+    for inv in invoice_result.items:
+        tx_type = EMAG_INVOICE_CATEGORY_TRANSACTION_TYPE.get(inv.category, FinancialTransactionType.OTHER)
+        net = inv.total_amount + inv.total_vat
+        transactions.append(
+            FinancialTransaction(
+                transaction_id=inv.invoice_number,
+                transaction_type=tx_type,
+                raw_transaction_type=inv.category,
+                transaction_date=inv.date,
+                description=f"{inv.category} - {inv.invoice_number}",
+                debit=net if net > 0 else Decimal("0"),
+                credit=abs(net) if net < 0 else Decimal("0"),
+                net_amount=net,
+                order_id=inv.order_id,
+                invoice_number=inv.invoice_number,
+                provider_meta=inv.provider_meta,
+            )
+        )
+    return PaginatedResult(
+        items=transactions,
+        has_more=invoice_result.has_more,
+        total=invoice_result.total,
     )

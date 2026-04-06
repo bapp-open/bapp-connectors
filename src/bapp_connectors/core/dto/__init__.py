@@ -5,6 +5,7 @@ Normalized data transfer objects for cross-provider communication.
 from .base import BaseDTO, BulkResult, ConnectionTestResult, PaginatedResult, ProviderMeta
 from .email import EmailAddress, EmailAttachmentContent, EmailAttachmentInfo, EmailDetail, EmailSummary
 from .feed import FeedResult, FeedUploadResult, FeedValidationError, FeedValidationResult, FeedWarning
+from .financial import FinancialInvoice, FinancialInvoiceLine, FinancialTransaction, FinancialTransactionType
 from .llm import (
     ChatMessage,
     ChatRole,
@@ -76,6 +77,10 @@ __all__ = [
     "FeedValidationError",
     "FeedValidationResult",
     "FeedWarning",
+    "FinancialInvoice",
+    "FinancialInvoiceLine",
+    "FinancialTransaction",
+    "FinancialTransactionType",
     "FinishReason",
     "ImageResult",
     "InboundMessage",

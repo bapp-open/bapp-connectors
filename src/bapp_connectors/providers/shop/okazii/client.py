@@ -107,3 +107,73 @@ class OkaziiApiClient:
             f"export_order_invoices/{order_id}",
             json={"invoice_url": invoice_url},
         )
+
+    # ── Location ──
+
+    def get_cities(self, **kwargs) -> list[dict]:
+        """List cities with courier availability."""
+        result = self._call("GET", "cities", **kwargs)
+        if isinstance(result, dict):
+            return result.get("hydra:member", [])
+        return []
+
+    def get_counties(self, **kwargs) -> list[dict]:
+        """List counties."""
+        result = self._call("GET", "counties", **kwargs)
+        if isinstance(result, dict):
+            return result.get("hydra:member", [])
+        return []
+
+    # ── GDL AWB (Okazii-managed shipping) ──
+
+    def get_gdl_awb(self, awb_id: int | str) -> dict:
+        """Get GDL AWB details."""
+        result = self._call("GET", f"order_awb_gdls/{awb_id}")
+        return result if isinstance(result, dict) else {}
+
+    def create_gdl_awb(
+        self,
+        order_id: int | str,
+        weight: float,
+        width: float,
+        length: float,
+        height: float,
+        commercial_discount: float = 0,
+    ) -> dict | str:
+        """Create a GDL AWB (Okazii-managed courier shipping)."""
+        return self._call(
+            "POST",
+            "order_awb_gdls",
+            json={
+                "orderid": str(order_id),
+                "weight": weight,
+                "width": width,
+                "length": length,
+                "height": height,
+                "commercialDiscount": commercial_discount,
+            },
+        )
+
+    def get_gdl_awb_pdf(self, awb_id: int | str) -> bytes:
+        """Download GDL AWB PDF."""
+        response = self.http.call("GET", f"order_awb_gdl_pdfs/{awb_id}", headers=self._extra_headers, direct_response=True)
+        if hasattr(response, "content"):
+            return response.content
+        return b""
+
+    # ── AWB (update) ──
+
+    def update_awb(self, order_id: int | str, awb_data: dict) -> dict | str:
+        """Update AWB tracking info for an order."""
+        return self._call("PUT", f"order_awbs/{order_id}", json=awb_data)
+
+    # ── Seller Pickup Address ──
+
+    def get_seller_pickup_address(self, address_id: int | str) -> dict:
+        """Get seller's pickup address."""
+        result = self._call("GET", f"seller_pickup_addresses/{address_id}")
+        return result if isinstance(result, dict) else {}
+
+    def update_seller_pickup_address(self, address_id: int | str, address_data: dict) -> dict | str:
+        """Update seller's pickup address."""
+        return self._call("PUT", f"seller_pickup_addresses/{address_id}", json=address_data)

@@ -123,3 +123,130 @@ SEC_STATUS_MAP = {
     "8": "authenticated_ok",
     "9": "verified_ok",
 }
+
+
+# ── Management API ──
+
+MANAGER_URL = "https://manager.euplatesc.ro/v3/index.php?action=ws"
+
+
+class EuPlatescApiClient:
+    """
+    EuPlatesc management API client.
+
+    Uses the manager.euplatesc.ro endpoint for transaction queries,
+    invoice listing, captures, refunds, etc.
+    All requests are POST with FormData and HMAC-MD5 authentication.
+    """
+
+    def __init__(self, http_client, merchant_id: str, merchant_key: bytes, user_key: str = "", user_api: str = ""):
+        self.http = http_client
+        self._merchant_id = merchant_id
+        self._merchant_key = merchant_key
+        self._user_key = user_key
+        self._user_api = user_api
+
+    def _build_request(self, method: str, extra: dict | None = None) -> dict:
+        """Build a signed request for the management API."""
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        nonce = binascii.b2a_hex(os.urandom(16)).decode()
+
+        data = OrderedDict()
+        data["method"] = method
+        data["mid"] = self._merchant_id
+        data["timestamp"] = timestamp
+        data["nonce"] = nonce
+
+        if extra:
+            data.update(extra)
+
+        fp_hash = compute_hmac(data, self._merchant_key)
+        result = dict(data)
+        result["fp_hash"] = fp_hash
+        return result
+
+    def _call(self, method: str, extra: dict | None = None) -> dict:
+        """Execute a management API call."""
+        form_data = self._build_request(method, extra)
+        return self.http.call("POST", MANAGER_URL, data=form_data)
+
+    def check_status(self, ep_id: str | None = None, invoice_id: str | None = None) -> dict:
+        """Get transaction status by EuPlatesc ID or invoice ID."""
+        extra = {}
+        if ep_id:
+            extra["epid"] = ep_id
+        if invoice_id:
+            extra["invoice_id"] = invoice_id
+        return self._call("CHECK_STATUS", extra)
+
+    def get_invoice_list(self, date_from: str, date_to: str) -> dict:
+        """List settlement invoices for a date range.
+
+        Args:
+            date_from: Start date (YYYY-MM-DD).
+            date_to: End date (YYYY-MM-DD).
+        """
+        return self._call("INVOICES", {
+            "ukey": self._user_key,
+            "from": date_from,
+            "to": date_to,
+        })
+
+    def get_invoice_transactions(self, invoice: str) -> dict:
+        """Get transactions for a specific settlement invoice.
+
+        Args:
+            invoice: Settlement invoice number.
+        """
+        return self._call("INVOICE", {
+            "ukey": self._user_key,
+            "invoice": invoice,
+        })
+
+    def get_captured_total(self, date_from: str, date_to: str) -> dict:
+        """Get total captured amounts for a date range."""
+        return self._call("CAPTURED_TOTAL", {
+            "ukey": self._user_key,
+            "mids": self._merchant_id,
+            "from": date_from,
+            "to": date_to,
+        })
+
+    def check_mid(self) -> dict:
+        """Validate merchant ID configuration."""
+        return self._call("CHECK_MID")
+
+    def capture(self, ep_id: str) -> dict:
+        """Full capture of a pre-authorized transaction."""
+        return self._call("CAPTURE", {"ukey": self._user_key, "epid": ep_id})
+
+    def reversal(self, ep_id: str) -> dict:
+        """Reverse a transaction."""
+        return self._call("REVERSAL", {"ukey": self._user_key, "epid": ep_id})
+
+    def partial_capture(self, ep_id: str, amount: float) -> dict:
+        """Partial capture of a pre-authorized transaction."""
+        return self._call("PARTIAL_CAPTURE", {
+            "ukey": self._user_key,
+            "epid": ep_id,
+            "amount": f"{amount:.2f}",
+        })
+
+    def refund(self, ep_id: str, amount: float, reason: str = "") -> dict:
+        """Full or partial refund."""
+        extra = {
+            "ukey": self._user_key,
+            "epid": ep_id,
+            "amount": f"{amount:.2f}",
+        }
+        if reason:
+            extra["reason"] = reason
+        return self._call("REFUND", extra)
+
+    def get_saved_cards(self, client_id: str) -> dict:
+        """Get saved cards for a client."""
+        return self._call("C2P_CARDS", {"c2p_id": client_id})
+
+    def remove_card(self, client_id: str, card_id: str) -> dict:
+        """Remove a saved card."""
+        return self._call("C2P_DELETE", {"c2p_id": client_id, "c2p_cid": card_id})

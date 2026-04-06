@@ -118,3 +118,51 @@ class PayPalApiClient:
             return bool(self._access_token)
         except Exception:
             return False
+
+    # ── Reporting ──
+
+    def list_transactions(
+        self,
+        *,
+        start_date: str,
+        end_date: str,
+        transaction_type: str | None = None,
+        page: int = 1,
+        page_size: int = 100,
+        fields: str = "all",
+    ) -> dict:
+        """List transactions from PayPal reporting API.
+
+        Args:
+            start_date: ISO 8601 datetime (e.g. "2026-01-01T00:00:00Z").
+            end_date: ISO 8601 datetime (e.g. "2026-01-31T23:59:59Z").
+            transaction_type: Filter by type (e.g. "T0006" for payouts). Optional.
+            page: Page number (1-based).
+            page_size: Results per page (max 500).
+            fields: "all" or "transaction_info" for minimal response.
+        """
+        params: dict[str, Any] = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "page": str(page),
+            "page_size": str(page_size),
+            "fields": fields,
+        }
+        if transaction_type:
+            params["transaction_type"] = transaction_type
+        return self.http.call(
+            "GET", "/v1/reporting/transactions",
+            headers=self._auth_headers(),
+            params=params,
+        )
+
+    def get_balances(self, currency: str | None = None) -> dict:
+        """Get account balances."""
+        params: dict[str, Any] = {}
+        if currency:
+            params["currency_code"] = currency.upper()
+        return self.http.call(
+            "GET", "/v1/reporting/balances",
+            headers=self._auth_headers(),
+            params=params,
+        )

@@ -28,6 +28,11 @@ def _parse_datetime(value: str) -> datetime | None:
     """Parse ISO datetime string without dateutil dependency."""
     if not value:
         return None
+    # Handle timezone offset (+00:00, +03:00, etc.) by converting to Z
+    if "+" in value[10:]:
+        value = value[: value.rindex("+")] + "Z"
+    elif value.endswith("Z"):
+        pass  # already UTC
     for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
         try:
             return datetime.strptime(value, fmt).replace(tzinfo=UTC)
@@ -41,16 +46,29 @@ def _parse_datetime(value: str) -> datetime | None:
 OKAZII_ORDER_STATUS_MAP: dict[str, OrderStatus] = {
     "new": OrderStatus.PENDING,
     "confirmed": OrderStatus.ACCEPTED,
-    "canceled": OrderStatus.CANCELLED,
-    "returned": OrderStatus.RETURNED,
     "delivered": OrderStatus.DELIVERED,
     "finished": OrderStatus.DELIVERED,
+    "canceled": OrderStatus.CANCELLED,
+    "returned": OrderStatus.RETURNED,
+}
+
+ORDER_STATUS_TO_OKAZII: dict[OrderStatus, str] = {
+    OrderStatus.PENDING: "new",
+    OrderStatus.ACCEPTED: "confirmed",
+    OrderStatus.PROCESSING: "confirmed",
+    OrderStatus.SHIPPED: "confirmed",
+    OrderStatus.DELIVERED: "delivered",
+    OrderStatus.CANCELLED: "canceled",
+    OrderStatus.RETURNED: "returned",
+    OrderStatus.REFUNDED: "returned",
 }
 
 OKAZII_PAYMENT_TYPE_MAP: dict[str, PaymentType] = {
+    "card": PaymentType.ONLINE_CARD,
     "ramburs_okazii": PaymentType.CASH_ON_DELIVERY,
     "ramburs": PaymentType.CASH_ON_DELIVERY,
-    "card": PaymentType.ONLINE_CARD,
+    "predare_personala": PaymentType.OTHER,
+    "avans": PaymentType.BANK_TRANSFER,
 }
 
 
@@ -98,15 +116,16 @@ def _map_billing_contact(data: dict) -> Contact | None:
     first_name = billing_info.get("firstName", "") or buyer_contact.get("firstName", "")
     last_name = billing_info.get("lastName", "") or buyer_contact.get("lastName", "")
 
-    # Build invoice address
-    invoice_parts = []
-    if address := billing_info.get("address", billing_info.get("street", "")):
-        invoice_parts.append(address)
-    if street_nr := billing_info.get("streetNr", ""):
-        invoice_parts.append(street_nr)
-    if zipcode := billing_info.get("zipcode", ""):
-        invoice_parts.append(f"({zipcode})")
-    invoice_address = " ".join(invoice_parts)
+    # Build invoice address — prefer 'address' (already formatted) over street+streetNr
+    if full_addr := billing_info.get("address", ""):
+        invoice_address = full_addr.strip()
+    else:
+        invoice_parts = []
+        if street := billing_info.get("street", ""):
+            invoice_parts.append(street)
+        if street_nr := billing_info.get("streetNr", ""):
+            invoice_parts.append(street_nr)
+        invoice_address = " ".join(invoice_parts)
 
     return Contact(
         name=f"{first_name} {last_name}".strip(),
@@ -146,15 +165,24 @@ def order_from_okazii(data: dict) -> Order:
 
     for bid in bids:
         item_price = bid.get("itemPrice", {})
+        unique_id = str(bid.get("auctionUniqueId", ""))
         items.append(
             OrderItem(
-                item_id=str(bid.get("auctionUniqueId", "")),
-                product_id=str(bid.get("auctionUniqueId", "")),
-                sku=str(bid.get("auctionUniqueId", "")),
-                name="",
+                item_id=str(bid.get("bidId", unique_id)),
+                product_id=unique_id,
+                sku=bid.get("auctionSku") or unique_id,
+                name=bid.get("auctionTitle", ""),
                 quantity=Decimal(str(bid.get("amount", 1))),
                 unit_price=Decimal(str(item_price.get("amount", 0))),
                 currency=item_price.get("currency", "RON"),
+                extra={
+                    k: v
+                    for k, v in bid.items()
+                    if k not in (
+                        "bidId", "auctionUniqueId", "auctionSku", "auctionTitle",
+                        "amount", "itemPrice", "@type",
+                    )
+                },
             )
         )
 
@@ -174,9 +202,8 @@ def order_from_okazii(data: dict) -> Order:
                 )
             )
 
-    order_date = None
-    if date_str := data.get("createdAt"):
-        order_date = _parse_datetime(date_str)
+    order_date = _parse_datetime(data.get("createdAt", ""))
+    updated_at = _parse_datetime(data.get("updatedAt", ""))
 
     # Status from first bid
     raw_status = bids[0].get("status", "") if bids else ""
@@ -189,19 +216,28 @@ def order_from_okazii(data: dict) -> Order:
     order_id = str(data.get("id", ""))
     delivery_addr = data.get("deliveryAddress", {})
 
+    # Use API-provided total when available
+    total_value = data.get("totalValue", {})
+    total = Decimal(str(total_value["amount"])) if total_value.get("amount") is not None else sum(
+        item.unit_price * item.quantity for item in items
+    )
+    currency = total_value.get("currency", "RON") if total_value else "RON"
+
     return Order(
         order_id=order_id,
         status=status,
+        raw_status=raw_status,
         payment_status=PaymentStatus.PAID if status != OrderStatus.PENDING else PaymentStatus.UNPAID,
         payment_type=payment_type,
-        currency="RON",
+        currency=currency,
         items=items,
         billing=_map_billing_contact(data),
         shipping=_map_shipping_contact(data),
         shipping_address=_map_delivery_address(delivery_addr),
         delivery_address=_format_delivery_address(delivery_addr),
-        total=sum(item.unit_price * item.quantity for item in items),
+        total=total,
         created_at=order_date,
+        updated_at=updated_at,
         provider_meta=ProviderMeta(
             provider="okazii",
             raw_id=order_id,
@@ -215,11 +251,16 @@ def order_from_okazii(data: dict) -> Order:
             not in (
                 "id",
                 "createdAt",
+                "updatedAt",
                 "bids",
                 "deliveryAddress",
                 "deliveryPrice",
                 "billingInfo",
                 "buyerContact",
+                "totalValue",
+                "@context",
+                "@id",
+                "@type",
             )
         },
     )

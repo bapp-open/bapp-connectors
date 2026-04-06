@@ -11,16 +11,20 @@ import json
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.capabilities import WebhookCapability
+from bapp_connectors.core.capabilities import FinancialCapability, WebhookCapability
 from bapp_connectors.core.dto import (
     CheckoutSession,
     ConnectionTestResult,
+    FinancialTransaction,
+    PaginatedResult,
     PaymentResult,
     Refund,
     WebhookEvent,
 )
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from bapp_connectors.core.dto import BillingDetails
 from bapp_connectors.core.errors import WebhookVerificationError
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
@@ -35,11 +39,12 @@ from bapp_connectors.providers.payment.paypal.mappers import (
     checkout_session_from_paypal,
     payment_result_from_paypal,
     refund_from_paypal,
+    transactions_from_paypal,
     webhook_event_from_paypal,
 )
 
 
-class PayPalPaymentAdapter(PaymentPort, WebhookCapability):
+class PayPalPaymentAdapter(PaymentPort, WebhookCapability, FinancialCapability):
     """PayPal payment adapter."""
 
     manifest = manifest
@@ -117,6 +122,32 @@ class PayPalPaymentAdapter(PaymentPort, WebhookCapability):
             amount=float(amount) if amount else None,
         )
         return refund_from_paypal(response, payment_id)
+
+    # ── FinancialCapability ──
+
+    def get_financial_transactions(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        transaction_type: str | None = None,
+        cursor: str | None = None,
+    ) -> PaginatedResult[FinancialTransaction]:
+        """Fetch transactions from PayPal reporting API.
+
+        Args:
+            start_date: Start of date range (max 31-day span).
+            end_date: End of date range.
+            transaction_type: PayPal transaction event code filter (e.g. "T0006" for payouts).
+            cursor: Page number as string (1-based).
+        """
+        page = int(cursor) if cursor else 1
+        response = self._client.list_transactions(
+            start_date=start_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            end_date=end_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            transaction_type=transaction_type,
+            page=page,
+        )
+        return transactions_from_paypal(response)
 
     # ── Webhook ──
 

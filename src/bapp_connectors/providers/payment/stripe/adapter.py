@@ -12,10 +12,16 @@ import json
 import time
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.capabilities import SavedPaymentCapability, SubscriptionCapability, WebhookCapability
+from bapp_connectors.core.capabilities import (
+    FinancialCapability,
+    SavedPaymentCapability,
+    SubscriptionCapability,
+    WebhookCapability,
+)
 from bapp_connectors.core.dto import (
     CheckoutSession,
     ConnectionTestResult,
+    FinancialTransaction,
     PaginatedResult,
     PaymentResult,
     Refund,
@@ -36,16 +42,18 @@ from bapp_connectors.providers.payment.stripe.mappers import (
     payment_method_from_stripe,
     refund_from_stripe,
     subscription_from_stripe,
+    transactions_from_stripe_balance,
     webhook_event_from_stripe,
 )
 
 if TYPE_CHECKING:
+    from datetime import datetime
     from decimal import Decimal
 
     from bapp_connectors.core.dto import BillingDetails
 
 
-class StripePaymentAdapter(PaymentPort, WebhookCapability, SubscriptionCapability, SavedPaymentCapability):
+class StripePaymentAdapter(PaymentPort, WebhookCapability, SubscriptionCapability, SavedPaymentCapability, FinancialCapability):
     """
     Stripe payment adapter.
 
@@ -315,6 +323,58 @@ class StripePaymentAdapter(PaymentPort, WebhookCapability, SubscriptionCapabilit
             **{"invoice_settings[default_payment_method]": payment_method_id},
         )
         return True
+
+    # ── FinancialCapability ──
+
+    def get_financial_transactions(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        transaction_type: str | None = None,
+        cursor: str | None = None,
+    ) -> PaginatedResult[FinancialTransaction]:
+        """Fetch balance transactions, optionally filtered by payout ID.
+
+        Args:
+            start_date: Start of date range.
+            end_date: End of date range.
+            transaction_type: Payout ID (e.g. "po_xxx") to get transactions for a specific payout.
+                If not provided, returns all balance transactions in the date range.
+            cursor: Pagination cursor (balance transaction ID).
+        """
+        response = self.client.list_balance_transactions(
+            payout=transaction_type,
+            created_gte=int(start_date.timestamp()),
+            created_lte=int(end_date.timestamp()),
+            starting_after=cursor,
+            expand=["data.source", "data.source.customer"],
+        )
+        return transactions_from_stripe_balance(response)
+
+    def list_payouts(
+        self,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        cursor: str | None = None,
+    ) -> PaginatedResult[dict]:
+        """List payouts (bank transfers from Stripe).
+
+        Returns raw payout dicts with id, amount, currency, arrival_date, status.
+        Use the payout ID as transaction_type in get_financial_transactions() to
+        see which transactions are included.
+        """
+        response = self.client.list_payouts(
+            created_gte=int(start_date.timestamp()) if start_date else None,
+            created_lte=int(end_date.timestamp()) if end_date else None,
+            starting_after=cursor,
+        )
+        items = response.get("data", [])
+        has_more = response.get("has_more", False)
+        return PaginatedResult(
+            items=items,
+            has_more=has_more,
+            cursor=items[-1]["id"] if items and has_more else None,
+        )
 
     # ── WebhookCapability ──
 

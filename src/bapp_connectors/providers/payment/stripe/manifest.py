@@ -2,7 +2,12 @@
 Stripe provider manifest — declares capabilities, auth, rate limits, and webhook config.
 """
 
-from bapp_connectors.core.capabilities import SavedPaymentCapability, SubscriptionCapability, WebhookCapability
+from bapp_connectors.core.capabilities import (
+    FinancialCapability,
+    SavedPaymentCapability,
+    SubscriptionCapability,
+    WebhookCapability,
+)
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -43,6 +48,7 @@ manifest = ProviderManifest(
         WebhookCapability,
         SubscriptionCapability,
         SavedPaymentCapability,
+        FinancialCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=25,

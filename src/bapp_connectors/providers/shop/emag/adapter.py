@@ -1,5 +1,5 @@
 """
-eMAG shop adapter — implements ShopPort + BulkUpdateCapability + InvoiceAttachmentCapability.
+eMAG shop adapter — implements ShopPort + BulkUpdateCapability + InvoiceAttachmentCapability + FinancialCapability.
 
 This is the main entry point for the eMAG integration.
 """
@@ -9,10 +9,19 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.capabilities import BulkUpdateCapability, InvoiceAttachmentCapability, WebhookCapability
+from bapp_connectors.core.capabilities import (
+    BulkUpdateCapability,
+    FinancialCapability,
+    InvoiceAttachmentCapability,
+    ShippingCapability,
+    WebhookCapability,
+)
 from bapp_connectors.core.dto import (
+    AWBLabel,
     BulkResult,
     ConnectionTestResult,
+    FinancialInvoice,
+    FinancialTransaction,
     Order,
     OrderStatus,
     PaginatedResult,
@@ -29,9 +38,11 @@ from bapp_connectors.providers.shop.emag.manifest import EMAG_BASE_URLS, manifes
 from bapp_connectors.providers.shop.emag.mappers import (
     EMAG_ORDER_STATUS_MAP,
     ORDER_STATUS_TO_EMAG,
+    invoices_from_emag,
     order_from_emag,
     orders_from_emag,
     products_from_emag,
+    transactions_from_emag_invoices,
     webhook_event_from_emag,
 )
 
@@ -43,7 +54,7 @@ if TYPE_CHECKING:
     from decimal import Decimal
 
 
-class EmagShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapability, WebhookCapability):
+class EmagShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapability, WebhookCapability, FinancialCapability, ShippingCapability):
     """
     eMAG marketplace adapter.
 
@@ -256,6 +267,40 @@ class EmagShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapabilit
         """Download AWB PDF for an order."""
         return self.client.read_awb_pdf(int(order_id), pdf_format=pdf_format)
 
+    # ── ShippingCapability ──
+
+    def get_order_awbs(self, order_id: str) -> list[AWBLabel]:
+        """Return AWBs for an order by reading AWB details via reservation_id.
+
+        eMAG doesn't support listing AWBs by order_id directly.
+        We read the AWB using the order's emag_id as reservation_id.
+        """
+        try:
+            response = self.client.read_awb(emag_id=int(order_id))
+            results = response.results or []
+        except Exception:
+            return []
+        awbs = []
+        for r in results:
+            tracking = r.get("awb_number", "")
+            if not tracking:
+                continue
+            awbs.append(AWBLabel(
+                tracking_number=tracking,
+                extra={
+                    "emag_id": r.get("emag_id"),
+                    "reservation_id": r.get("reservation_id"),
+                    "courier_name": r.get("courier_name", ""),
+                    "status": r.get("status", ""),
+                    "type": r.get("type", ""),
+                },
+            ))
+        return awbs
+
+    def get_awb_pdf(self, awb_id: str) -> bytes:
+        """Download AWB label PDF. awb_id is the order ID."""
+        return self.client.read_awb_pdf(int(awb_id))
+
     def get_locality_id(self, region: str, locality: str, country: str | None = None) -> int:
         """Look up a locality ID for AWB sender/receiver addresses."""
         response = self.client.get_locality(
@@ -266,3 +311,61 @@ class EmagShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapabilit
         if not response.results:
             raise ValueError(f"No locality found for region={region}, locality={locality}")
         return response.results[0]["emag_id"]
+
+    # ── FinancialCapability ──
+
+    def get_financial_transactions(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        transaction_type: str | None = None,
+        cursor: str | None = None,
+    ) -> PaginatedResult[FinancialTransaction]:
+        page = int(cursor) if cursor else 1
+        response = self.client.get_invoices(
+            category=transaction_type,
+            date_start=start_date.strftime("%Y-%m-%d"),
+            date_end=end_date.strftime("%Y-%m-%d"),
+            page=page,
+        )
+        return transactions_from_emag_invoices(response)
+
+    def get_invoices(
+        self,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        category: str | None = None,
+        cursor: str | None = None,
+    ) -> PaginatedResult[FinancialInvoice]:
+        page = int(cursor) if cursor else 1
+        response = self.client.get_invoices(
+            category=category,
+            date_start=start_date.strftime("%Y-%m-%d") if start_date else None,
+            date_end=end_date.strftime("%Y-%m-%d") if end_date else None,
+            page=page,
+        )
+        return invoices_from_emag(response)
+
+    def get_customer_invoices(
+        self,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        order_id: int | None = None,
+        category: str | None = None,
+        cursor: str | None = None,
+    ) -> PaginatedResult[FinancialInvoice]:
+        """Fetch seller-to-customer invoices.
+
+        Args:
+            category: "normal" or "storno".
+            order_id: Filter by specific order.
+        """
+        page = int(cursor) if cursor else 1
+        response = self.client.get_customer_invoices(
+            category=category,
+            order_id=order_id,
+            date_start=start_date.strftime("%Y-%m-%d") if start_date else None,
+            date_end=end_date.strftime("%Y-%m-%d") if end_date else None,
+            page=page,
+        )
+        return invoices_from_emag(response)

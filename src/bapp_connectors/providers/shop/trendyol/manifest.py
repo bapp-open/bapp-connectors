@@ -2,7 +2,13 @@
 Trendyol provider manifest — declares capabilities, auth, rate limits, and webhook config.
 """
 
-from bapp_connectors.core.capabilities import BulkUpdateCapability, InvoiceAttachmentCapability
+from bapp_connectors.core.capabilities import (
+    BulkUpdateCapability,
+    FinancialCapability,
+    InvoiceAttachmentCapability,
+    ShippingCapability,
+    WebhookCapability,
+)
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -14,13 +20,16 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
 
+TRENDYOL_LIVE_URL = "https://apigw.trendyol.com/integration/"
+TRENDYOL_STAGING_URL = "https://stageapigw.trendyol.com/integration/"
+
 manifest = ProviderManifest(
     name="trendyol",
     family=ProviderFamily.SHOP,
     allow_multiple=True,
     display_name="Trendyol",
     description="Trendyol marketplace integration for orders, products, and inventory management.",
-    base_url="https://apigw.trendyol.com/integration/",
+    base_url=TRENDYOL_LIVE_URL,
     auth=AuthConfig(
         strategy=AuthStrategy.BASIC,
         required_fields=[
@@ -35,12 +44,23 @@ manifest = ProviderManifest(
                 required=False,
                 choices=["RO", "DE", "SA", "AE", "GR", "SK", "CZ"],
             ),
+            CredentialField(
+                name="sandbox",
+                label="Sandbox Mode",
+                sensitive=False,
+                required=False,
+                default="false",
+                help_text="Set to 'true' to use the Trendyol staging API.",
+            ),
         ],
     ),
     capabilities=[
         ShopPort,
         BulkUpdateCapability,
         InvoiceAttachmentCapability,
+        WebhookCapability,
+        FinancialCapability,
+        ShippingCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,
@@ -55,6 +75,10 @@ manifest = ProviderManifest(
     webhooks=WebhookConfig(
         supported=True,
         signature_method=None,  # Trendyol doesn't sign webhooks
-        events=["order.created", "order.cancelled", "order.shipped"],
+        events=[
+            "CREATED", "PICKING", "INVOICED", "SHIPPED", "CANCELLED",
+            "DELIVERED", "UNDELIVERED", "RETURNED", "UNSUPPLIED",
+            "AWAITING", "UNPACKED", "AT_COLLECTION_POINT", "VERIFIED",
+        ],
     ),
 )

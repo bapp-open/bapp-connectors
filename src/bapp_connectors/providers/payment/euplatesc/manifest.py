@@ -5,7 +5,7 @@ EuPlatesc is a Romanian payment gateway supporting card payments
 with form-based checkout and HMAC-MD5 IPN verification.
 """
 
-from bapp_connectors.core.capabilities import WebhookCapability
+from bapp_connectors.core.capabilities import FinancialCapability, WebhookCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -43,6 +43,20 @@ manifest = ProviderManifest(
                 sensitive=True,
                 help_text="EuPlatesc Merchant Key (hex-encoded).",
             ),
+            CredentialField(
+                name="user_key",
+                label="User Key",
+                sensitive=True,
+                required=False,
+                help_text="EuPlatesc User Key (required for capture, refund, and financial reporting).",
+            ),
+            CredentialField(
+                name="user_api",
+                label="User API",
+                sensitive=True,
+                required=False,
+                help_text="EuPlatesc User API key (required for capture, refund, and financial reporting).",
+            ),
         ],
     ),
     settings=SettingsConfig(
@@ -74,6 +88,7 @@ manifest = ProviderManifest(
     capabilities=[
         PaymentPort,
         WebhookCapability,
+        FinancialCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=10,

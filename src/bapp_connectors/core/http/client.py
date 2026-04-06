@@ -80,7 +80,7 @@ class ResilientHttpClient:
                 status_code=status,
             )
 
-        if status == 429:
+        if status in (428, 429):
             retry_after = None
             if ra := response.headers.get("Retry-After"):
                 with contextlib.suppress(ValueError):

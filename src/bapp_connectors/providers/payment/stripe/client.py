@@ -235,6 +235,70 @@ class StripeApiClient:
         """Detach a payment method from its customer."""
         return self._call("POST", f"payment_methods/{payment_method_id}/detach")
 
+    # ── Payouts ──
+
+    def list_payouts(
+        self,
+        *,
+        limit: int = 25,
+        starting_after: str | None = None,
+        created_gte: int | None = None,
+        created_lte: int | None = None,
+    ) -> dict:
+        """List payouts (bank transfers from Stripe to seller)."""
+        params: dict[str, Any] = {"limit": str(limit)}
+        if starting_after:
+            params["starting_after"] = starting_after
+        if created_gte is not None:
+            params["created[gte]"] = str(created_gte)
+        if created_lte is not None:
+            params["created[lte]"] = str(created_lte)
+        return self._call("GET", "payouts", params=params)
+
+    def get_payout(self, payout_id: str) -> dict:
+        """Retrieve a single payout."""
+        return self._call("GET", f"payouts/{payout_id}")
+
+    # ── Balance Transactions ──
+
+    def list_balance_transactions(
+        self,
+        *,
+        payout: str | None = None,
+        limit: int = 100,
+        starting_after: str | None = None,
+        created_gte: int | None = None,
+        created_lte: int | None = None,
+        expand: list[str] | None = None,
+    ) -> dict:
+        """List balance transactions, optionally filtered by payout.
+
+        Args:
+            payout: Filter by payout ID to get all transactions in a specific payout.
+            expand: Stripe expand fields (e.g. ["data.source"] to include charge details).
+        """
+        params: dict[str, Any] = {"limit": str(limit)}
+        if payout:
+            params["payout"] = payout
+        if starting_after:
+            params["starting_after"] = starting_after
+        if created_gte is not None:
+            params["created[gte]"] = str(created_gte)
+        if created_lte is not None:
+            params["created[lte]"] = str(created_lte)
+        if expand:
+            for i, field in enumerate(expand):
+                params[f"expand[{i}]"] = field
+        return self._call("GET", "balance_transactions", params=params)
+
+    def get_charge(self, charge_id: str, expand: list[str] | None = None) -> dict:
+        """Retrieve a charge with optional expansion (e.g. customer, balance_transaction)."""
+        params: dict[str, Any] = {}
+        if expand:
+            for i, field in enumerate(expand):
+                params[f"expand[{i}]"] = field
+        return self._call("GET", f"charges/{charge_id}", params=params)
+
     # ── Direct Charge (off-session) ──
 
     def create_payment_intent(

@@ -4,7 +4,7 @@ Okazii provider manifest — declares capabilities, auth, rate limits, and webho
 
 from __future__ import annotations
 
-from bapp_connectors.core.capabilities import InvoiceAttachmentCapability
+from bapp_connectors.core.capabilities import InvoiceAttachmentCapability, ShippingCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -31,6 +31,7 @@ manifest = ProviderManifest(
     capabilities=[
         ShopPort,
         InvoiceAttachmentCapability,
+        ShippingCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,

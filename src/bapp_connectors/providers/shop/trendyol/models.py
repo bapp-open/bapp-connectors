@@ -64,15 +64,34 @@ class TrendyolAddress(BaseModel):
 class TrendyolOrderLine(BaseModel):
     """Line item from a Trendyol order."""
 
+    line_id: int | None = Field(None, alias="lineId")
     product_name: str = Field(alias="productName")
     stock_code: str = Field(alias="stockCode")
+    merchant_sku: str | None = Field(None, alias="merchantSku")
     quantity: int = 1
+    price: Decimal | None = Field(None)
+    amount: Decimal | None = Field(None)
     line_unit_price: Decimal = Field(alias="lineUnitPrice")
+    discount: Decimal | None = Field(None)
+    ty_discount: Decimal | None = Field(None, alias="tyDiscount")
+    seller_discount: Decimal | None = Field(None, alias="sellerDiscount")
+    vat_base_amount: Decimal | None = Field(None, alias="vatBaseAmount")
+    vat_rate: Decimal | None = Field(None, alias="vatRate")
     merchant_id: int | None = Field(None, alias="merchantId")
     product_size: str | None = Field(None, alias="productSize")
     product_color: str | None = Field(None, alias="productColor")
     product_main_id: str | None = Field(None, alias="productMainId")
     barcode: str | None = None
+    order_line_item_status_name: str | None = Field(None, alias="orderLineItemStatusName")
+
+    model_config = {"populate_by_name": True}
+
+
+class TrendyolPackageHistory(BaseModel):
+    """Status change entry in package history."""
+
+    created_date: int | None = Field(None, alias="createdDate")
+    status: str | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -81,16 +100,96 @@ class TrendyolOrder(BaseModel):
     """Order from Trendyol API."""
 
     id: int | None = None
+    order_id: int | None = Field(None, alias="orderId")
     order_number: str = Field(alias="orderNumber")
     order_date: int = Field(alias="orderDate")  # timestamp in ms
+    last_modified_date: int | None = Field(None, alias="lastModifiedDate")
     status: str = ""
+    shipment_package_status: str | None = Field(None, alias="shipmentPackageStatus")
     currency_code: str = Field("TRY", alias="currencyCode")
+
+    # Customer
+    customer_id: int | None = Field(None, alias="customerId")
+    customer_first_name: str | None = Field(None, alias="customerFirstName")
+    customer_last_name: str | None = Field(None, alias="customerLastName")
     customer_email: str | None = Field(None, alias="customerEmail")
+
+    # Addresses
     invoice_address: TrendyolAddress | None = Field(None, alias="invoiceAddress")
     shipment_address: TrendyolAddress | None = Field(None, alias="shipmentAddress")
+
+    # Lines
     lines: list[TrendyolOrderLine] = []
+
+    # Package / shipping
     shipment_package_id: int | None = Field(None, alias="shipmentPackageId")
     cargo_tracking_number: str | None = Field(None, alias="cargoTrackingNumber")
+    cargo_tracking_link: str | None = Field(None, alias="cargoTrackingLink")
+    cargo_sender_number: str | None = Field(None, alias="cargoSenderNumber")
+    cargo_provider_name: str | None = Field(None, alias="cargoProviderName")
+    cargo_deci: Decimal | None = Field(None, alias="cargoDeci")
+
+    # Financial
+    gross_amount: Decimal | None = Field(None, alias="grossAmount")
+    total_discount: Decimal | None = Field(None, alias="totalDiscount")
+    total_ty_discount: Decimal | None = Field(None, alias="totalTyDiscount")
+    package_gross_amount: Decimal | None = Field(None, alias="packageGrossAmount")
+    package_total_discount: Decimal | None = Field(None, alias="packageTotalDiscount")
+    package_seller_discount: Decimal | None = Field(None, alias="packageSellerDiscount")
+    package_ty_discount: Decimal | None = Field(None, alias="packageTyDiscount")
+
+    # Delivery
+    delivery_type: str | None = Field(None, alias="deliveryType")
+    fast_delivery: bool | None = Field(None, alias="fastDelivery")
+    estimated_delivery_start_date: int | None = Field(None, alias="estimatedDeliveryStartDate")
+    estimated_delivery_end_date: int | None = Field(None, alias="estimatedDeliveryEndDate")
+    agreed_delivery_date: int | None = Field(None, alias="agreedDeliveryDate")
+
+    # Flags
+    commercial: bool | None = None
+    is_cod: bool | None = Field(None, alias="isCod")
+    gift_box_requested: bool | None = Field(None, alias="giftBoxRequested")
+    three_p_by_trendyol: bool | None = Field(None, alias="3pByTrendyol")
+    micro: bool | None = None
+    contains_dangerous_product: bool | None = Field(None, alias="containsDangerousProduct")
+
+    # Micro export
+    etgb_no: str | None = Field(None, alias="etgbNo")
+    etgb_date: int | None = Field(None, alias="etgbDate")
+
+    # History
+    package_histories: list[TrendyolPackageHistory] = Field(default_factory=list, alias="packageHistories")
+
+    model_config = {"populate_by_name": True}
+
+
+class TrendyolFinancialTransaction(BaseModel):
+    """Financial transaction from settlements or other financials."""
+
+    id: str = ""
+    transaction_date: int | None = Field(None, alias="transactionDate")
+    barcode: str | None = None
+    transaction_type: str | None = Field(None, alias="transactionType")
+    receipt_id: int | None = Field(None, alias="receiptId")
+    description: str | None = None
+    debt: Decimal = Decimal("0")
+    credit: Decimal = Decimal("0")
+    payment_period: int | None = Field(None, alias="paymentPeriod")
+    commission_rate: Decimal | None = Field(None, alias="commissionRate")
+    commission_amount: Decimal | None = Field(None, alias="commissionAmount")
+    commission_invoice_serial_number: str | None = Field(None, alias="commissionInvoiceSerialNumber")
+    seller_revenue: Decimal | None = Field(None, alias="sellerRevenue")
+    order_number: str | None = Field(None, alias="orderNumber")
+    payment_order_id: int | None = Field(None, alias="paymentOrderId")
+    payment_date: int | None = Field(None, alias="paymentDate")
+    seller_id: int | None = Field(None, alias="sellerId")
+    store_id: int | None = Field(None, alias="storeId")
+    store_name: str | None = Field(None, alias="storeName")
+    store_address: str | None = Field(None, alias="storeAddress")
+    country: str | None = None
+    order_date: int | None = Field(None, alias="orderDate")
+    affiliate: str | None = None
+    shipment_package_id: int | None = Field(None, alias="shipmentPackageId")
 
     model_config = {"populate_by_name": True}
 

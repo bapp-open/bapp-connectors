@@ -17,32 +17,40 @@ import json
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.capabilities import WebhookCapability
+from bapp_connectors.core.capabilities import FinancialCapability, WebhookCapability
 from bapp_connectors.core.dto import (
     CheckoutSession,
     ConnectionTestResult,
+    FinancialInvoice,
+    FinancialTransaction,
+    PaginatedResult,
     PaymentResult,
     Refund,
     WebhookEvent,
 )
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from bapp_connectors.core.dto import BillingDetails
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
 from bapp_connectors.providers.payment.euplatesc.client import (
+    EuPlatescApiClient,
     build_checkout_form,
     verify_ipn_hmac,
 )
 from bapp_connectors.providers.payment.euplatesc.manifest import manifest
 from bapp_connectors.providers.payment.euplatesc.mappers import (
     checkout_session_from_euplatesc,
+    invoices_from_euplatesc,
     payment_result_from_ipn,
+    transactions_from_euplatesc_invoice,
     webhook_event_from_euplatesc,
 )
 
 
-class EuPlatescPaymentAdapter(PaymentPort, WebhookCapability):
+class EuPlatescPaymentAdapter(PaymentPort, WebhookCapability, FinancialCapability):
     """
     EuPlatesc payment adapter.
 
@@ -70,8 +78,6 @@ class EuPlatescPaymentAdapter(PaymentPort, WebhookCapability):
         self._notify_url = config.get("notify_url", "")
         self._back_url = config.get("back_url", "")
 
-        # EuPlatesc doesn't have a REST API, but we keep the http_client
-        # for potential status check endpoints in the future
         if http_client is None:
             http_client = ResilientHttpClient(
                 base_url=manifest.base_url,
@@ -79,6 +85,14 @@ class EuPlatescPaymentAdapter(PaymentPort, WebhookCapability):
                 provider_name="euplatesc",
             )
         self._http_client = http_client
+
+        self.client = EuPlatescApiClient(
+            http_client=http_client,
+            merchant_id=self._merchant_id,
+            merchant_key=self._merchant_key,
+            user_key=credentials.get("user_key", ""),
+            user_api=credentials.get("user_api", ""),
+        )
 
     # ── BasePort ──
 
@@ -148,6 +162,61 @@ class EuPlatescPaymentAdapter(PaymentPort, WebhookCapability):
         raise NotImplementedError(
             "EuPlatesc refunds are processed manually via the merchant back office at secure.euplatesc.ro."
         )
+
+    # ── FinancialCapability ──
+
+    def get_financial_transactions(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        transaction_type: str | None = None,
+        cursor: str | None = None,
+    ) -> PaginatedResult[FinancialTransaction]:
+        """Fetch transactions for a settlement invoice.
+
+        Args:
+            start_date: Start of date range (used if transaction_type is not set).
+            end_date: End of date range.
+            transaction_type: Settlement invoice number. If provided, fetches
+                transactions for that specific invoice. Otherwise lists invoices
+                in the date range and fetches transactions from the first one.
+            cursor: Not used (EuPlatesc doesn't paginate).
+        """
+        if transaction_type:
+            response = self.client.get_invoice_transactions(transaction_type)
+            return transactions_from_euplatesc_invoice(response)
+
+        # No specific invoice — list invoices then get transactions from first
+        invoices_resp = self.client.get_invoice_list(
+            date_from=start_date.strftime("%Y-%m-%d"),
+            date_to=end_date.strftime("%Y-%m-%d"),
+        )
+        invoices = invoices_from_euplatesc(invoices_resp)
+        if not invoices.items:
+            return PaginatedResult(items=[], has_more=False, total=0)
+
+        # Get transactions from the first invoice
+        first_invoice = invoices.items[0].invoice_number
+        response = self.client.get_invoice_transactions(first_invoice)
+        return transactions_from_euplatesc_invoice(response)
+
+    def get_invoices(
+        self,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        category: str | None = None,
+        cursor: str | None = None,
+    ) -> PaginatedResult[FinancialInvoice]:
+        """List settlement invoices for a date range."""
+        from datetime import UTC as _UTC
+        from datetime import datetime as dt
+        _start = start_date or dt(2020, 1, 1, tzinfo=_UTC)
+        _end = end_date or dt.now(_UTC)
+        response = self.client.get_invoice_list(
+            date_from=_start.strftime("%Y-%m-%d"),
+            date_to=_end.strftime("%Y-%m-%d"),
+        )
+        return invoices_from_euplatesc(response)
 
     # ── Webhook / IPN ──
 

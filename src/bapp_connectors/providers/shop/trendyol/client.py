@@ -61,20 +61,27 @@ class TrendyolApiClient:
     def get_orders(
         self,
         page: int = 0,
+        size: int = 200,
         created_after: datetime | None = None,
         status: str | None = None,
         order_id: str | None = None,
+        shipment_package_ids: list[int] | None = None,
+        order_by_field: str = "PackageLastModifiedDate",
+        order_by_direction: str = "DESC",
         **kwargs,
     ) -> dict:
         params: dict[str, Any] = {
-            "orderByField": "CreatedDate",
-            "orderByDirection": "DESC",
+            "orderByField": order_by_field,
+            "orderByDirection": order_by_direction,
             "page": page,
+            "size": size,
         }
         if status:
             params["status"] = status
         if order_id:
             params["orderNumber"] = order_id
+        if shipment_package_ids:
+            params["shipmentPackageIds"] = ",".join(str(i) for i in shipment_package_ids)
         if created_after:
             params["startDate"] = int(created_after.timestamp() * 1000)
             from datetime import datetime as dt
@@ -139,3 +146,67 @@ class TrendyolApiClient:
     def order_attachment(self, order_id: int, invoice_url: str) -> dict | str:
         data = _json_encode({"shipmentPackageId": order_id, "invoiceLink": invoice_url})
         return self._call("POST", f"sellers/{self.seller_id}/seller-invoice-links", data=data)
+
+    # ── Finance ──
+
+    def get_settlements(
+        self,
+        transaction_type: str,
+        start_date: int,
+        end_date: int,
+        page: int = 0,
+        size: int = 500,
+        **kwargs,
+    ) -> dict:
+        params: dict[str, Any] = {
+            "transactionType": transaction_type,
+            "startDate": start_date,
+            "endDate": end_date,
+            "page": page,
+            "size": size,
+        }
+        return self._call(
+            "GET", f"finance/che/sellers/{self.seller_id}/settlements", params=params, **kwargs
+        )
+
+    def get_other_financials(
+        self,
+        transaction_type: str,
+        start_date: int,
+        end_date: int,
+        page: int = 0,
+        size: int = 500,
+        **kwargs,
+    ) -> dict:
+        params: dict[str, Any] = {
+            "transactionType": transaction_type,
+            "startDate": start_date,
+            "endDate": end_date,
+            "page": page,
+            "size": size,
+        }
+        return self._call(
+            "GET", f"finance/che/sellers/{self.seller_id}/otherfinancials", params=params, **kwargs
+        )
+
+    # ── Webhooks ──
+
+    def create_webhook(self, webhook: dict, **kwargs) -> dict | str:
+        data = _json_encode(webhook)
+        return self._call("POST", f"webhook/sellers/{self.seller_id}/webhooks", data=data, **kwargs)
+
+    def list_webhooks(self, **kwargs) -> list | dict:
+        return self._call("GET", f"webhook/sellers/{self.seller_id}/webhooks", **kwargs)
+
+    def update_webhook(self, webhook_id: str, webhook: dict, **kwargs) -> dict | str:
+        data = _json_encode(webhook)
+        return self._call("PUT", f"webhook/sellers/{self.seller_id}/webhooks/{webhook_id}", data=data, **kwargs)
+
+    def delete_webhook(self, webhook_id: str, **kwargs) -> dict | str:
+        return self._call("DELETE", f"webhook/sellers/{self.seller_id}/webhooks/{webhook_id}", **kwargs)
+
+    def activate_webhook(self, webhook_id: str, **kwargs) -> dict | str:
+        return self._call("PUT", f"webhook/sellers/{self.seller_id}/webhooks/{webhook_id}/activate", **kwargs)
+
+    def deactivate_webhook(self, webhook_id: str, **kwargs) -> dict | str:
+        return self._call("PUT", f"webhook/sellers/{self.seller_id}/webhooks/{webhook_id}/deactivate", **kwargs)

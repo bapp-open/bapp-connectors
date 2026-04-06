@@ -5,7 +5,7 @@ PayPal is a global payment platform supporting checkout via REST API
 with OAuth2 authentication and webhook notifications.
 """
 
-from bapp_connectors.core.capabilities import WebhookCapability
+from bapp_connectors.core.capabilities import FinancialCapability, WebhookCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -49,6 +49,7 @@ manifest = ProviderManifest(
     capabilities=[
         PaymentPort,
         WebhookCapability,
+        FinancialCapability,
     ],
     rate_limit=RateLimitConfig(requests_per_second=30, burst=50),
     retry=RetryConfig(
