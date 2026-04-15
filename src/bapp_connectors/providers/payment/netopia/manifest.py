@@ -16,15 +16,15 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import PaymentPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
-NETOPIA_LIVE_URL = "https://secure.mobilpay.ro/pay/"
-NETOPIA_SANDBOX_URL = "https://sandboxsecure.mobilpay.ro/pay/"
+NETOPIA_LIVE_URL = "https://secure.netopia-payments.com/"
+NETOPIA_SANDBOX_URL = "https://secure.sandbox.netopia-payments.com/"
 
 manifest = ProviderManifest(
     name="netopia",
     family=ProviderFamily.PAYMENT,
     display_name="Netopia",
-    description="Netopia Payments — Romanian payment gateway for online card payments.",
-    base_url="https://secure.mobilpay.ro/pay/",
+    description="Netopia Payments — Romanian payment gateway for online card payments, BNPL, and Apple Pay.",
+    base_url=NETOPIA_LIVE_URL,
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[

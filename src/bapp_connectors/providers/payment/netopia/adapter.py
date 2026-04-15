@@ -1,7 +1,8 @@
 """
-Netopia payment adapter — implements PaymentPort.
+Netopia payment adapter — implements PaymentPort + WebhookCapability.
 
 This is the main entry point for the Netopia integration.
+Netopia v2 API with JSON endpoints and API key authentication.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from bapp_connectors.providers.payment.netopia.manifest import (
 from bapp_connectors.providers.payment.netopia.mappers import (
     checkout_session_from_netopia,
     payment_from_netopia,
+    refund_from_netopia,
     webhook_event_from_netopia,
 )
 
@@ -68,14 +70,11 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
                 provider_name="netopia",
             )
         else:
-            # Ensure custom auth is applied even when the registry provides the client
-            # (CUSTOM auth strategy means the registry passes NoAuth).
             http_client.auth = MultiHeaderAuth(
                 {
                     "Authorization": self.api_key,
                 }
             )
-            # Override base_url for sandbox/live switching
             http_client.base_url = base_url.rstrip("/") + "/"
 
         self.client = NetopiaApiClient(
@@ -118,6 +117,20 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
     ) -> CheckoutSession:
         _email = (billing.email if billing else None) or client_email or ""
         _phone = billing.phone if billing else ""
+
+        # Extract billing name/address if available
+        first_name = ""
+        last_name = ""
+        city = ""
+        address = ""
+        if billing:
+            parts = billing.name.split(" ", 1) if billing.name else ["", ""]
+            first_name = parts[0]
+            last_name = parts[1] if len(parts) > 1 else ""
+            if billing.address:
+                city = billing.address.city or ""
+                address = billing.address.street or ""
+
         response = self.client.start_payment(
             amount=float(amount),
             currency=currency,
@@ -125,6 +138,10 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
             order_id=identifier,
             client_email=_email,
             client_phone=_phone,
+            first_name=first_name,
+            last_name=last_name,
+            city=city,
+            address=address,
             cancel_url=cancel_url or "",
             success_url=success_url or "",
         )
@@ -135,14 +152,11 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
         return payment_from_netopia(response)
 
     def refund(self, payment_id: str, amount: Decimal | None = None, reason: str = "") -> Refund:
-        # Netopia does not expose a direct refund API through their standard flow.
-        # Refunds are typically processed through the Netopia admin panel or via
-        # the credit IPN callback. We raise UnsupportedFeatureError for programmatic refunds.
-        from bapp_connectors.core.errors import UnsupportedFeatureError
-
-        raise UnsupportedFeatureError(
-            "Netopia does not support programmatic refunds via API. Use the Netopia admin panel to process refunds."
+        response = self.client.credit(
+            ntp_id=payment_id,
+            amount=float(amount) if amount is not None else None,
         )
+        return refund_from_netopia(response, payment_id)
 
     # ── WebhookCapability ──
 
@@ -156,7 +170,6 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
         """
         try:
             data = json.loads(body)
-            # Basic structure check
             return "payment" in data or "order" in data or "status" in data
         except (json.JSONDecodeError, ValueError):
             return False

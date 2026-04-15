@@ -112,10 +112,19 @@ class WooCommerceShopAdapter(
 
         use_query_auth = config.get("use_query_auth", False)
 
-        if http_client is None:
+        # The manifest carries a placeholder base_url; the real store domain
+        # comes from per-connection credentials. Rebuild the client so requests
+        # target the tenant's actual WooCommerce host.
+        if self.domain:
             base_url = f"{self.domain}/wp-json/wc/v3/"
             http_client = ResilientHttpClient(
                 base_url=base_url,
+                auth=BasicAuth(self.consumer_key, self.consumer_secret),
+                provider_name="woocommerce",
+            )
+        elif http_client is None:
+            http_client = ResilientHttpClient(
+                base_url=f"{self.domain}/wp-json/wc/v3/",
                 auth=BasicAuth(self.consumer_key, self.consumer_secret),
                 provider_name="woocommerce",
             )
