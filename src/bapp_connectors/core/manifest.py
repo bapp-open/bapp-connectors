@@ -30,7 +30,14 @@ class CredentialField:
 
 @dataclass
 class SettingsField:
-    """A single tenant-configurable setting for the provider."""
+    """A single tenant-configurable setting for the provider.
+
+    `choices_source` lets a SELECT field be populated dynamically from the
+    connected adapter at render time. Currently supported value: `"list_models"`
+    — the renderer should call `adapter.list_models()` and use the returned
+    `ModelInfo.id` values. `choices` (static) is used as a fallback when the
+    dynamic call fails or no credentials are available yet.
+    """
 
     name: str
     label: str = ""
@@ -38,12 +45,28 @@ class SettingsField:
     required: bool = False
     default: str | bool | int | None = None
     choices: list[str] | None = None
+    choices_source: str | None = None
     help_text: str = ""
     description: str = ""
 
     def __post_init__(self):
         if not self.label:
             self.label = self.name.replace("_", " ").title()
+
+    def resolve_choices(self, adapter=None) -> list[str] | None:
+        """Resolve choices for this field, dynamically if `choices_source` is set.
+
+        If the dynamic call fails (no adapter, missing credentials, network
+        error), falls back to static `choices`. Caller is responsible for
+        passing a built adapter when `choices_source` is set.
+        """
+        if self.choices_source and adapter is not None:
+            try:
+                if self.choices_source == "list_models":
+                    return [m.id for m in adapter.list_models()]
+            except Exception:
+                pass
+        return self.choices
 
 
 @dataclass
@@ -59,7 +82,7 @@ class SettingsConfig:
             value = config.get(f.name)
             if f.required and (value is None or value == ""):
                 errors.append(f"Missing required setting: {f.name}")
-            if value is not None and f.choices and str(value) not in f.choices:
+            if value is not None and f.choices and not f.choices_source and str(value) not in f.choices:
                 errors.append(f"Invalid value for {f.name}: '{value}'. Must be one of: {f.choices}")
         return errors
 

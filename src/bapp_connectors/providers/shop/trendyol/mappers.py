@@ -263,12 +263,21 @@ def _ms_to_datetime(ts: int | None) -> datetime | None:
 
 
 TRENDYOL_TRANSACTION_TYPE_MAP: dict[str, FinancialTransactionType] = {
+    # Settlements
     "Sale": FinancialTransactionType.SALE,
     "Return": FinancialTransactionType.RETURN,
+    # Other financials
+    "CashAdvance": FinancialTransactionType.PAYMENT,
+    "WireTransfer": FinancialTransactionType.PAYMENT,
+    "IncomingTransfer": FinancialTransactionType.PAYMENT,
+    "ReturnInvoice": FinancialTransactionType.RETURN,
+    "CommissionAgreementInvoice": FinancialTransactionType.COMMISSION,
     "PaymentOrder": FinancialTransactionType.PAYMENT,
     "DeductionInvoices": FinancialTransactionType.DEDUCTION,
+    "FinancialItem": FinancialTransactionType.OTHER,
+    "Stoppage": FinancialTransactionType.DEDUCTION,
     "CreditNote": FinancialTransactionType.CREDIT_NOTE,
-    "CommissionInvocie": FinancialTransactionType.COMMISSION,
+    "CommissionInvoice": FinancialTransactionType.COMMISSION,
 }
 
 
@@ -293,6 +302,13 @@ def settlement_from_trendyol(data: dict, query_type: str = "") -> FinancialTrans
         order_id=str(data.get("orderNumber", "")) if data.get("orderNumber") else "",
         invoice_number=data.get("commissionInvoiceSerialNumber") or "",
         payment_date=_ms_to_datetime(data.get("paymentDate")),
+        # For Sale/Return rows, paymentOrderId points at the parent PaymentOrder.
+        # For PaymentOrder rows, the row itself IS the payout — use its own id so
+        # callers can join `settlement.payout_id == payout.payout_id` uniformly.
+        payout_id=(
+            str(data.get("paymentOrderId")) if data.get("paymentOrderId") is not None
+            else (str(data.get("id", "")) if query_type == "PaymentOrder" else "")
+        ),
         provider_meta=ProviderMeta(
             provider="trendyol",
             raw_id=data.get("id", ""),
@@ -306,7 +322,6 @@ def settlement_from_trendyol(data: dict, query_type: str = "") -> FinancialTrans
                 "receipt_id": data.get("receiptId"),
                 "payment_period": data.get("paymentPeriod"),
                 "seller_revenue": str(data["sellerRevenue"]) if data.get("sellerRevenue") is not None else None,
-                "payment_order_id": data.get("paymentOrderId"),
                 "shipment_package_id": data.get("shipmentPackageId"),
                 "store_name": data.get("storeName"),
                 "country": data.get("country"),

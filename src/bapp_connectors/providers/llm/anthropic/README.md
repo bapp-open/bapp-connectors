@@ -22,7 +22,7 @@ shared key while still allowing tenants to bring their own.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `default_model` | select | `claude-sonnet-4-20250514` | Model when none specified. Choices: `claude-sonnet-4-20250514`, `claude-haiku-4-5-20251001`, `claude-opus-4-20250514` |
+| `default_model` | select | `claude-sonnet-4-6` | Model when none specified. Choices: `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `claude-opus-4-20250514`, `claude-sonnet-4-20250514` |
 | `max_tokens` | int | `4096` | Default maximum tokens in the response |
 | `platform_api_key` | str | | Platform-level API key fallback |
 

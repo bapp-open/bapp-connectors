@@ -81,6 +81,7 @@ def _serialize_settings_field(f: SettingsField) -> dict[str, Any]:
         "required": f.required,
         "default": f.default,
         "choices": f.choices,
+        "choices_source": f.choices_source,
         "help_text": f.help_text,
         "description": f.description,
     }

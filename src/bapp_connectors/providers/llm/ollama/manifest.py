@@ -38,9 +38,10 @@ manifest = ProviderManifest(
             SettingsField(
                 name="default_model",
                 label="Default Model",
-                field_type=FieldType.STR,
+                field_type=FieldType.SELECT,
+                choices_source="list_models",
                 default="llama3.2",
-                help_text="Model to use when none is specified (e.g. llama3.2, mistral, gemma2).",
+                help_text="Model to use when none is specified. Lists models installed on the Ollama server.",
             ),
             SettingsField(
                 name="temperature",

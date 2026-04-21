@@ -21,7 +21,7 @@ shared key while still allowing tenants to bring their own.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `default_model` | select | `gpt-4o-mini` | Model when none specified. Choices: `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-3.5-turbo` |
+| `default_model` | select | `gpt-4o-mini` | Model when none specified. Choices populated dynamically from `GET /v1/models` for the connected account (`choices_source="list_models"`). |
 | `temperature` | str | `0.7` | Default sampling temperature (0.0-2.0) |
 | `platform_api_key` | str | | Platform-level API key fallback |
 

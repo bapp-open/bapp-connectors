@@ -38,8 +38,14 @@ manifest = ProviderManifest(
                 name="default_model",
                 label="Default Model",
                 field_type=FieldType.SELECT,
-                choices=["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001", "claude-opus-4-20250514"],
-                default="claude-sonnet-4-20250514",
+                choices=[
+                    "claude-opus-4-7",
+                    "claude-sonnet-4-6",
+                    "claude-haiku-4-5-20251001",
+                    "claude-opus-4-20250514",
+                    "claude-sonnet-4-20250514",
+                ],
+                default="claude-sonnet-4-6",
                 help_text="Model to use when none is specified in the request.",
             ),
             SettingsField(

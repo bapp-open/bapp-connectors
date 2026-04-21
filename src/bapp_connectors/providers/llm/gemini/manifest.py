@@ -43,6 +43,7 @@ manifest = ProviderManifest(
                 label="Default Model",
                 field_type=FieldType.SELECT,
                 choices=["gemini-2.5-flash-preview-05-20", "gemini-2.5-pro-preview-05-06", "gemini-2.0-flash"],
+                choices_source="list_models",
                 default="gemini-2.0-flash",
                 help_text="Model to use when none is specified.",
             ),

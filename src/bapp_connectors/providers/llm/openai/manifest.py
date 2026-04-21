@@ -40,6 +40,7 @@ manifest = ProviderManifest(
                 label="Default Model",
                 field_type=FieldType.SELECT,
                 choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+                choices_source="list_models",
                 default="gpt-4o-mini",
                 help_text="Model to use when none is specified in the request.",
             ),

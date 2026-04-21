@@ -225,8 +225,10 @@ class TestAnthropicResponse:
 class TestAnthropicModels:
     def test_hardcoded_models(self):
         models = hardcoded_models()
-        assert len(models) == 3
         ids = [m.id for m in models]
+        assert "claude-opus-4-7" in ids
+        assert "claude-sonnet-4-6" in ids
+        assert "claude-haiku-4-5-20251001" in ids
         assert "claude-sonnet-4-20250514" in ids
         assert "claude-opus-4-20250514" in ids
         assert all(m.pricing is not None for m in models)

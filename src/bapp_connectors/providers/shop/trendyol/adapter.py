@@ -211,7 +211,19 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
     # ── FinancialCapability ──
 
     SETTLEMENT_TYPES = ("Sale", "Return")
-    OTHER_FINANCIAL_TYPES = ("PaymentOrder", "DeductionInvoices", "CreditNote", "CommissionInvocie")
+    OTHER_FINANCIAL_TYPES = (
+        "CashAdvance",
+        "WireTransfer",
+        "IncomingTransfer",
+        "ReturnInvoice",
+        "CommissionAgreementInvoice",
+        "PaymentOrder",
+        "DeductionInvoices",
+        "FinancialItem",
+        "Stoppage",
+        "CreditNote",
+        "CommissionInvoice",
+    )
     ALL_FINANCIAL_TYPES = SETTLEMENT_TYPES + OTHER_FINANCIAL_TYPES
 
     def get_financial_transactions(
@@ -224,9 +236,8 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
         """Fetch financial transactions.
 
         Args:
-            transaction_type: "Sale", "Return" (settlements) or
-                "PaymentOrder", "DeductionInvoices", "CreditNote", "CommissionInvocie" (other financials).
-                Defaults to "Sale".
+            transaction_type: "Sale" or "Return" (settlements) or one of the
+                OTHER_FINANCIAL_TYPES (other financials). Defaults to "Sale".
         """
         tx_type = transaction_type or "Sale"
         if tx_type not in self.ALL_FINANCIAL_TYPES:
@@ -278,7 +289,9 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
         """Fetch other financial transactions.
 
         Args:
-            transaction_type: "PaymentOrder", "DeductionInvoices", "CreditNote", or "CommissionInvocie".
+            transaction_type: One of OTHER_FINANCIAL_TYPES (CashAdvance, WireTransfer,
+                IncomingTransfer, ReturnInvoice, CommissionAgreementInvoice, PaymentOrder,
+                DeductionInvoices, FinancialItem, Stoppage, CreditNote, CommissionInvoice).
             start_date: Start of date range (max 15-day span).
             end_date: End of date range.
             cursor: Page number as string.

@@ -49,6 +49,7 @@ class FinancialTransaction(BaseDTO):
 
     # Payment
     payment_date: datetime | None = None
+    payout_id: str = ""  # Provider's payout/settlement batch ID — joins per-order rows to the bank deposit row
 
     # Provider metadata
     provider_meta: ProviderMeta | None = None

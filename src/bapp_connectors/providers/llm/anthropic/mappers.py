@@ -161,11 +161,25 @@ def hardcoded_models() -> list[ModelInfo]:
     """Return known Anthropic models with pricing and context windows."""
     return [
         ModelInfo(
+            id="claude-opus-4-7",
+            name="Claude Opus 4.7",
+            context_window=200000,
+            capabilities=["chat", "tool_use", "vision"],
+            pricing=ModelPricing(input_price_per_million=15.0, output_price_per_million=75.0),
+        ),
+        ModelInfo(
             id="claude-opus-4-20250514",
             name="Claude Opus 4",
             context_window=200000,
             capabilities=["chat", "tool_use", "vision"],
             pricing=ModelPricing(input_price_per_million=15.0, output_price_per_million=75.0),
+        ),
+        ModelInfo(
+            id="claude-sonnet-4-6",
+            name="Claude Sonnet 4.6",
+            context_window=200000,
+            capabilities=["chat", "tool_use", "vision"],
+            pricing=ModelPricing(input_price_per_million=3.0, output_price_per_million=15.0),
         ),
         ModelInfo(
             id="claude-sonnet-4-20250514",

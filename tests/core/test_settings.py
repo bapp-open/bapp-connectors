@@ -73,6 +73,54 @@ def test_validate_settings_valid_choice():
     assert errors == []
 
 
+def test_validate_settings_skips_choices_when_dynamic_source():
+    config = SettingsConfig(fields=[
+        SettingsField(
+            name="model",
+            field_type=FieldType.SELECT,
+            choices=["a", "b"],
+            choices_source="list_models",
+        ),
+    ])
+    # Value not in static choices is allowed when choices_source is set —
+    # the canonical list is dynamic.
+    assert config.validate_settings({"model": "z"}) == []
+
+
+class _FakeAdapter:
+    def __init__(self, model_ids):
+        from bapp_connectors.core.dto import ModelInfo
+        self._models = [ModelInfo(id=mid, name=mid) for mid in model_ids]
+
+    def list_models(self):
+        return self._models
+
+
+def test_resolve_choices_static():
+    f = SettingsField(name="model", choices=["a", "b"])
+    assert f.resolve_choices() == ["a", "b"]
+
+
+def test_resolve_choices_dynamic_from_list_models():
+    f = SettingsField(name="model", choices_source="list_models", choices=["fallback"])
+    adapter = _FakeAdapter(["gpt-x", "gpt-y"])
+    assert f.resolve_choices(adapter) == ["gpt-x", "gpt-y"]
+
+
+def test_resolve_choices_falls_back_when_no_adapter():
+    f = SettingsField(name="model", choices_source="list_models", choices=["fallback"])
+    assert f.resolve_choices() == ["fallback"]
+
+
+def test_resolve_choices_falls_back_when_adapter_raises():
+    class BrokenAdapter:
+        def list_models(self):
+            raise RuntimeError("auth failed")
+
+    f = SettingsField(name="model", choices_source="list_models", choices=["fallback"])
+    assert f.resolve_choices(BrokenAdapter()) == ["fallback"]
+
+
 def test_validate_settings_no_fields():
     config = SettingsConfig()
     errors = config.validate_settings({"anything": "goes"})
