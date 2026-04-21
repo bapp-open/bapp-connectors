@@ -1,6 +1,6 @@
 [project]
 name = "django-bapp-connectors"
-version = "0.20.0"
+version = "0.21.0"
 description = "Django integration for bapp-connectors: multi-tenant connection management, sync state, webhooks, and audit logging"
 readme = "README.md"
 requires-python = ">=3.11"
