@@ -687,3 +687,35 @@ class TestGmailErrors:
         err = classify_gmail_error(Exception("Something unexpected"))
         assert isinstance(err, GmailError)
         assert "Gmail API error" in str(err)
+
+
+# ── TestGmailInboxActions ──
+
+
+class TestGmailInboxActions:
+    def _adapter(self):
+        a = GmailEmailAdapter(credentials={"access_token": "tok"}, http_client=MagicMock())
+        a.client = MagicMock()
+        return a
+
+    def test_delete_message_trashes(self):
+        adapter = self._adapter()
+        adapter.delete_message("m1", folder="INBOX")
+        adapter.client.trash_message.assert_called_once_with("m1")
+
+    def test_move_message_swaps_labels(self):
+        adapter = self._adapter()
+        adapter.move_message("m1", "Archive", folder="INBOX")
+        adapter.client.modify_labels.assert_called_once_with(
+            "m1", add=["Archive"], remove=["INBOX"]
+        )
+
+    def test_mark_read_removes_unread_label(self):
+        adapter = self._adapter()
+        adapter.mark_read("m1", read=True, folder="INBOX")
+        adapter.client.modify_labels.assert_called_once_with("m1", remove=["UNREAD"])
+
+    def test_mark_unread_adds_unread_label(self):
+        adapter = self._adapter()
+        adapter.mark_read("m1", read=False, folder="INBOX")
+        adapter.client.modify_labels.assert_called_once_with("m1", add=["UNREAD"])

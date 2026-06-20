@@ -116,3 +116,22 @@ class GmailApiClient:
         return self.http.get(
             f"messages/{message_id}/attachments/{attachment_id}",
         )
+
+    def modify_labels(
+        self,
+        message_id: str,
+        *,
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+    ) -> dict:
+        """Add/remove labels on a message (Gmail messages.modify)."""
+        body: dict = {}
+        if add:
+            body["addLabelIds"] = add
+        if remove:
+            body["removeLabelIds"] = remove
+        return self.http.post(f"messages/{message_id}/modify", json=body)
+
+    def trash_message(self, message_id: str) -> dict:
+        """Move a message to Trash (Gmail messages.trash) — recoverable."""
+        return self.http.post(f"messages/{message_id}/trash", json={})

@@ -192,3 +192,31 @@ class GmailEmailAdapter(EmailPort, InboxCapability):
             )
         except Exception as e:
             raise classify_gmail_error(e) from e
+
+    def delete_message(self, message_id: str, *, folder: str = "INBOX") -> None:
+        """Delete a message by moving it to Trash (recoverable; not permanent)."""
+        try:
+            self.client.trash_message(message_id)
+        except Exception as e:
+            raise classify_gmail_error(e) from e
+
+    def move_message(self, message_id: str, target_folder: str, *, folder: str = "INBOX") -> None:
+        """Move a message by swapping its folder labels."""
+        try:
+            self.client.modify_labels(
+                message_id,
+                add=[_folder_to_label(target_folder)],
+                remove=[_folder_to_label(folder)],
+            )
+        except Exception as e:
+            raise classify_gmail_error(e) from e
+
+    def mark_read(self, message_id: str, *, read: bool = True, folder: str = "INBOX") -> None:
+        """Mark a message read (remove UNREAD) or unread (add UNREAD)."""
+        try:
+            if read:
+                self.client.modify_labels(message_id, remove=["UNREAD"])
+            else:
+                self.client.modify_labels(message_id, add=["UNREAD"])
+        except Exception as e:
+            raise classify_gmail_error(e) from e
