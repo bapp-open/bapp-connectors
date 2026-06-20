@@ -423,3 +423,50 @@ class TestSignalRobustness:
             assert connection.auth_failure_count == 1
         finally:
             connection_status_changed.disconnect(broken_handler)
+
+
+# ── email_received ──
+
+
+class TestEmailReceivedSignal:
+    def test_dispatch_collects_return_values(self):
+        from bapp_connectors.core.dto import InboxAction
+        from django_bapp_connectors.signals import email_received
+
+        def handler(sender, **kwargs):
+            assert kwargs["folder"] == "INBOX"
+            assert kwargs["email"] == "EMAIL_SENTINEL"
+            return InboxAction.delete()
+
+        email_received.connect(handler)
+        try:
+            responses = email_received.send_robust(
+                sender=Connection,
+                connection=None,
+                email="EMAIL_SENTINEL",
+                folder="INBOX",
+                provider_family="email",
+                provider_name="gmail",
+            )
+            actions = [r for _, r in responses if isinstance(r, InboxAction)]
+            assert len(actions) == 1
+            assert actions[0].type.value == "delete"
+        finally:
+            email_received.disconnect(handler)
+
+    def test_raising_receiver_is_isolated(self):
+        from django_bapp_connectors.signals import email_received
+
+        def broken(sender, **kwargs):
+            raise RuntimeError("boom")
+
+        email_received.connect(broken)
+        try:
+            responses = email_received.send_robust(
+                sender=Connection, connection=None, email="x", folder="INBOX",
+                provider_family="email", provider_name="gmail",
+            )
+            # send_robust returns the exception as the receiver's response
+            assert any(isinstance(r, Exception) for _, r in responses)
+        finally:
+            email_received.disconnect(broken)

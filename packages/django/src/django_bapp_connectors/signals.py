@@ -99,3 +99,25 @@ Kwargs:
     provider_family: str.
     provider_name: str.
 """
+
+# ── Email signals ──
+
+email_received = Signal()
+"""
+Fired once per email fetched during an inbox poll (see services.InboxPollService).
+
+A receiver MAY return a bapp_connectors.core.dto.InboxAction (delete / move /
+mark_read). The first non-None action returned by any receiver (in receiver
+registration order) is applied to the message; other returned actions are
+ignored. Receivers that raise are logged and skipped (send_robust).
+
+Kwargs:
+    sender: The concrete Connection model class.
+    connection: The Connection model instance.
+    email: bapp_connectors.core.dto.EmailDetail — the fully-hydrated message
+           (body, headers, attachment manifest). Attachment bytes are fetched
+           on demand via connection.get_adapter().download_attachment(...).
+    folder: str — the mailbox folder polled.
+    provider_family: str ("email").
+    provider_name: str (e.g. "gmail", "smtp").
+"""
