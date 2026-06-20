@@ -25,9 +25,10 @@ def test_incomplete_subclass_cannot_instantiate():
 
 
 def test_email_adapters_still_instantiate():
+    from unittest.mock import MagicMock
+
     from bapp_connectors.providers.email.gmail.adapter import GmailEmailAdapter
     from bapp_connectors.providers.email.smtp.adapter import SMTPEmailAdapter
-    from unittest.mock import MagicMock
 
     smtp = SMTPEmailAdapter(
         credentials={"username": "u@example.com", "password": "p", "imap_host": "imap.example.com"}

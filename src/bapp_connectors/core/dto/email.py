@@ -95,17 +95,17 @@ class InboxAction(BaseDTO):
     read: bool = True     # desired read state for MARK_READ
 
     @classmethod
-    def delete(cls) -> "InboxAction":
+    def delete(cls) -> InboxAction:
         return cls(type=InboxActionType.DELETE)
 
     @classmethod
-    def move(cls, folder: str) -> "InboxAction":
+    def move(cls, folder: str) -> InboxAction:
         return cls(type=InboxActionType.MOVE, folder=folder)
 
     @classmethod
-    def mark_read(cls, read: bool = True) -> "InboxAction":
+    def mark_read(cls, read: bool = True) -> InboxAction:
         return cls(type=InboxActionType.MARK_READ, read=read)
 
     @classmethod
-    def none(cls) -> "InboxAction":
+    def none(cls) -> InboxAction:
         return cls(type=InboxActionType.NONE)
