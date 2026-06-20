@@ -335,6 +335,19 @@ class IMAPClient:
             with contextlib.suppress(Exception):
                 conn.logout()
 
+    def _expunge_uid(self, conn, uid: str) -> None:
+        """Expunge a single message by UID.
+
+        Uses UID EXPUNGE (RFC 3502) when the server advertises UIDPLUS so only
+        the target message is removed; otherwise falls back to a folder-wide
+        EXPUNGE, which removes every message currently flagged \\Deleted.
+        """
+        capabilities = getattr(conn, "capabilities", ())
+        if "UIDPLUS" in capabilities:
+            conn.uid("expunge", uid)
+        else:
+            conn.expunge()
+
     def set_seen(self, uid: str, *, seen: bool = True, folder: str = "INBOX") -> None:
         """Add or remove the \\Seen flag on a message."""
         conn = self._connect()
@@ -352,7 +365,7 @@ class IMAPClient:
         try:
             conn.select(folder, readonly=False)
             conn.uid("store", uid, "+FLAGS", "(\\Deleted)")
-            conn.expunge()
+            self._expunge_uid(conn, uid)
         finally:
             with contextlib.suppress(Exception):
                 conn.logout()
@@ -372,7 +385,7 @@ class IMAPClient:
             else:
                 conn.uid("copy", uid, target_folder)
                 conn.uid("store", uid, "+FLAGS", "(\\Deleted)")
-                conn.expunge()
+                self._expunge_uid(conn, uid)
         finally:
             with contextlib.suppress(Exception):
                 conn.logout()

@@ -457,3 +457,17 @@ class TestIMAPClientWrites:
         client, conn = self._client_with_mock_conn()
         client.set_seen("42", seen=False, folder="INBOX")
         conn.uid.assert_called_once_with("store", "42", "-FLAGS", "(\\Seen)")
+
+    def test_delete_uid_uses_uid_expunge_with_uidplus(self):
+        client, conn = self._client_with_mock_conn(capabilities=("UIDPLUS",))
+        client.delete_uid("42", folder="INBOX")
+        conn.uid.assert_any_call("store", "42", "+FLAGS", "(\\Deleted)")
+        conn.uid.assert_any_call("expunge", "42")
+        conn.expunge.assert_not_called()
+
+    def test_move_uid_copy_fallback_uses_uid_expunge_with_uidplus(self):
+        client, conn = self._client_with_mock_conn(capabilities=("UIDPLUS",))
+        client.move_uid("42", "Archive", folder="INBOX")
+        conn.uid.assert_any_call("copy", "42", "Archive")
+        conn.uid.assert_any_call("expunge", "42")
+        conn.expunge.assert_not_called()
