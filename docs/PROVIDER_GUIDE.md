@@ -564,6 +564,9 @@ The registry will **reject registration** if you declare a capability but don't 
 | `TranscriptionCapability` | `transcribe(audio, model, language) -> TranscriptionResult` |
 | `StreamingCapability` | `stream(messages, model) -> Iterator[LLMChunk]` |
 | `ImageGenerationCapability` | `generate_image(prompt, model, size) -> ImageResult` |
+| `InboxCapability` | `fetch_messages(since, until, folder, limit) -> list[EmailSummary]`, `get_message(id, folder) -> EmailDetail`, `download_attachment(id, attachment_id, folder) -> EmailAttachmentContent`, `delete_message(id, folder)`, `move_message(id, target_folder, folder)`, `mark_read(id, read=True, folder)` |
+
+> **Email providers:** `InboxCapability` requires all six methods above. `delete_message`, `move_message`, and `mark_read` are mailbox-write operations consumed by the Django layer's `InboxPollService` (a receiver of the `email_received` signal may return an `InboxAction` that the poller applies). Because these are `@abstractmethod`, a new email provider that omits any of them will fail to instantiate. Provider-specific semantics differ — e.g. IMAP `delete_message` flags `\Deleted` and expunges only the target UID (via `UID EXPUNGE` when `UIDPLUS` is advertised); Gmail's moves the message to Trash.
 
 ---
 
