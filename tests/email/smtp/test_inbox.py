@@ -414,7 +414,7 @@ class TestSMTPInboxActions:
 
         adapter = SMTPEmailAdapter(credentials={"username": "u@example.com", "password": "p"})
         adapter.imap_client = None
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="IMAP"):
             adapter.delete_message("1")
 
 
@@ -439,6 +439,7 @@ class TestIMAPClientWrites:
         client, conn = self._client_with_mock_conn(capabilities=("MOVE",))
         client.move_uid("42", "Archive", folder="INBOX")
         conn.uid.assert_called_once_with("move", "42", "Archive")
+        conn.select.assert_called_once_with("INBOX", readonly=False)
 
     def test_move_uid_falls_back_to_copy(self):
         client, conn = self._client_with_mock_conn(capabilities=())
@@ -451,3 +452,8 @@ class TestIMAPClientWrites:
         client, conn = self._client_with_mock_conn()
         client.set_seen("42", seen=True, folder="INBOX")
         conn.uid.assert_called_once_with("store", "42", "+FLAGS", "(\\Seen)")
+
+    def test_set_seen_removes_flag(self):
+        client, conn = self._client_with_mock_conn()
+        client.set_seen("42", seen=False, folder="INBOX")
+        conn.uid.assert_called_once_with("store", "42", "-FLAGS", "(\\Seen)")
