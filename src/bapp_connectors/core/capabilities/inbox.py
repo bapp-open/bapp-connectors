@@ -82,3 +82,27 @@ class InboxCapability(ABC):
             EmailAttachmentContent with the raw bytes.
         """
         ...
+
+    @abstractmethod
+    def delete_message(self, message_id: str, *, folder: str = "INBOX") -> None:
+        """
+        Delete a message from the mailbox.
+
+        Semantics are provider-defined (IMAP: flag \\Deleted + expunge;
+        Gmail: move to Trash).
+        """
+        ...
+
+    @abstractmethod
+    def move_message(
+        self, message_id: str, target_folder: str, *, folder: str = "INBOX"
+    ) -> None:
+        """Move a message from ``folder`` to ``target_folder``."""
+        ...
+
+    @abstractmethod
+    def mark_read(
+        self, message_id: str, *, read: bool = True, folder: str = "INBOX"
+    ) -> None:
+        """Mark a message as read (``read=True``) or unread (``read=False``)."""
+        ...
