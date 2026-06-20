@@ -27,6 +27,7 @@ class WebhookEventType(StrEnum):
     SHIPMENT_FAILED = "shipment.failed"
 
     # Payments
+    PAYMENT_PENDING = "payment.pending"
     PAYMENT_COMPLETED = "payment.completed"
     PAYMENT_FAILED = "payment.failed"
     PAYMENT_REFUNDED = "payment.refunded"

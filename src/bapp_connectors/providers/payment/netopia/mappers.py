@@ -146,10 +146,11 @@ def refund_from_netopia(data: dict, payment_id: str) -> Refund:
 
 
 NETOPIA_IPN_EVENT_MAP: dict[str, WebhookEventType] = {
-    "confirmed": WebhookEventType.ORDER_UPDATED,
-    "paid_pending": WebhookEventType.ORDER_UPDATED,
-    "cancelled": WebhookEventType.ORDER_CANCELLED,
-    "credit": WebhookEventType.ORDER_UPDATED,
+    "pending": WebhookEventType.PAYMENT_PENDING,        # status 0
+    "paid_pending": WebhookEventType.PAYMENT_PENDING,   # status 3
+    "confirmed": WebhookEventType.PAYMENT_COMPLETED,    # status 5
+    "cancelled": WebhookEventType.PAYMENT_FAILED,       # status 12
+    "credit": WebhookEventType.PAYMENT_REFUNDED,        # status 15 (refund)
 }
 
 
