@@ -214,3 +214,27 @@ class SMTPEmailAdapter(EmailPort, InboxCapability):
             return result
         except Exception as e:
             raise classify_imap_error(e) from e
+
+    def delete_message(self, message_id: str, *, folder: str = "INBOX") -> None:
+        """Delete a message from the mailbox (flag \\Deleted + expunge)."""
+        imap = self._require_imap()
+        try:
+            imap.delete_uid(message_id, folder=folder)
+        except Exception as e:
+            raise classify_imap_error(e) from e
+
+    def move_message(self, message_id: str, target_folder: str, *, folder: str = "INBOX") -> None:
+        """Move a message to another folder."""
+        imap = self._require_imap()
+        try:
+            imap.move_uid(message_id, target_folder, folder=folder)
+        except Exception as e:
+            raise classify_imap_error(e) from e
+
+    def mark_read(self, message_id: str, *, read: bool = True, folder: str = "INBOX") -> None:
+        """Mark a message as read (read=True) or unread (read=False)."""
+        imap = self._require_imap()
+        try:
+            imap.set_seen(message_id, seen=read, folder=folder)
+        except Exception as e:
+            raise classify_imap_error(e) from e

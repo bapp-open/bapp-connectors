@@ -335,6 +335,48 @@ class IMAPClient:
             with contextlib.suppress(Exception):
                 conn.logout()
 
+    def set_seen(self, uid: str, *, seen: bool = True, folder: str = "INBOX") -> None:
+        """Add or remove the \\Seen flag on a message."""
+        conn = self._connect()
+        try:
+            conn.select(folder, readonly=False)
+            op = "+FLAGS" if seen else "-FLAGS"
+            conn.uid("store", uid, op, "(\\Seen)")
+        finally:
+            with contextlib.suppress(Exception):
+                conn.logout()
+
+    def delete_uid(self, uid: str, *, folder: str = "INBOX") -> None:
+        """Delete a message: flag \\Deleted then expunge."""
+        conn = self._connect()
+        try:
+            conn.select(folder, readonly=False)
+            conn.uid("store", uid, "+FLAGS", "(\\Deleted)")
+            conn.expunge()
+        finally:
+            with contextlib.suppress(Exception):
+                conn.logout()
+
+    def move_uid(self, uid: str, target_folder: str, *, folder: str = "INBOX") -> None:
+        """Move a message to another folder.
+
+        Uses server-side UID MOVE when advertised; otherwise falls back to
+        COPY + \\Deleted + EXPUNGE.
+        """
+        conn = self._connect()
+        try:
+            conn.select(folder, readonly=False)
+            capabilities = getattr(conn, "capabilities", ())
+            if "MOVE" in capabilities:
+                conn.uid("move", uid, target_folder)
+            else:
+                conn.uid("copy", uid, target_folder)
+                conn.uid("store", uid, "+FLAGS", "(\\Deleted)")
+                conn.expunge()
+        finally:
+            with contextlib.suppress(Exception):
+                conn.logout()
+
 
 class IMAPFolderError(Exception):
     """Raised when an IMAP folder cannot be selected."""

@@ -382,3 +382,72 @@ class TestAdapterRequiresIMAP:
 
         with pytest.raises(Exception, match="IMAP"):
             adapter.download_attachment("1", "att-1")
+
+
+class TestSMTPInboxActions:
+    def _adapter(self):
+        from bapp_connectors.providers.email.smtp.adapter import SMTPEmailAdapter
+
+        adapter = SMTPEmailAdapter(
+            credentials={"username": "u@example.com", "password": "p", "imap_host": "imap.example.com"}
+        )
+        adapter.imap_client = MagicMock()
+        return adapter
+
+    def test_delete_message_delegates_to_client(self):
+        adapter = self._adapter()
+        adapter.delete_message("42", folder="INBOX")
+        adapter.imap_client.delete_uid.assert_called_once_with("42", folder="INBOX")
+
+    def test_move_message_delegates_to_client(self):
+        adapter = self._adapter()
+        adapter.move_message("42", "Archive", folder="INBOX")
+        adapter.imap_client.move_uid.assert_called_once_with("42", "Archive", folder="INBOX")
+
+    def test_mark_read_delegates_to_client(self):
+        adapter = self._adapter()
+        adapter.mark_read("42", read=True, folder="INBOX")
+        adapter.imap_client.set_seen.assert_called_once_with("42", seen=True, folder="INBOX")
+
+    def test_actions_without_imap_raise(self):
+        from bapp_connectors.providers.email.smtp.adapter import SMTPEmailAdapter
+
+        adapter = SMTPEmailAdapter(credentials={"username": "u@example.com", "password": "p"})
+        adapter.imap_client = None
+        with pytest.raises(Exception):
+            adapter.delete_message("1")
+
+
+class TestIMAPClientWrites:
+    def _client_with_mock_conn(self, capabilities=()):
+        from bapp_connectors.providers.email.smtp.client import IMAPClient
+
+        client = IMAPClient(host="imap.example.com", username="u", password="p")
+        conn = MagicMock()
+        conn.capabilities = capabilities
+        client._connect = MagicMock(return_value=conn)
+        return client, conn
+
+    def test_delete_uid_flags_and_expunges(self):
+        client, conn = self._client_with_mock_conn()
+        client.delete_uid("42", folder="INBOX")
+        conn.select.assert_called_once_with("INBOX", readonly=False)
+        conn.uid.assert_called_once_with("store", "42", "+FLAGS", "(\\Deleted)")
+        conn.expunge.assert_called_once()
+
+    def test_move_uid_uses_server_move_when_supported(self):
+        client, conn = self._client_with_mock_conn(capabilities=("MOVE",))
+        client.move_uid("42", "Archive", folder="INBOX")
+        conn.uid.assert_called_once_with("move", "42", "Archive")
+
+    def test_move_uid_falls_back_to_copy(self):
+        client, conn = self._client_with_mock_conn(capabilities=())
+        client.move_uid("42", "Archive", folder="INBOX")
+        conn.uid.assert_any_call("copy", "42", "Archive")
+        conn.uid.assert_any_call("store", "42", "+FLAGS", "(\\Deleted)")
+        conn.expunge.assert_called_once()
+
+    def test_set_seen_adds_flag(self):
+        client, conn = self._client_with_mock_conn()
+        client.set_seen("42", seen=True, folder="INBOX")
+        conn.uid.assert_called_once_with("store", "42", "+FLAGS", "(\\Seen)")
