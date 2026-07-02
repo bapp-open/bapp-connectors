@@ -219,6 +219,7 @@ uv run pytest tests/ -v
 
 - [Provider Development Guide](docs/PROVIDER_GUIDE.md) — How to add a new provider or create a new family
 - [Django Integration Guide](docs/DJANGO_INTEGRATION.md) — How to use the Django package
+- [Connecting Social & Ads Providers](docs/connecting/README.md) — Per-provider credential setup, targeting model, and performance reporting
 
 ## Project Structure
 
