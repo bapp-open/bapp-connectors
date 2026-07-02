@@ -56,6 +56,43 @@ class AdInsightsLevel(StrEnum):
     AD = "ad"
 
 
+class AdMediaType(StrEnum):
+    """Kind of media asset uploaded to an ad platform."""
+
+    IMAGE = "image"
+    VIDEO = "video"
+
+
+class AdMediaAsset(BaseModel):
+    """
+    A media file to upload to an ad platform's asset library.
+
+    Provide exactly one source: ``url`` (platform fetches it), ``file_path``
+    (local file), or ``content`` (raw bytes). Not every platform supports every
+    source — see the provider's connection guide.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    media_type: AdMediaType
+    url: str = ""
+    file_path: str = ""
+    content: bytes | None = None
+    filename: str = ""
+    extra: dict = {}
+
+
+class UploadedAdMedia(BaseModel):
+    """A media asset stored on the ad platform, referenceable from creatives/ads."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str  # Meta image_hash / video id, TikTok image_id / video_id, Google asset resource name
+    media_type: AdMediaType
+    url: str = ""
+    extra: dict = {}
+
+
 class AdTargeting(BaseModel):
     """Normalized audience targeting. Platform-specific spec goes in ``extra``."""
 

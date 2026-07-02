@@ -10,8 +10,11 @@ from .ads import (
     AdGroup,
     AdInsights,
     AdInsightsLevel,
+    AdMediaAsset,
+    AdMediaType,
     AdObjective,
     AdTargeting,
+    UploadedAdMedia,
 )
 from .base import BaseDTO, BulkResult, ConnectionTestResult, PaginatedResult, ProviderMeta
 from .email import (
@@ -67,11 +70,15 @@ from .product import (
 from .saved_payment import CardBrand, SavedPaymentMethod
 from .shipment import AWBLabel, Parcel, Shipment, ShipmentStatus, TrackingEvent
 from .social import (
+    PublishResult,
+    PublishStatus,
     SocialAccount,
     SocialAccountStats,
     SocialMediaType,
     SocialPost,
+    SocialPostDraft,
     SocialPostStats,
+    SocialPrivacy,
 )
 from .subscription import Subscription, SubscriptionInterval, SubscriptionStatus
 from .webhook import WebhookEvent, WebhookEventType
@@ -85,6 +92,8 @@ __all__ = [
     "AdGroup",
     "AdInsights",
     "AdInsightsLevel",
+    "AdMediaAsset",
+    "AdMediaType",
     "AdObjective",
     "AdTargeting",
     "Address",
@@ -146,6 +155,8 @@ __all__ = [
     "ProductUpdate",
     "ProductVariant",
     "ProviderMeta",
+    "PublishResult",
+    "PublishStatus",
     "Refund",
     "RelatedProductLink",
     "SavedPaymentMethod",
@@ -155,7 +166,9 @@ __all__ = [
     "SocialAccountStats",
     "SocialMediaType",
     "SocialPost",
+    "SocialPostDraft",
     "SocialPostStats",
+    "SocialPrivacy",
     "Subscription",
     "SubscriptionInterval",
     "SubscriptionStatus",
@@ -164,6 +177,7 @@ __all__ = [
     "ToolDefinition",
     "TrackingEvent",
     "TranscriptionResult",
+    "UploadedAdMedia",
     "WebhookEvent",
     "WebhookEventType",
 ]

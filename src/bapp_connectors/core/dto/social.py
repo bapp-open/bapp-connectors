@@ -29,6 +29,64 @@ class SocialMediaType(StrEnum):
     OTHER = "other"
 
 
+class SocialPrivacy(StrEnum):
+    """Normalized post visibility. Platforms map to their closest equivalent."""
+
+    PUBLIC = "public"
+    PRIVATE = "private"
+    UNLISTED = "unlisted"
+
+
+class PublishStatus(StrEnum):
+    """Lifecycle of a publish operation."""
+
+    PUBLISHED = "published"
+    PROCESSING = "processing"  # accepted by the platform, still transcoding/reviewing
+    FAILED = "failed"
+
+
+class SocialPostDraft(BaseModel):
+    """
+    A post to publish on a social platform.
+
+    Media source: ``media_url`` (platform fetches it), ``file_path`` (local
+    file), or ``content`` (raw bytes). Platform support differs — see the
+    provider's connection guide. Text-only posts leave all three empty.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    title: str = ""
+    description: str = ""
+    media_type: SocialMediaType = SocialMediaType.VIDEO
+    media_url: str = ""
+    file_path: str = ""
+    content: bytes | None = None
+    filename: str = ""
+    link: str = ""  # attached link for link/text posts
+    privacy: SocialPrivacy = SocialPrivacy.PUBLIC
+    tags: list[str] = []
+    extra: dict = {}
+
+
+class PublishResult(BaseModel):
+    """
+    Result of publishing a post.
+
+    ``post_id`` may be empty while ``status`` is PROCESSING on platforms that
+    publish asynchronously — poll ``check_publish_status`` with ``publish_id``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    post_id: str = ""
+    publish_id: str = ""  # platform handle for polling async publishes
+    status: PublishStatus = PublishStatus.PUBLISHED
+    url: str = ""
+    error: str = ""
+    extra: dict = {}
+
+
 class SocialAccount(BaseDTO):
     """A social media account/channel/page."""
 

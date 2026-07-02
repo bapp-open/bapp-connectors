@@ -1,6 +1,7 @@
 """Optional capability interfaces for feature discovery."""
 
 from .bulk_operations import BulkImportCapability, BulkUpdateCapability
+from .creative_upload import CreativeUploadCapability
 from .embedding import EmbeddingCapability
 from .financial import FinancialCapability
 from .image_generation import ImageGenerationCapability
@@ -19,6 +20,7 @@ from .product_management import (
 from .rich_messaging import RichMessagingCapability
 from .saved_payment import SavedPaymentCapability
 from .shipping import ShippingCapability
+from .social_publish import SocialPublishCapability
 from .streaming import StreamingCapability
 from .subscriptions import SubscriptionCapability
 from .transcription import TranscriptionCapability
@@ -29,6 +31,7 @@ __all__ = [
     "BulkImportCapability",
     "BulkUpdateCapability",
     "CategoryManagementCapability",
+    "CreativeUploadCapability",
     "EmbeddingCapability",
     "FeedFormat",
     "FeedUploadCapability",
@@ -45,6 +48,7 @@ __all__ = [
     "RichMessagingCapability",
     "SavedPaymentCapability",
     "ShippingCapability",
+    "SocialPublishCapability",
     "StreamingCapability",
     "SubscriptionCapability",
     "TranscriptionCapability",
