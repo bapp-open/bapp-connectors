@@ -7,10 +7,11 @@ appear in the posts edge), page/post insights, and publishing (feed posts,
 photos, videos).
 """
 
-from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.capabilities import OAuthCapability, SocialPublishCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
+    OAuthConfig,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
@@ -34,9 +35,11 @@ manifest = ProviderManifest(
                 name="token",
                 label="Page Access Token",
                 sensitive=True,
+                required=False,
                 help_text=(
                     "Long-lived Page access token with pages_read_engagement and read_insights "
-                    "permissions; pages_manage_posts is required for publishing."
+                    "permissions; pages_manage_posts is required for publishing. Optional when "
+                    "connecting via the OAuth flow (obtained afterwards via list_page_tokens)."
                 ),
             ),
             CredentialField(
@@ -44,11 +47,33 @@ manifest = ProviderManifest(
                 label="Page ID",
                 help_text="Numeric ID of the Facebook Page.",
             ),
+            CredentialField(
+                name="app_id",
+                label="App ID",
+                required=False,
+                help_text="Meta app ID, used for the OAuth authorization flow.",
+            ),
+            CredentialField(
+                name="app_secret",
+                label="App Secret",
+                sensitive=True,
+                required=False,
+                help_text="Meta app secret, used for the OAuth authorization flow.",
+            ),
         ],
+        oauth=OAuthConfig(
+            credential_fields=[
+                CredentialField(name="app_id", label="App ID"),
+                CredentialField(name="app_secret", label="App Secret", sensitive=True),
+            ],
+            scopes=["pages_show_list", "pages_read_engagement", "read_insights", "pages_manage_posts"],
+            display_name="Connect with Facebook",
+        ),
     ),
     capabilities=[
         SocialPort,
         SocialPublishCapability,
+        OAuthCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=10,

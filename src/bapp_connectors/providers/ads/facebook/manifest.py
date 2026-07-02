@@ -4,10 +4,11 @@ Facebook/Meta Ads provider manifest — declares capabilities, auth, rate limits
 Uses the Meta Marketing API v19.0 (https://developers.facebook.com/docs/marketing-apis/).
 """
 
-from bapp_connectors.core.capabilities import CreativeUploadCapability
+from bapp_connectors.core.capabilities import CreativeUploadCapability, OAuthCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
+    OAuthConfig,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
@@ -30,14 +31,39 @@ manifest = ProviderManifest(
                 name="token",
                 label="Access Token",
                 sensitive=True,
-                help_text="Marketing API access token with the ads_management scope.",
+                required=False,
+                help_text=(
+                    "Marketing API access token with the ads_management scope. "
+                    "Optional when connecting via the OAuth flow."
+                ),
             ),
             CredentialField(
                 name="ad_account_id",
                 label="Ad Account Id",
                 help_text="Numeric ad account ID, without the act_ prefix.",
             ),
+            CredentialField(
+                name="app_id",
+                label="App ID",
+                required=False,
+                help_text="Meta app ID, used for the OAuth authorization flow.",
+            ),
+            CredentialField(
+                name="app_secret",
+                label="App Secret",
+                sensitive=True,
+                required=False,
+                help_text="Meta app secret, used for the OAuth authorization flow.",
+            ),
         ],
+        oauth=OAuthConfig(
+            credential_fields=[
+                CredentialField(name="app_id", label="App ID"),
+                CredentialField(name="app_secret", label="App Secret", sensitive=True),
+            ],
+            scopes=["ads_management", "ads_read", "business_management"],
+            display_name="Connect with Facebook",
+        ),
     ),
     settings=SettingsConfig(
         fields=[
@@ -69,6 +95,7 @@ manifest = ProviderManifest(
     capabilities=[
         AdsPort,
         CreativeUploadCapability,
+        OAuthCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,

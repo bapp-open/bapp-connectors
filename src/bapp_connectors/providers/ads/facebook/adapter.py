@@ -12,8 +12,10 @@ import json
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlencode
 
-from bapp_connectors.core.capabilities import CreativeUploadCapability
+from bapp_connectors.core.capabilities import CreativeUploadCapability, OAuthCapability
+from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
 from bapp_connectors.core.dto.ads import (
     Ad,
@@ -31,6 +33,7 @@ from bapp_connectors.core.errors import ConfigurationError, ValidationError
 from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
 from bapp_connectors.core.ports import AdsPort
 from bapp_connectors.providers.ads.facebook.client import MetaAdsClient
+from bapp_connectors.providers.ads.facebook.errors import check_payload
 from bapp_connectors.providers.ads.facebook.manifest import manifest
 from bapp_connectors.providers.ads.facebook.mappers import (
     ad_from_meta,
@@ -50,14 +53,19 @@ INSIGHTS_LEVEL_TO_META: dict[AdInsightsLevel, str] = {
     AdInsightsLevel.AD: "ad",
 }
 
+_FB_OAUTH_DIALOG_URL = "https://www.facebook.com/v19.0/dialog/oauth"
 
-class MetaAdsAdapter(AdsPort, CreativeUploadCapability):
+
+class MetaAdsAdapter(AdsPort, CreativeUploadCapability, OAuthCapability):
     """
     Meta Marketing API adapter.
 
     Implements AdsPort: campaigns, ad groups (Meta ad sets), ads, and the
     universal insights interface. Also implements CreativeUploadCapability:
     media upload (adimages/advideos) and creative creation (adcreatives).
+
+    Implements OAuthCapability: Meta OAuth2 authorization code flow plus the
+    ``fb_exchange_token`` long-lived token exchange (Meta has no refresh tokens).
     """
 
     manifest = manifest
@@ -85,6 +93,8 @@ class MetaAdsAdapter(AdsPort, CreativeUploadCapability):
         self.config = config
         self._optimization_goal = config.get("default_optimization_goal", "LINK_CLICKS")
         self._billing_event = config.get("default_billing_event", "IMPRESSIONS")
+        self._app_id = credentials.get("app_id", "")
+        self._app_secret = credentials.get("app_secret", "")
 
         self.ad_account_id = str(credentials.get("ad_account_id", "")).removeprefix("act_")
 
@@ -100,8 +110,11 @@ class MetaAdsAdapter(AdsPort, CreativeUploadCapability):
     # ── BasePort ──
 
     def validate_credentials(self) -> bool:
+        if self._app_id and self._app_secret:
+            # OAuth-flow-only adapter: app credentials alone are enough to run the flow.
+            return True
         missing = self.manifest.auth.validate_credentials(self.credentials)
-        return len(missing) == 0
+        return len(missing) == 0 and bool(self.credentials.get("token"))
 
     def test_connection(self) -> ConnectionTestResult:
         try:
@@ -114,6 +127,83 @@ class MetaAdsAdapter(AdsPort, CreativeUploadCapability):
             )
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
+
+    # ── OAuthCapability ──
+
+    def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
+        scopes = self.manifest.auth.oauth.scopes if self.manifest.auth.oauth else []
+        params = {
+            "client_id": self._app_id,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "scope": ",".join(scopes),
+        }
+        return f"{_FB_OAUTH_DIALOG_URL}?{urlencode(params)}"
+
+    def exchange_code_for_token(self, code: str, redirect_uri: str, state: str = "") -> OAuthTokens:
+        """Exchange the authorization code for a short-lived user access token."""
+        response = self.client.http.call(
+            "GET",
+            "oauth/access_token",
+            params={
+                "client_id": self._app_id,
+                "redirect_uri": redirect_uri,
+                "client_secret": self._app_secret,
+                "code": code,
+            },
+        )
+        data = response if isinstance(response, dict) else {}
+        check_payload(data)
+        access_token = data.get("access_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            refresh_token="",  # Meta issues no refresh tokens
+            expires_in=data.get("expires_in"),
+            token_type=data.get("token_type", "Bearer"),
+            extra={
+                "credentials": {
+                    "token": access_token,
+                    "app_id": self._app_id,
+                    "app_secret": self._app_secret,
+                },
+            },
+        )
+
+    def refresh_token(self, refresh_token: str) -> OAuthTokens:
+        """Exchange the CURRENT ACCESS TOKEN for a long-lived one (~60 days).
+
+        Meta has no refresh tokens — its "refresh" equivalent is the
+        ``fb_exchange_token`` grant, which trades a valid (short- or long-lived)
+        access token for a fresh long-lived token. Therefore ``refresh_token``
+        here must be the current access token, and the returned
+        ``OAuthTokens.refresh_token`` is always ``""``.
+        """
+        response = self.client.http.call(
+            "GET",
+            "oauth/access_token",
+            params={
+                "grant_type": "fb_exchange_token",
+                "client_id": self._app_id,
+                "client_secret": self._app_secret,
+                "fb_exchange_token": refresh_token,
+            },
+        )
+        data = response if isinstance(response, dict) else {}
+        check_payload(data)
+        access_token = data.get("access_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            refresh_token="",  # Meta issues no refresh tokens
+            expires_in=data.get("expires_in"),
+            token_type=data.get("token_type", "Bearer"),
+            extra={
+                "credentials": {
+                    "token": access_token,
+                    "app_id": self._app_id,
+                    "app_secret": self._app_secret,
+                },
+            },
+        )
 
     # ── Shared helpers ──
 

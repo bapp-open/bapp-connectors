@@ -7,10 +7,11 @@ All tests run against a FakeHttpClient with canned Graph API responses.
 from __future__ import annotations
 
 from decimal import Decimal
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from bapp_connectors.core.capabilities import CreativeUploadCapability
+from bapp_connectors.core.capabilities import CreativeUploadCapability, OAuthCapability
 from bapp_connectors.core.dto.ads import (
     Ad,
     AdCampaign,
@@ -26,6 +27,7 @@ from bapp_connectors.core.dto.ads import (
 )
 from bapp_connectors.core.errors import ConfigurationError, ValidationError
 from bapp_connectors.providers.ads.facebook.adapter import MetaAdsAdapter
+from bapp_connectors.providers.ads.facebook.manifest import manifest
 from bapp_connectors.providers.ads.facebook.mappers import (
     META_TO_OBJECTIVE,
     OBJECTIVE_TO_META,
@@ -523,3 +525,94 @@ class TestCreateCreative:
         create_call = next(c for c in media_http.calls if c.method == "POST" and c.path == f"act_{ACCOUNT_ID}/ads")
         assert create_call.kwargs["json"]["creative"] == {"creative_id": "cr_new"}
         assert ad.id == "ad_new"
+
+
+OAUTH_SCOPES = ["ads_management", "ads_read", "business_management"]
+
+
+class TestMetaAdsOAuth:
+
+    def make_oauth_adapter(self, fake: FakeHttpClient | None = None) -> MetaAdsAdapter:
+        return MetaAdsAdapter(
+            credentials={"app_id": "app_123", "app_secret": "app_secret_456", "ad_account_id": ACCOUNT_ID},
+            http_client=fake or FakeHttpClient(),
+        )
+
+    def test_oauth_declared_in_manifest(self):
+        assert OAuthCapability in manifest.capabilities
+        assert manifest.auth.oauth is not None
+        assert manifest.auth.oauth.display_name == "Connect with Facebook"
+        assert [f.name for f in manifest.auth.oauth.credential_fields] == ["app_id", "app_secret"]
+        assert manifest.auth.oauth.scopes == OAUTH_SCOPES
+
+    def test_token_not_required_in_manifest(self):
+        token_field = next(f for f in manifest.auth.required_fields if f.name == "token")
+        assert token_field.required is False
+        account_field = next(f for f in manifest.auth.required_fields if f.name == "ad_account_id")
+        assert account_field.required is True
+
+    def test_supports_oauth_capability(self, adapter):
+        assert adapter.supports(OAuthCapability) is True
+
+    def test_adapter_constructible_with_app_credentials_only(self):
+        adapter = MetaAdsAdapter(credentials={"app_id": "app_123", "app_secret": "app_secret_456"})
+        assert adapter._app_id == "app_123"
+        assert adapter._app_secret == "app_secret_456"
+        assert adapter.validate_credentials() is True
+
+    def test_validate_credentials_old_behavior_without_app_credentials(self, adapter):
+        assert adapter.validate_credentials() is True  # token + ad_account_id
+        no_token = MetaAdsAdapter(credentials={"ad_account_id": ACCOUNT_ID}, http_client=FakeHttpClient())
+        assert no_token.validate_credentials() is False
+
+    def test_get_authorize_url(self):
+        url = self.make_oauth_adapter().get_authorize_url("https://example.com/cb", state="xyz789")
+        assert url.startswith("https://www.facebook.com/v19.0/dialog/oauth?")
+        query = parse_qs(urlparse(url).query)
+        assert query["client_id"] == ["app_123"]
+        assert query["redirect_uri"] == ["https://example.com/cb"]
+        assert query["state"] == ["xyz789"]
+        assert query["scope"] == [",".join(OAUTH_SCOPES)]
+
+    def test_exchange_code_for_token(self):
+        fake = FakeHttpClient()
+        fake.add(
+            "GET",
+            "oauth/access_token",
+            {"access_token": "USER_TOKEN", "token_type": "bearer", "expires_in": 5183944},
+        )
+        tokens = self.make_oauth_adapter(fake).exchange_code_for_token("the_code", "https://example.com/cb")
+
+        call = fake.last_call()
+        assert call.method == "GET"
+        assert call.path == "oauth/access_token"
+        assert call.kwargs["params"]["client_id"] == "app_123"
+        assert call.kwargs["params"]["client_secret"] == "app_secret_456"
+        assert call.kwargs["params"]["code"] == "the_code"
+        assert call.kwargs["params"]["redirect_uri"] == "https://example.com/cb"
+        assert tokens.access_token == "USER_TOKEN"
+        assert tokens.refresh_token == ""  # Meta has no refresh tokens
+        assert tokens.expires_in == 5183944
+        assert tokens.extra["credentials"] == {
+            "token": "USER_TOKEN",
+            "app_id": "app_123",
+            "app_secret": "app_secret_456",
+        }
+
+    def test_refresh_token_is_long_lived_exchange(self):
+        fake = FakeHttpClient()
+        fake.add(
+            "GET",
+            "oauth/access_token",
+            {"access_token": "LONG_LIVED_TOKEN", "token_type": "bearer", "expires_in": 5184000},
+        )
+        tokens = self.make_oauth_adapter(fake).refresh_token("SHORT_LIVED_TOKEN")
+
+        params = fake.last_call().kwargs["params"]
+        assert params["grant_type"] == "fb_exchange_token"
+        assert params["fb_exchange_token"] == "SHORT_LIVED_TOKEN"
+        assert params["client_id"] == "app_123"
+        assert params["client_secret"] == "app_secret_456"
+        assert tokens.access_token == "LONG_LIVED_TOKEN"
+        assert tokens.refresh_token == ""
+        assert tokens.expires_in == 5184000

@@ -12,8 +12,10 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
-from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.capabilities import OAuthCapability, SocialPublishCapability
+from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
 from bapp_connectors.core.dto.social import (
     PublishResult,
@@ -25,6 +27,7 @@ from bapp_connectors.core.errors import ConnectorError, ValidationError
 from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
 from bapp_connectors.core.ports import SocialPort
 from bapp_connectors.providers.social.facebook.client import FacebookGraphClient
+from bapp_connectors.providers.social.facebook.errors import check_payload
 from bapp_connectors.providers.social.facebook.manifest import manifest
 from bapp_connectors.providers.social.facebook.mappers import (
     account_from_page,
@@ -50,8 +53,10 @@ if TYPE_CHECKING:
 POST_INSIGHT_METRICS = "post_impressions,post_impressions_unique,post_clicks,post_video_views"
 PAGE_INSIGHT_METRICS = "page_impressions,page_impressions_unique"
 
+_FB_OAUTH_DIALOG_URL = "https://www.facebook.com/v19.0/dialog/oauth"
 
-class FacebookSocialAdapter(SocialPort, SocialPublishCapability):
+
+class FacebookSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapability):
     """
     Facebook Page adapter (Graph API v19.0).
 
@@ -65,6 +70,10 @@ class FacebookSocialAdapter(SocialPort, SocialPublishCapability):
     synchronously; videos come back PROCESSING while Meta transcodes — poll
     ``check_publish_status`` with the returned ``publish_id``. Publishing
     requires the ``pages_manage_posts`` permission on the token.
+
+    Implements OAuthCapability: Meta OAuth2 authorization code flow. The
+    exchanged token is a *user* token — call ``list_page_tokens`` with it to
+    obtain the Page access token to store as the ``token`` credential.
     """
 
     manifest = manifest
@@ -85,6 +94,8 @@ class FacebookSocialAdapter(SocialPort, SocialPublishCapability):
         self.credentials = credentials
         self.config = config or {}
         self.page_id = credentials.get("page_id", "")
+        self._app_id = credentials.get("app_id", "")
+        self._app_secret = credentials.get("app_secret", "")
 
         if http_client is None:
             http_client = ResilientHttpClient(
@@ -98,8 +109,11 @@ class FacebookSocialAdapter(SocialPort, SocialPublishCapability):
     # ── BasePort ──
 
     def validate_credentials(self) -> bool:
+        if self._app_id and self._app_secret:
+            # OAuth-flow-only adapter: app credentials alone are enough to run the flow.
+            return True
         missing = self.manifest.auth.validate_credentials(self.credentials)
-        return len(missing) == 0
+        return len(missing) == 0 and bool(self.credentials.get("token"))
 
     def test_connection(self) -> ConnectionTestResult:
         try:
@@ -112,6 +126,111 @@ class FacebookSocialAdapter(SocialPort, SocialPublishCapability):
             )
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
+
+    # ── OAuthCapability ──
+
+    def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
+        scopes = self.manifest.auth.oauth.scopes if self.manifest.auth.oauth else []
+        params = {
+            "client_id": self._app_id,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "scope": ",".join(scopes),
+        }
+        return f"{_FB_OAUTH_DIALOG_URL}?{urlencode(params)}"
+
+    def exchange_code_for_token(self, code: str, redirect_uri: str, state: str = "") -> OAuthTokens:
+        """Exchange the authorization code for a short-lived *user* access token.
+
+        The returned token is not a Page token — pass it to ``list_page_tokens``
+        to pick the Page access token to store as the ``token`` credential.
+        """
+        response = self.client.http.call(
+            "GET",
+            "oauth/access_token",
+            params={
+                "client_id": self._app_id,
+                "redirect_uri": redirect_uri,
+                "client_secret": self._app_secret,
+                "code": code,
+            },
+        )
+        data = check_payload(response if isinstance(response, dict) else {})
+        access_token = data.get("access_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            refresh_token="",  # Meta issues no refresh tokens
+            expires_in=data.get("expires_in"),
+            token_type=data.get("token_type", "Bearer"),
+            extra={
+                "credentials": {
+                    "token": access_token,
+                    "app_id": self._app_id,
+                    "app_secret": self._app_secret,
+                },
+            },
+        )
+
+    def refresh_token(self, refresh_token: str) -> OAuthTokens:
+        """Exchange the CURRENT ACCESS TOKEN for a long-lived one (~60 days).
+
+        Meta has no refresh tokens — its "refresh" equivalent is the
+        ``fb_exchange_token`` grant, which trades a valid (short- or long-lived)
+        access token for a fresh long-lived token. Therefore ``refresh_token``
+        here must be the current access token, and the returned
+        ``OAuthTokens.refresh_token`` is always ``""``.
+        """
+        response = self.client.http.call(
+            "GET",
+            "oauth/access_token",
+            params={
+                "grant_type": "fb_exchange_token",
+                "client_id": self._app_id,
+                "client_secret": self._app_secret,
+                "fb_exchange_token": refresh_token,
+            },
+        )
+        data = check_payload(response if isinstance(response, dict) else {})
+        access_token = data.get("access_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            refresh_token="",  # Meta issues no refresh tokens
+            expires_in=data.get("expires_in"),
+            token_type=data.get("token_type", "Bearer"),
+            extra={
+                "credentials": {
+                    "token": access_token,
+                    "app_id": self._app_id,
+                    "app_secret": self._app_secret,
+                },
+            },
+        )
+
+    def list_page_tokens(self, user_token: str) -> list[dict]:
+        """List the Pages the user manages, each with its Page access token.
+
+        Helper for completing the OAuth flow (not part of OAuthCapability):
+        the token returned by ``exchange_code_for_token``/``refresh_token`` is a
+        *user* token, but this adapter authenticates with a *Page* token. Call
+        this with the user token, pick the entry matching your ``page_id``, and
+        store its ``access_token`` as the ``token`` credential.
+
+        Returns a list of ``{"id", "name", "access_token"}`` dicts.
+        """
+        response = self.client.http.call(
+            "GET",
+            "me/accounts",
+            params={"access_token": user_token, "fields": "id,name,access_token"},
+        )
+        payload = check_payload(response if isinstance(response, dict) else {})
+        return [
+            {
+                "id": page.get("id", ""),
+                "name": page.get("name", ""),
+                "access_token": page.get("access_token", ""),
+            }
+            for page in payload.get("data", [])
+        ]
 
     # ── SocialPort ──
 

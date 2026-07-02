@@ -8,9 +8,11 @@ media type mapping, and Graph error classification.
 
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlparse
+
 import pytest
 
-from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.capabilities import OAuthCapability, SocialPublishCapability
 from bapp_connectors.core.dto.social import (
     PublishStatus,
     SocialMediaType,
@@ -25,6 +27,7 @@ from bapp_connectors.core.errors import (
 )
 from bapp_connectors.providers.social.facebook.adapter import FacebookSocialAdapter
 from bapp_connectors.providers.social.facebook.errors import check_payload, classify_graph_error
+from bapp_connectors.providers.social.facebook.manifest import manifest
 from bapp_connectors.providers.social.facebook.mappers import (
     account_from_page,
     account_stats_from_page,
@@ -511,6 +514,129 @@ class TestPublishCapability:
 
     def test_adapter_supports_social_publish(self):
         assert make_adapter().supports(SocialPublishCapability) is True
+
+
+# ── OAuth ──
+
+
+OAUTH_SCOPES = ["pages_show_list", "pages_read_engagement", "read_insights", "pages_manage_posts"]
+
+
+class TestFacebookOAuth:
+
+    def make_oauth_adapter(self, fake: FakeHttpClient | None = None) -> FacebookSocialAdapter:
+        return FacebookSocialAdapter(
+            credentials={"app_id": "app_123", "app_secret": "app_secret_456", "page_id": PAGE_ID},
+            http_client=fake or FakeHttpClient(),
+        )
+
+    def test_oauth_declared_in_manifest(self):
+        assert OAuthCapability in manifest.capabilities
+        assert manifest.auth.oauth is not None
+        assert manifest.auth.oauth.display_name == "Connect with Facebook"
+        assert [f.name for f in manifest.auth.oauth.credential_fields] == ["app_id", "app_secret"]
+        assert manifest.auth.oauth.scopes == OAUTH_SCOPES
+
+    def test_token_not_required_in_manifest(self):
+        token_field = next(f for f in manifest.auth.required_fields if f.name == "token")
+        assert token_field.required is False
+        page_id_field = next(f for f in manifest.auth.required_fields if f.name == "page_id")
+        assert page_id_field.required is True
+
+    def test_supports_oauth_capability(self):
+        assert make_adapter().supports(OAuthCapability) is True
+
+    def test_adapter_constructible_with_app_credentials_only(self):
+        adapter = FacebookSocialAdapter(credentials={"app_id": "app_123", "app_secret": "app_secret_456"})
+        assert adapter._app_id == "app_123"
+        assert adapter._app_secret == "app_secret_456"
+        assert adapter.validate_credentials() is True
+
+    def test_validate_credentials_old_behavior_without_app_credentials(self):
+        assert make_adapter().validate_credentials() is True  # token + page_id
+        no_token = FacebookSocialAdapter(credentials={"page_id": PAGE_ID}, http_client=FakeHttpClient())
+        assert no_token.validate_credentials() is False
+
+    def test_get_authorize_url(self):
+        url = self.make_oauth_adapter().get_authorize_url("https://example.com/cb", state="xyz789")
+        assert url.startswith("https://www.facebook.com/v19.0/dialog/oauth?")
+        query = parse_qs(urlparse(url).query)
+        assert query["client_id"] == ["app_123"]
+        assert query["redirect_uri"] == ["https://example.com/cb"]
+        assert query["state"] == ["xyz789"]
+        assert query["scope"] == [",".join(OAUTH_SCOPES)]
+
+    def test_exchange_code_for_token(self):
+        fake = FakeHttpClient()
+        fake.add(
+            "GET",
+            "oauth/access_token",
+            {"access_token": "USER_TOKEN", "token_type": "bearer", "expires_in": 5183944},
+        )
+        tokens = self.make_oauth_adapter(fake).exchange_code_for_token("the_code", "https://example.com/cb")
+
+        call = fake.last_call()
+        assert call.method == "GET"
+        assert call.path == "oauth/access_token"
+        assert call.kwargs["params"]["client_id"] == "app_123"
+        assert call.kwargs["params"]["client_secret"] == "app_secret_456"
+        assert call.kwargs["params"]["code"] == "the_code"
+        assert call.kwargs["params"]["redirect_uri"] == "https://example.com/cb"
+        assert tokens.access_token == "USER_TOKEN"
+        assert tokens.refresh_token == ""  # Meta has no refresh tokens
+        assert tokens.expires_in == 5183944
+        assert tokens.extra["credentials"] == {
+            "token": "USER_TOKEN",
+            "app_id": "app_123",
+            "app_secret": "app_secret_456",
+        }
+
+    def test_refresh_token_is_long_lived_exchange(self):
+        fake = FakeHttpClient()
+        fake.add(
+            "GET",
+            "oauth/access_token",
+            {"access_token": "LONG_LIVED_TOKEN", "token_type": "bearer", "expires_in": 5184000},
+        )
+        tokens = self.make_oauth_adapter(fake).refresh_token("SHORT_LIVED_TOKEN")
+
+        params = fake.last_call().kwargs["params"]
+        assert params["grant_type"] == "fb_exchange_token"
+        assert params["fb_exchange_token"] == "SHORT_LIVED_TOKEN"
+        assert params["client_id"] == "app_123"
+        assert params["client_secret"] == "app_secret_456"
+        assert tokens.access_token == "LONG_LIVED_TOKEN"
+        assert tokens.refresh_token == ""
+        assert tokens.expires_in == 5184000
+
+    def test_list_page_tokens(self):
+        fake = FakeHttpClient()
+        fake.add(
+            "GET",
+            "me/accounts",
+            {
+                "data": [
+                    {"id": PAGE_ID, "name": "Test Page", "access_token": "PAGE_TOKEN", "category": "Retail"},
+                    {"id": "5678", "name": "Other Page", "access_token": "OTHER_TOKEN"},
+                ],
+            },
+        )
+        pages = self.make_oauth_adapter(fake).list_page_tokens("USER_TOKEN")
+
+        call = fake.last_call()
+        assert call.method == "GET"
+        assert call.path == "me/accounts"
+        assert call.kwargs["params"] == {"access_token": "USER_TOKEN", "fields": "id,name,access_token"}
+        assert pages == [
+            {"id": PAGE_ID, "name": "Test Page", "access_token": "PAGE_TOKEN"},
+            {"id": "5678", "name": "Other Page", "access_token": "OTHER_TOKEN"},
+        ]
+
+    def test_list_page_tokens_raises_on_graph_error(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "me/accounts", {"error": {"code": 190, "message": "expired token"}})
+        with pytest.raises(AuthenticationError):
+            self.make_oauth_adapter(fake).list_page_tokens("BAD_TOKEN")
 
 
 # ── Connection test ──
