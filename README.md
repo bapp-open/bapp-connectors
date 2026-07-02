@@ -36,8 +36,10 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Storage** | Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV | 7 |
 | **LLM** | Anthropic, Google Gemini, Ollama, OpenAI | 4 |
 | **Feed** | Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro | 4 |
+| **Ads** | Facebook Ads, Google Ads, TikTok Ads | 3 |
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
-| | **Total** | **47** |
+| **Social** | Facebook Page, TikTok, YouTube Shorts | 3 |
+| | **Total** | **53** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -242,7 +244,9 @@ packages/connectors/
 │       ├── storage/       # Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV
 │       ├── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
 │       ├── feed/          # Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro
-│       └── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
+│       ├── ads/           # Facebook Ads, Google Ads, TikTok Ads
+│       ├── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
+│       └── social/        # Facebook Page, TikTok, YouTube Shorts
 <!-- STRUCTURE:END -->
 ├── packages/django/        # Django integration (separate uv workspace)
 │   └── src/django_bapp_connectors/

@@ -7,8 +7,9 @@ is recorded in ``calls`` for assertions on outgoing payloads.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass
