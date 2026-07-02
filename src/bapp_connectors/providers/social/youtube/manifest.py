@@ -4,10 +4,11 @@ YouTube Shorts provider manifest — declares capabilities, auth, rate limits.
 Uses the YouTube Data API v3 (https://developers.google.com/youtube/v3).
 """
 
-from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.capabilities import OAuthCapability, SocialPublishCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
+    OAuthConfig,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
@@ -47,7 +48,32 @@ manifest = ProviderManifest(
                     "https://www.googleapis.com/auth/youtube.upload scope."
                 ),
             ),
+            CredentialField(
+                name="client_id",
+                label="Client ID",
+                sensitive=False,
+                required=False,
+                help_text="OAuth2 client ID for the redirect-based authorization flow.",
+            ),
+            CredentialField(
+                name="client_secret",
+                label="Client Secret",
+                sensitive=True,
+                required=False,
+                help_text="OAuth2 client secret for the redirect-based authorization flow.",
+            ),
         ],
+        oauth=OAuthConfig(
+            credential_fields=[
+                CredentialField(name="client_id", label="Client ID", sensitive=False),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+            ],
+            scopes=[
+                "https://www.googleapis.com/auth/youtube.readonly",
+                "https://www.googleapis.com/auth/youtube.upload",
+            ],
+            display_name="Connect with YouTube",
+        ),
     ),
     settings=SettingsConfig(
         fields=[
@@ -80,6 +106,7 @@ manifest = ProviderManifest(
     capabilities=[
         SocialPort,
         SocialPublishCapability,
+        OAuthCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=10,

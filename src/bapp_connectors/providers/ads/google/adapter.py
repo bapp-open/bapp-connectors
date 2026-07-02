@@ -16,8 +16,10 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
-from bapp_connectors.core.capabilities import CreativeUploadCapability
+from bapp_connectors.core.capabilities import CreativeUploadCapability, OAuthCapability
+from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
 from bapp_connectors.core.dto.ads import (
     Ad,
@@ -54,6 +56,9 @@ if TYPE_CHECKING:
 
 # Default daily budget when creating a campaign without one: 10 currency units.
 DEFAULT_BUDGET_MICROS = 10_000_000
+
+_GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 # ── GAQL queries ──
 
@@ -103,7 +108,7 @@ def _numeric_id(entity: str, value: str) -> str:
     return value
 
 
-class GoogleAdsAdapter(AdsPort, CreativeUploadCapability):
+class GoogleAdsAdapter(AdsPort, CreativeUploadCapability, OAuthCapability):
     """
     Google Ads REST API v17 adapter.
 
@@ -129,6 +134,8 @@ class GoogleAdsAdapter(AdsPort, CreativeUploadCapability):
         **kwargs,
     ):
         self.credentials = credentials
+        self._client_id = credentials.get("client_id", "")
+        self._client_secret = credentials.get("client_secret", "")
         self.config = manifest.settings.apply_defaults(config or {})
 
         if http_client is None:
@@ -150,6 +157,9 @@ class GoogleAdsAdapter(AdsPort, CreativeUploadCapability):
     # ── BasePort ──
 
     def validate_credentials(self) -> bool:
+        if not self.credentials.get("access_token"):
+            # client_id + client_secret alone are enough to run the OAuth flow.
+            return bool(self._client_id and self._client_secret)
         missing = self.manifest.auth.validate_credentials(self.credentials)
         return len(missing) == 0
 
@@ -167,6 +177,79 @@ class GoogleAdsAdapter(AdsPort, CreativeUploadCapability):
             )
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
+
+    # ── OAuthCapability ──
+
+    def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
+        scopes = self.manifest.auth.oauth.scopes if self.manifest.auth.oauth else []
+        params = {
+            "client_id": self._client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": " ".join(scopes),
+            "access_type": "offline",
+            "prompt": "consent",
+            "state": state,
+        }
+        return f"{_GOOGLE_AUTH_URL}?{urlencode(params)}"
+
+    def exchange_code_for_token(self, code: str, redirect_uri: str, state: str = "") -> OAuthTokens:
+        response = self.client.http.call(
+            "POST",
+            _GOOGLE_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+        data = response if isinstance(response, dict) else {}
+        access_token = data.get("access_token", "")
+        refresh_tok = data.get("refresh_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            refresh_token=refresh_tok,
+            expires_in=data.get("expires_in"),
+            token_type=data.get("token_type", "Bearer"),
+            extra={
+                "credentials": {
+                    "access_token": access_token,
+                    "refresh_token": refresh_tok,
+                    "client_id": self._client_id,
+                    "client_secret": self._client_secret,
+                },
+            },
+        )
+
+    def refresh_token(self, refresh_token: str) -> OAuthTokens:
+        response = self.client.http.call(
+            "POST",
+            _GOOGLE_TOKEN_URL,
+            data={
+                "refresh_token": refresh_token,
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+                "grant_type": "refresh_token",
+            },
+        )
+        data = response if isinstance(response, dict) else {}
+        access_token = data.get("access_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=data.get("expires_in"),
+            token_type=data.get("token_type", "Bearer"),
+            extra={
+                "credentials": {
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "client_id": self._client_id,
+                    "client_secret": self._client_secret,
+                },
+            },
+        )
 
     # ── Internal helpers ──
 

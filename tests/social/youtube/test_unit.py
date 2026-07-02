@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.capabilities import OAuthCapability, SocialPublishCapability
 from bapp_connectors.core.dto.social import (
     PublishStatus,
     SocialMediaType,
@@ -16,6 +16,7 @@ from bapp_connectors.core.dto.social import (
 from bapp_connectors.core.errors import AuthenticationError, PermanentProviderError, ValidationError
 from bapp_connectors.providers.social.youtube.adapter import YouTubeSocialAdapter
 from bapp_connectors.providers.social.youtube.client import UPLOAD_URL
+from bapp_connectors.providers.social.youtube.manifest import manifest
 from bapp_connectors.providers.social.youtube.mappers import parse_iso8601_duration
 from tests.fake_http import FakeHttpClient
 from tests.social.contract import SocialContractTests
@@ -426,3 +427,99 @@ class TestYouTubeCheckPublishStatus:
         adapter = self.make_status_adapter(None)
         with pytest.raises(PermanentProviderError):
             adapter.check_publish_status("nope1234567")
+
+
+# ── OAuth ──
+
+OAUTH_CREDENTIALS = {"client_id": "test_client_id", "client_secret": "test_client_secret"}
+
+TOKEN_RESPONSE = {
+    "access_token": "new-access-token",
+    "refresh_token": "new-refresh-token",
+    "expires_in": 3599,
+    "token_type": "Bearer",
+}
+
+
+def make_oauth_adapter(token_response: dict | None = None) -> tuple[YouTubeSocialAdapter, FakeHttpClient]:
+    fake = FakeHttpClient()
+    fake.add("POST", "oauth2.googleapis.com/token", token_response or dict(TOKEN_RESPONSE))
+    adapter = YouTubeSocialAdapter(credentials=dict(OAUTH_CREDENTIALS), http_client=fake, config={})
+    return adapter, fake
+
+
+class TestYouTubeOAuth:
+    """OAuthCapability: authorization URL, code exchange, token refresh."""
+
+    def test_oauth_capability_declared_in_manifest(self):
+        assert OAuthCapability in manifest.capabilities
+        assert manifest.auth.oauth is not None
+        assert manifest.auth.oauth.display_name == "Connect with YouTube"
+        assert len(manifest.auth.oauth.credential_fields) == 2
+        assert manifest.auth.oauth.scopes == [
+            "https://www.googleapis.com/auth/youtube.readonly",
+            "https://www.googleapis.com/auth/youtube.upload",
+        ]
+
+    def test_get_authorize_url(self):
+        adapter, _ = make_oauth_adapter()
+        url = adapter.get_authorize_url("https://example.com/callback", state="abc123")
+        assert "accounts.google.com" in url
+        assert "client_id=test_client_id" in url
+        assert "response_type=code" in url
+        assert "redirect_uri=" in url
+        assert "state=abc123" in url
+        assert "access_type=offline" in url
+
+    def test_exchange_code_for_token(self):
+        adapter, fake = make_oauth_adapter()
+        tokens = adapter.exchange_code_for_token("auth-code", "https://example.com/callback")
+
+        call = fake.last_call()
+        assert call.method == "POST"
+        assert "oauth2.googleapis.com/token" in call.path
+        assert call.kwargs["data"] == {
+            "code": "auth-code",
+            "client_id": "test_client_id",
+            "client_secret": "test_client_secret",
+            "redirect_uri": "https://example.com/callback",
+            "grant_type": "authorization_code",
+        }
+        assert tokens.access_token == "new-access-token"
+        assert tokens.refresh_token == "new-refresh-token"
+        assert tokens.expires_in == 3599
+        assert tokens.extra["credentials"] == {
+            "access_token": "new-access-token",
+            "refresh_token": "new-refresh-token",
+            "client_id": "test_client_id",
+            "client_secret": "test_client_secret",
+        }
+
+    def test_refresh_token(self):
+        adapter, fake = make_oauth_adapter(
+            {"access_token": "refreshed-access-token", "expires_in": 3599, "token_type": "Bearer"}
+        )
+        tokens = adapter.refresh_token("old-refresh-token")
+
+        call = fake.last_call()
+        assert call.method == "POST"
+        assert call.kwargs["data"] == {
+            "refresh_token": "old-refresh-token",
+            "client_id": "test_client_id",
+            "client_secret": "test_client_secret",
+            "grant_type": "refresh_token",
+        }
+        assert tokens.access_token == "refreshed-access-token"
+        assert tokens.refresh_token == "old-refresh-token"
+        assert tokens.extra["credentials"]["access_token"] == "refreshed-access-token"
+        assert tokens.extra["credentials"]["refresh_token"] == "old-refresh-token"
+
+    def test_adapter_constructible_with_only_client_credentials(self):
+        adapter, _ = make_oauth_adapter()
+        assert adapter._client_id == "test_client_id"
+        assert adapter._client_secret == "test_client_secret"
+        assert adapter.validate_credentials() is True
+
+    def test_supports_oauth_capability(self):
+        adapter = make_adapter()
+        assert adapter.supports(OAuthCapability) is True

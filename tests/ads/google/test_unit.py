@@ -11,7 +11,7 @@ from decimal import Decimal
 
 import pytest
 
-from bapp_connectors.core.capabilities import CreativeUploadCapability
+from bapp_connectors.core.capabilities import CreativeUploadCapability, OAuthCapability
 from bapp_connectors.core.dto.ads import (
     Ad,
     AdCampaign,
@@ -27,6 +27,7 @@ from bapp_connectors.core.errors import PermanentProviderError, UnsupportedFeatu
 from bapp_connectors.providers.ads.google.adapter import GoogleAdsAdapter
 from bapp_connectors.providers.ads.google.client import GoogleAdsClient, sanitize_customer_id
 from bapp_connectors.providers.ads.google.errors import extract_ad_id, extract_resource_id
+from bapp_connectors.providers.ads.google.manifest import manifest
 from bapp_connectors.providers.ads.google.mappers import (
     campaign_from_row,
     decimal_to_micros,
@@ -509,3 +510,106 @@ class TestGoogleAdsCreativeUpload:
         with pytest.raises(UnsupportedFeatureError, match="creative resource"):
             adapter.create_creative(creative)
         assert fake_http.calls == []
+
+
+# ── OAuth ──
+
+OAUTH_CREDENTIALS = {"client_id": "test_client_id", "client_secret": "test_client_secret"}
+
+TOKEN_RESPONSE = {
+    "access_token": "new-access-token",
+    "refresh_token": "new-refresh-token",
+    "expires_in": 3599,
+    "token_type": "Bearer",
+}
+
+
+def make_oauth_adapter(token_response: dict | None = None) -> tuple[GoogleAdsAdapter, FakeHttpClient]:
+    fake = FakeHttpClient()
+    fake.add("POST", "oauth2.googleapis.com/token", token_response or dict(TOKEN_RESPONSE))
+    adapter = GoogleAdsAdapter(credentials=dict(OAUTH_CREDENTIALS), http_client=fake)
+    return adapter, fake
+
+
+class TestGoogleAdsOAuth:
+    """OAuthCapability: authorization URL, code exchange, token refresh."""
+
+    def test_oauth_capability_declared_in_manifest(self):
+        assert OAuthCapability in manifest.capabilities
+        assert manifest.auth.oauth is not None
+        assert manifest.auth.oauth.display_name == "Connect with Google Ads"
+        assert len(manifest.auth.oauth.credential_fields) == 2
+        assert manifest.auth.oauth.scopes == ["https://www.googleapis.com/auth/adwords"]
+
+    def test_access_token_not_required_in_manifest(self):
+        access_token_field = next(f for f in manifest.auth.required_fields if f.name == "access_token")
+        assert access_token_field.required is False
+        developer_token_field = next(f for f in manifest.auth.required_fields if f.name == "developer_token")
+        assert developer_token_field.required is True
+        customer_id_field = next(f for f in manifest.auth.required_fields if f.name == "customer_id")
+        assert customer_id_field.required is True
+
+    def test_get_authorize_url(self):
+        oauth_adapter, _ = make_oauth_adapter()
+        url = oauth_adapter.get_authorize_url("https://example.com/callback", state="abc123")
+        assert "accounts.google.com" in url
+        assert "client_id=test_client_id" in url
+        assert "response_type=code" in url
+        assert "redirect_uri=" in url
+        assert "state=abc123" in url
+        assert "access_type=offline" in url
+
+    def test_exchange_code_for_token(self):
+        oauth_adapter, fake = make_oauth_adapter()
+        tokens = oauth_adapter.exchange_code_for_token("auth-code", "https://example.com/callback")
+
+        call = fake.last_call()
+        assert call.method == "POST"
+        assert "oauth2.googleapis.com/token" in call.path
+        assert call.kwargs["data"] == {
+            "code": "auth-code",
+            "client_id": "test_client_id",
+            "client_secret": "test_client_secret",
+            "redirect_uri": "https://example.com/callback",
+            "grant_type": "authorization_code",
+        }
+        assert tokens.access_token == "new-access-token"
+        assert tokens.refresh_token == "new-refresh-token"
+        assert tokens.expires_in == 3599
+        assert tokens.extra["credentials"] == {
+            "access_token": "new-access-token",
+            "refresh_token": "new-refresh-token",
+            "client_id": "test_client_id",
+            "client_secret": "test_client_secret",
+        }
+
+    def test_refresh_token(self):
+        oauth_adapter, fake = make_oauth_adapter(
+            {"access_token": "refreshed-access-token", "expires_in": 3599, "token_type": "Bearer"}
+        )
+        tokens = oauth_adapter.refresh_token("old-refresh-token")
+
+        call = fake.last_call()
+        assert call.method == "POST"
+        assert call.kwargs["data"] == {
+            "refresh_token": "old-refresh-token",
+            "client_id": "test_client_id",
+            "client_secret": "test_client_secret",
+            "grant_type": "refresh_token",
+        }
+        assert tokens.access_token == "refreshed-access-token"
+        assert tokens.refresh_token == "old-refresh-token"
+        assert tokens.extra["credentials"]["access_token"] == "refreshed-access-token"
+        assert tokens.extra["credentials"]["refresh_token"] == "old-refresh-token"
+
+    def test_adapter_constructible_with_only_client_credentials(self):
+        oauth_adapter, _ = make_oauth_adapter()
+        assert oauth_adapter._client_id == "test_client_id"
+        assert oauth_adapter._client_secret == "test_client_secret"
+        assert oauth_adapter.validate_credentials() is True
+
+    def test_full_credentials_still_validate(self, adapter):
+        assert adapter.validate_credentials() is True
+
+    def test_supports_oauth_capability(self, adapter):
+        assert adapter.supports(OAuthCapability) is True

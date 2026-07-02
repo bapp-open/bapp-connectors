@@ -13,8 +13,10 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
-from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.capabilities import OAuthCapability, SocialPublishCapability
+from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
 from bapp_connectors.core.dto.social import PublishResult, PublishStatus, SocialMediaType
 from bapp_connectors.core.errors import AuthenticationError, PermanentProviderError, ValidationError
@@ -43,8 +45,11 @@ if TYPE_CHECKING:
         SocialPostStats,
     )
 
+_GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
-class YouTubeSocialAdapter(SocialPort, SocialPublishCapability):
+
+class YouTubeSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapability):
     """
     YouTube Data API v3 adapter.
 
@@ -59,6 +64,8 @@ class YouTubeSocialAdapter(SocialPort, SocialPublishCapability):
         self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs
     ):
         self.credentials = credentials
+        self._client_id = credentials.get("client_id", "")
+        self._client_secret = credentials.get("client_secret", "")
         config = self.manifest.settings.apply_defaults(config or {})
         self._channel_id: str = config.get("channel_id") or ""
         self._shorts_only = str(config.get("shorts_only", "true")).lower() in ("true", "1", "yes")
@@ -86,8 +93,9 @@ class YouTubeSocialAdapter(SocialPort, SocialPublishCapability):
             return False
         api_key = self.credentials.get("api_key")
         access_token = self.credentials.get("access_token")
+        # client_id + client_secret alone are enough to run the OAuth flow.
         if not api_key and not access_token:
-            return False
+            return bool(self._client_id and self._client_secret)
         # An API key alone cannot resolve `mine=true` — a channel_id setting is required.
         if not access_token and not self._channel_id:
             return False
@@ -104,6 +112,79 @@ class YouTubeSocialAdapter(SocialPort, SocialPublishCapability):
             )
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
+
+    # ── OAuthCapability ──
+
+    def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
+        scopes = self.manifest.auth.oauth.scopes if self.manifest.auth.oauth else []
+        params = {
+            "client_id": self._client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": " ".join(scopes),
+            "access_type": "offline",
+            "prompt": "consent",
+            "state": state,
+        }
+        return f"{_GOOGLE_AUTH_URL}?{urlencode(params)}"
+
+    def exchange_code_for_token(self, code: str, redirect_uri: str, state: str = "") -> OAuthTokens:
+        response = self.client.http.call(
+            "POST",
+            _GOOGLE_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+        data = response if isinstance(response, dict) else {}
+        access_token = data.get("access_token", "")
+        refresh_tok = data.get("refresh_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            refresh_token=refresh_tok,
+            expires_in=data.get("expires_in"),
+            token_type=data.get("token_type", "Bearer"),
+            extra={
+                "credentials": {
+                    "access_token": access_token,
+                    "refresh_token": refresh_tok,
+                    "client_id": self._client_id,
+                    "client_secret": self._client_secret,
+                },
+            },
+        )
+
+    def refresh_token(self, refresh_token: str) -> OAuthTokens:
+        response = self.client.http.call(
+            "POST",
+            _GOOGLE_TOKEN_URL,
+            data={
+                "refresh_token": refresh_token,
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+                "grant_type": "refresh_token",
+            },
+        )
+        data = response if isinstance(response, dict) else {}
+        access_token = data.get("access_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=data.get("expires_in"),
+            token_type=data.get("token_type", "Bearer"),
+            extra={
+                "credentials": {
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "client_id": self._client_id,
+                    "client_secret": self._client_secret,
+                },
+            },
+        )
 
     # ── SocialPort ──
 

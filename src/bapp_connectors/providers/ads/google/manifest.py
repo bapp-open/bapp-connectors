@@ -4,10 +4,11 @@ Google Ads provider manifest — declares capabilities, auth, rate limits.
 Uses the Google Ads REST API v17 (https://developers.google.com/google-ads/api/rest/overview).
 """
 
-from bapp_connectors.core.capabilities import CreativeUploadCapability
+from bapp_connectors.core.capabilities import CreativeUploadCapability, OAuthCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
+    OAuthConfig,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
@@ -36,6 +37,7 @@ manifest = ProviderManifest(
                 name="access_token",
                 label="Access Token",
                 sensitive=True,
+                required=False,
                 help_text="OAuth2 access token with https://www.googleapis.com/auth/adwords scope.",
             ),
             CredentialField(
@@ -49,7 +51,29 @@ manifest = ProviderManifest(
                 required=False,
                 help_text="Manager/MCC account ID when accessing a client account.",
             ),
+            CredentialField(
+                name="client_id",
+                label="Client ID",
+                sensitive=False,
+                required=False,
+                help_text="OAuth2 client ID for the redirect-based authorization flow.",
+            ),
+            CredentialField(
+                name="client_secret",
+                label="Client Secret",
+                sensitive=True,
+                required=False,
+                help_text="OAuth2 client secret for the redirect-based authorization flow.",
+            ),
         ],
+        oauth=OAuthConfig(
+            credential_fields=[
+                CredentialField(name="client_id", label="Client ID", sensitive=False),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+            ],
+            scopes=["https://www.googleapis.com/auth/adwords"],
+            display_name="Connect with Google Ads",
+        ),
     ),
     settings=SettingsConfig(
         fields=[
@@ -65,6 +89,7 @@ manifest = ProviderManifest(
     capabilities=[
         AdsPort,
         CreativeUploadCapability,
+        OAuthCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,
