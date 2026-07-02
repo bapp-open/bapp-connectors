@@ -18,8 +18,8 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 | storage | `StoragePort` | Dropbox, FTP, SFTP, S3, WebDAV |
 | llm | `LLMPort` | OpenAI, Anthropic, Ollama, Gemini |
 | feed | `FeedPort` | Google Merchant, Facebook Commerce, Compari.ro |
-| social | `SocialPort` | TikTok, YouTube Shorts, Facebook Page |
-| ads | `AdsPort` | Facebook Ads, TikTok Ads, Google Ads |
+| social | `SocialPort` | TikTok, YouTube Shorts, Facebook Page, Instagram, Threads, LinkedIn Page, Pinterest |
+| ads | `AdsPort` | Facebook Ads, TikTok Ads, Google Ads, Microsoft Ads, LinkedIn Ads, Pinterest Ads |
 
 ### Provider File Structure (7 files each)
 

@@ -36,10 +36,10 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Storage** | Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV | 7 |
 | **LLM** | Anthropic, Google Gemini, Ollama, OpenAI | 4 |
 | **Feed** | Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro | 4 |
-| **Ads** | Facebook Ads, Google Ads, TikTok Ads | 3 |
+| **Ads** | Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads | 6 |
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
-| **Social** | Facebook Page, TikTok, YouTube Shorts | 3 |
-| | **Total** | **53** |
+| **Social** | Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts | 7 |
+| | **Total** | **60** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -245,9 +245,9 @@ packages/connectors/
 │       ├── storage/       # Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV
 │       ├── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
 │       ├── feed/          # Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro
-│       ├── ads/           # Facebook Ads, Google Ads, TikTok Ads
+│       ├── ads/           # Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads
 │       ├── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
-│       └── social/        # Facebook Page, TikTok, YouTube Shorts
+│       └── social/        # Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts
 <!-- STRUCTURE:END -->
 ├── packages/django/        # Django integration (separate uv workspace)
 │   └── src/django_bapp_connectors/

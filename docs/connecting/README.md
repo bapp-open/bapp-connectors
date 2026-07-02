@@ -7,9 +7,21 @@ Step-by-step connection guides for the `social` and `ads` provider families:
 | social | TikTok | [social/tiktok.md](social/tiktok.md) |
 | social | YouTube Shorts | [social/youtube.md](social/youtube.md) |
 | social | Facebook Page | [social/facebook.md](social/facebook.md) |
+| social | Instagram | [social/instagram.md](social/instagram.md) |
+| social | Threads | [social/threads.md](social/threads.md) |
+| social | LinkedIn Page | [social/linkedin.md](social/linkedin.md) |
+| social | Pinterest | [social/pinterest.md](social/pinterest.md) |
 | ads | Facebook Ads | [ads/facebook.md](ads/facebook.md) |
 | ads | TikTok Ads | [ads/tiktok.md](ads/tiktok.md) |
 | ads | Google Ads | [ads/google.md](ads/google.md) |
+| ads | Microsoft Ads | [ads/microsoft.md](ads/microsoft.md) |
+| ads | LinkedIn Ads | [ads/linkedin.md](ads/linkedin.md) |
+| ads | Pinterest Ads | [ads/pinterest.md](ads/pinterest.md) |
+
+Note: Instagram *advertising* runs through `ads/facebook` (Meta placements),
+and YouTube *advertising* through `ads/google` (VIDEO campaigns) — no separate
+providers needed. LinkedIn Ads and Pinterest Ads promote organic posts/pins
+created via their social siblings.
 
 ## The universal stats interface (social)
 
