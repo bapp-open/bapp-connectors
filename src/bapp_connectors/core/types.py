@@ -18,6 +18,8 @@ class ProviderFamily(StrEnum):
     STORAGE = "storage"
     LLM = "llm"
     FEED = "feed"
+    SOCIAL = "social"
+    ADS = "ads"
 
 
 class BackoffStrategy(StrEnum):

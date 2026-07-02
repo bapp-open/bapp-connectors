@@ -2,6 +2,17 @@
 Normalized data transfer objects for cross-provider communication.
 """
 
+from .ads import (
+    Ad,
+    AdCampaign,
+    AdCreative,
+    AdEntityStatus,
+    AdGroup,
+    AdInsights,
+    AdInsightsLevel,
+    AdObjective,
+    AdTargeting,
+)
 from .base import BaseDTO, BulkResult, ConnectionTestResult, PaginatedResult, ProviderMeta
 from .email import (
     EmailAddress,
@@ -55,11 +66,27 @@ from .product import (
 )
 from .saved_payment import CardBrand, SavedPaymentMethod
 from .shipment import AWBLabel, Parcel, Shipment, ShipmentStatus, TrackingEvent
+from .social import (
+    SocialAccount,
+    SocialAccountStats,
+    SocialMediaType,
+    SocialPost,
+    SocialPostStats,
+)
 from .subscription import Subscription, SubscriptionInterval, SubscriptionStatus
 from .webhook import WebhookEvent, WebhookEventType
 
 __all__ = [
     "AWBLabel",
+    "Ad",
+    "AdCampaign",
+    "AdCreative",
+    "AdEntityStatus",
+    "AdGroup",
+    "AdInsights",
+    "AdInsightsLevel",
+    "AdObjective",
+    "AdTargeting",
     "Address",
     "AttributeDefinition",
     "AttributeValue",
@@ -124,6 +151,11 @@ __all__ = [
     "SavedPaymentMethod",
     "Shipment",
     "ShipmentStatus",
+    "SocialAccount",
+    "SocialAccountStats",
+    "SocialMediaType",
+    "SocialPost",
+    "SocialPostStats",
     "Subscription",
     "SubscriptionInterval",
     "SubscriptionStatus",
