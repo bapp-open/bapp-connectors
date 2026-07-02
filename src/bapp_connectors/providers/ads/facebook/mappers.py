@@ -20,8 +20,10 @@ from bapp_connectors.core.dto.ads import (
     AdGroup,
     AdInsights,
     AdInsightsLevel,
+    AdMediaType,
     AdObjective,
     AdTargeting,
+    UploadedAdMedia,
 )
 from bapp_connectors.core.errors import ValidationError
 
@@ -334,9 +336,57 @@ def ad_to_meta_payload(ad: Ad | dict, for_create: bool = False) -> dict:
     elif for_create:
         raise ValidationError(
             "Meta ads require a creative: set creative.id to an existing creative ID "
-            "or provide extra['object_story_spec']."
+            "(e.g. from CreativeUploadCapability.create_creative) or provide extra['object_story_spec']."
         )
     return payload
+
+
+# ── Creatives ──
+
+
+def _call_to_action(creative: AdCreative) -> dict:
+    """Build a Marketing API call_to_action spec pointing at the landing URL."""
+    return {
+        "type": creative.call_to_action or "LEARN_MORE",
+        "value": {"link": creative.landing_url},
+    }
+
+
+def creative_to_meta_payload(creative: AdCreative, media: UploadedAdMedia | None, page_id: str) -> dict:
+    """Build a Marketing API ad creative payload (object_story_spec) from a DTO.
+
+    Video media becomes ``video_data``; image media (or no media but a landing
+    URL) becomes ``link_data``. ``link_data`` requires ``creative.landing_url``.
+    """
+    spec: dict = {"page_id": page_id}
+
+    if media is not None and media.media_type == AdMediaType.VIDEO:
+        video_data: dict = {"video_id": media.id}
+        if creative.body:
+            video_data["message"] = creative.body
+        if creative.landing_url:
+            video_data["call_to_action"] = _call_to_action(creative)
+        if creative.thumbnail_url:
+            video_data["image_url"] = creative.thumbnail_url
+        spec["video_data"] = video_data
+    elif media is not None or creative.landing_url:
+        if not creative.landing_url:
+            raise ValidationError("Meta link_data creatives require creative.landing_url.")
+        link_data: dict = {"link": creative.landing_url}
+        if creative.body:
+            link_data["message"] = creative.body
+        if creative.title:
+            link_data["name"] = creative.title
+        if media is not None and media.media_type == AdMediaType.IMAGE:
+            link_data["image_hash"] = media.id
+        link_data["call_to_action"] = _call_to_action(creative)
+        spec["link_data"] = link_data
+    else:
+        raise ValidationError(
+            "Meta creatives require uploaded media (image/video) or a landing_url to build link_data."
+        )
+
+    return {"name": creative.title or "Creative", "object_story_spec": spec}
 
 
 # ── Insights ──

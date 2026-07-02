@@ -4,6 +4,7 @@ Facebook/Meta Ads provider manifest — declares capabilities, auth, rate limits
 Uses the Meta Marketing API v19.0 (https://developers.facebook.com/docs/marketing-apis/).
 """
 
+from bapp_connectors.core.capabilities import CreativeUploadCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -56,10 +57,18 @@ manifest = ProviderManifest(
                 default="IMPRESSIONS",
                 help_text="Billing event applied to newly created ad sets.",
             ),
+            SettingsField(
+                name="page_id",
+                label="Facebook Page ID",
+                field_type=FieldType.STR,
+                required=False,
+                help_text="Facebook Page ID that creatives publish as; required for create_creative.",
+            ),
         ],
     ),
     capabilities=[
         AdsPort,
+        CreativeUploadCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,

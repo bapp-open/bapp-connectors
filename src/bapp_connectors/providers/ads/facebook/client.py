@@ -79,3 +79,35 @@ class MetaAdsClient:
     def update(self, object_id: str, payload: dict) -> dict:
         """POST field updates to an existing object."""
         return self._parse(self.http.call("POST", object_id, json=payload))
+
+    # ── Media & creatives ──
+
+    def upload_image(self, files: dict | None = None, payload: dict | None = None) -> dict:
+        """POST an ad image to act_{id}/adimages.
+
+        Pass ``files`` for a multipart upload, or ``payload`` for a JSON body
+        (e.g. ``{"bytes": <base64>}``). Response: ``{"images": {<name>: {"hash": ..., "url": ...}}}``.
+        """
+        kwargs: dict = {}
+        if files is not None:
+            kwargs["files"] = files
+        if payload is not None:
+            kwargs["json"] = payload
+        return self._parse(self.http.call("POST", self.account_path("adimages"), **kwargs))
+
+    def upload_video(self, payload: dict | None = None, files: dict | None = None) -> dict:
+        """POST an ad video to act_{id}/advideos.
+
+        Pass ``payload`` for a JSON body (e.g. ``{"file_url": ...}``), or
+        ``files`` for a multipart upload of the ``source`` field. Response: ``{"id": ...}``.
+        """
+        kwargs: dict = {}
+        if payload is not None:
+            kwargs["json"] = payload
+        if files is not None:
+            kwargs["files"] = files
+        return self._parse(self.http.call("POST", self.account_path("advideos"), **kwargs))
+
+    def create_creative_object(self, payload: dict) -> dict:
+        """POST a new ad creative to act_{id}/adcreatives. Returns ``{"id": ...}``."""
+        return self._parse(self.http.call("POST", self.account_path("adcreatives"), json=payload))

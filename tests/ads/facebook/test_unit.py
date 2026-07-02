@@ -10,6 +10,7 @@ from decimal import Decimal
 
 import pytest
 
+from bapp_connectors.core.capabilities import CreativeUploadCapability
 from bapp_connectors.core.dto.ads import (
     Ad,
     AdCampaign,
@@ -17,10 +18,13 @@ from bapp_connectors.core.dto.ads import (
     AdEntityStatus,
     AdGroup,
     AdInsightsLevel,
+    AdMediaAsset,
+    AdMediaType,
     AdObjective,
     AdTargeting,
+    UploadedAdMedia,
 )
-from bapp_connectors.core.errors import ValidationError
+from bapp_connectors.core.errors import ConfigurationError, ValidationError
 from bapp_connectors.providers.ads.facebook.adapter import MetaAdsAdapter
 from bapp_connectors.providers.ads.facebook.mappers import (
     META_TO_OBJECTIVE,
@@ -385,3 +389,137 @@ class TestConnectionAndFiltering:
         result = adapter.list_campaigns()
         assert result.cursor == "cursor_xyz"
         assert result.has_more is True
+
+
+ADIMAGES_RESPONSE = {"images": {"img.jpg": {"hash": "abc123", "url": "https://cdn.fbcdn.example/img.jpg"}}}
+
+
+@pytest.fixture
+def media_http(fake_http: FakeHttpClient) -> FakeHttpClient:
+    fake_http.add("POST", f"act_{ACCOUNT_ID}/adimages", ADIMAGES_RESPONSE)
+    fake_http.add("POST", f"act_{ACCOUNT_ID}/advideos", {"id": "vid_1"})
+    fake_http.add("POST", f"act_{ACCOUNT_ID}/adcreatives", {"id": "cr_new"})
+    return fake_http
+
+
+@pytest.fixture
+def page_adapter(media_http: FakeHttpClient) -> MetaAdsAdapter:
+    """Adapter configured with the page_id setting required by create_creative."""
+    return MetaAdsAdapter(
+        credentials={"token": "test-token", "ad_account_id": ACCOUNT_ID},
+        http_client=media_http,
+        config={"page_id": "42"},
+    )
+
+
+class TestMediaUpload:
+    def test_supports_creative_upload_capability(self, adapter):
+        assert adapter.supports(CreativeUploadCapability) is True
+
+    def test_upload_image_from_content(self, page_adapter, media_http):
+        media = page_adapter.upload_media(
+            AdMediaAsset(media_type=AdMediaType.IMAGE, content=b"\xff\xd8jpegbytes", filename="img.jpg")
+        )
+        call = media_http.last_call()
+        assert call.method == "POST"
+        assert call.path == f"act_{ACCOUNT_ID}/adimages"
+        assert call.kwargs["files"] == {"filename": ("img.jpg", b"\xff\xd8jpegbytes")}
+        assert media.id == "abc123"
+        assert media.media_type == AdMediaType.IMAGE
+        assert media.url == "https://cdn.fbcdn.example/img.jpg"
+
+    def test_upload_image_from_file_path(self, page_adapter, media_http, tmp_path):
+        path = tmp_path / "banner.png"
+        path.write_bytes(b"pngbytes")
+        media = page_adapter.upload_media(AdMediaAsset(media_type=AdMediaType.IMAGE, file_path=str(path)))
+        assert media_http.last_call().kwargs["files"] == {"filename": ("banner.png", b"pngbytes")}
+        assert media.id == "abc123"
+
+    def test_upload_image_with_url_raises(self, page_adapter):
+        with pytest.raises(ValidationError):
+            page_adapter.upload_media(AdMediaAsset(media_type=AdMediaType.IMAGE, url="https://example.com/img.jpg"))
+
+    def test_upload_image_without_source_raises(self, page_adapter):
+        with pytest.raises(ValidationError):
+            page_adapter.upload_media(AdMediaAsset(media_type=AdMediaType.IMAGE))
+
+    def test_upload_video_by_file_url(self, page_adapter, media_http):
+        media = page_adapter.upload_media(
+            AdMediaAsset(media_type=AdMediaType.VIDEO, url="https://example.com/spot.mp4")
+        )
+        call = media_http.last_call()
+        assert call.path == f"act_{ACCOUNT_ID}/advideos"
+        assert call.kwargs["json"] == {"file_url": "https://example.com/spot.mp4"}
+        assert media.id == "vid_1"
+        assert media.media_type == AdMediaType.VIDEO
+
+    def test_upload_video_from_content(self, page_adapter, media_http):
+        page_adapter.upload_media(AdMediaAsset(media_type=AdMediaType.VIDEO, content=b"mp4bytes"))
+        assert media_http.last_call().kwargs["files"] == {"source": ("video.mp4", b"mp4bytes")}
+
+
+class TestCreateCreative:
+    def test_create_creative_with_image_media(self, page_adapter, media_http):
+        creative = AdCreative(
+            title="Big sale",
+            body="Buy now",
+            call_to_action="SHOP_NOW",
+            landing_url="https://example.com/sale",
+        )
+        media = UploadedAdMedia(id="abc123", media_type=AdMediaType.IMAGE)
+        created = page_adapter.create_creative(creative, media)
+        call = next(c for c in media_http.calls if c.method == "POST" and "adcreatives" in c.path)
+        payload = call.kwargs["json"]
+        assert payload["name"] == "Big sale"
+        spec = payload["object_story_spec"]
+        assert spec["page_id"] == "42"
+        assert spec["link_data"]["image_hash"] == "abc123"
+        assert spec["link_data"]["link"] == "https://example.com/sale"
+        assert spec["link_data"]["message"] == "Buy now"
+        assert spec["link_data"]["call_to_action"] == {
+            "type": "SHOP_NOW",
+            "value": {"link": "https://example.com/sale"},
+        }
+        assert created.id == "cr_new"
+
+    def test_create_creative_with_video_media(self, page_adapter, media_http):
+        creative = AdCreative(
+            body="Watch this",
+            landing_url="https://example.com",
+            thumbnail_url="https://cdn.example/thumb.jpg",
+        )
+        media = UploadedAdMedia(id="vid_1", media_type=AdMediaType.VIDEO)
+        created = page_adapter.create_creative(creative, media)
+        call = next(c for c in media_http.calls if c.method == "POST" and "adcreatives" in c.path)
+        spec = call.kwargs["json"]["object_story_spec"]
+        assert spec["video_data"]["video_id"] == "vid_1"
+        assert spec["video_data"]["message"] == "Watch this"
+        assert spec["video_data"]["image_url"] == "https://cdn.example/thumb.jpg"
+        assert spec["video_data"]["call_to_action"] == {"type": "LEARN_MORE", "value": {"link": "https://example.com"}}
+        assert created.id == "cr_new"
+
+    def test_create_creative_without_page_id_raises(self, adapter):
+        with pytest.raises(ConfigurationError):
+            adapter.create_creative(AdCreative(landing_url="https://example.com"))
+
+    def test_link_data_without_landing_url_raises(self, page_adapter):
+        media = UploadedAdMedia(id="abc123", media_type=AdMediaType.IMAGE)
+        with pytest.raises(ValidationError):
+            page_adapter.create_creative(AdCreative(title="No link"), media)
+
+    def test_create_creative_without_media_or_landing_url_raises(self, page_adapter):
+        with pytest.raises(ValidationError):
+            page_adapter.create_creative(AdCreative(title="Nothing usable"))
+
+    def test_upload_create_creative_create_ad_flow(self, page_adapter, media_http):
+        media = page_adapter.upload_media(
+            AdMediaAsset(media_type=AdMediaType.IMAGE, content=b"jpegbytes", filename="img.jpg")
+        )
+        creative = page_adapter.create_creative(
+            AdCreative(title="Flow", body="End to end", landing_url="https://example.com"),
+            media,
+        )
+        ad = page_adapter.create_ad(Ad(ad_group_id="set_1", name="Flow ad", creative=creative))
+        create_call = next(c for c in media_http.calls if c.method == "POST" and c.path == f"act_{ACCOUNT_ID}/ads")
+        assert create_call.kwargs["json"]["creative"] == {"creative_id": "cr_new"}
+        assert ad.id == "ad_new"

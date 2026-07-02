@@ -11,16 +11,23 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 
+from bapp_connectors.core.capabilities import CreativeUploadCapability
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
 from bapp_connectors.core.dto.ads import (
     Ad,
     AdCampaign,
+    AdCreative,
     AdEntityStatus,
     AdGroup,
     AdInsights,
     AdInsightsLevel,
+    AdMediaAsset,
+    AdMediaType,
+    UploadedAdMedia,
 )
+from bapp_connectors.core.errors import ConfigurationError, ValidationError
 from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
 from bapp_connectors.core.ports import AdsPort
 from bapp_connectors.providers.ads.facebook.client import MetaAdsClient
@@ -32,6 +39,7 @@ from bapp_connectors.providers.ads.facebook.mappers import (
     ad_to_meta_payload,
     campaign_from_meta,
     campaign_to_meta_payload,
+    creative_to_meta_payload,
     insights_from_meta,
 )
 
@@ -43,12 +51,13 @@ INSIGHTS_LEVEL_TO_META: dict[AdInsightsLevel, str] = {
 }
 
 
-class MetaAdsAdapter(AdsPort):
+class MetaAdsAdapter(AdsPort, CreativeUploadCapability):
     """
     Meta Marketing API adapter.
 
     Implements AdsPort: campaigns, ad groups (Meta ad sets), ads, and the
-    universal insights interface.
+    universal insights interface. Also implements CreativeUploadCapability:
+    media upload (adimages/advideos) and creative creation (adcreatives).
     """
 
     manifest = manifest
@@ -73,6 +82,7 @@ class MetaAdsAdapter(AdsPort):
     ):
         self.credentials = credentials
         config = config or {}
+        self.config = config
         self._optimization_goal = config.get("default_optimization_goal", "LINK_CLICKS")
         self._billing_event = config.get("default_billing_event", "IMPRESSIONS")
 
@@ -192,6 +202,55 @@ class MetaAdsAdapter(AdsPort):
 
     def set_ad_status(self, ad_id: str, status: AdEntityStatus) -> Ad:
         return self.update_ad(ad_id, {"status": status})
+
+    # ── CreativeUploadCapability ──
+
+    @staticmethod
+    def _read_asset(asset: AdMediaAsset, default_filename: str) -> tuple[bytes, str]:
+        """Resolve the raw bytes and filename for a local media asset."""
+        if asset.content is not None:
+            return asset.content, asset.filename or default_filename
+        if asset.file_path:
+            path = Path(asset.file_path)
+            return path.read_bytes(), asset.filename or path.name
+        raise ValidationError("Media asset has no usable source: provide content bytes or file_path.")
+
+    def upload_media(self, asset: AdMediaAsset) -> UploadedAdMedia:
+        if asset.media_type == AdMediaType.IMAGE:
+            if asset.url:
+                raise ValidationError(
+                    "Meta adimages cannot fetch a remote URL; download the image and "
+                    "provide it as content bytes or a file_path."
+                )
+            content, filename = self._read_asset(asset, default_filename="image.jpg")
+            response = self.client.upload_image(files={"filename": (filename, content)})
+            images = response.get("images") or {}
+            if not images:
+                raise ValidationError("Meta adimages response contained no images.")
+            image = next(iter(images.values()))
+            return UploadedAdMedia(
+                id=str(image.get("hash", "")),
+                media_type=AdMediaType.IMAGE,
+                url=image.get("url", ""),
+            )
+
+        if asset.url:
+            response = self.client.upload_video(payload={"file_url": asset.url})
+        else:
+            content, filename = self._read_asset(asset, default_filename="video.mp4")
+            response = self.client.upload_video(files={"source": (filename, content)})
+        return UploadedAdMedia(id=str(response.get("id", "")), media_type=AdMediaType.VIDEO)
+
+    def create_creative(self, creative: AdCreative, media: UploadedAdMedia | None = None) -> AdCreative:
+        page_id = self.config.get("page_id")
+        if not page_id:
+            raise ConfigurationError(
+                "Meta creative creation requires the page_id setting "
+                "(the Facebook Page the creative publishes as)."
+            )
+        payload = creative_to_meta_payload(creative, media, str(page_id))
+        created = self.client.create_creative_object(payload)
+        return creative.model_copy(update={"id": str(created["id"])})
 
     # ── Universal insights ──
 
