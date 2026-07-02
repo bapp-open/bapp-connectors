@@ -3,7 +3,7 @@ Google Ads advertising adapter — implements AdsPort.
 
 Uses the Google Ads REST API v17 (not the gRPC surface): reads are GAQL
 queries via ``googleAds:search``, writes are per-resource ``:mutate``
-endpoints (campaignBudgets, campaigns, adGroups, adGroupAds).
+endpoints (campaignBudgets, campaigns, adGroups, adGroupAds, assets).
 
 Normalized mapping: Google "campaign" -> AdCampaign, "ad group" -> AdGroup,
 "ad group ad" -> Ad. Money is micros in the account currency. OAuth token
@@ -13,18 +13,25 @@ credential.
 
 from __future__ import annotations
 
+import base64
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from bapp_connectors.core.capabilities import CreativeUploadCapability
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
 from bapp_connectors.core.dto.ads import (
     Ad,
     AdCampaign,
+    AdCreative,
     AdEntityStatus,
     AdGroup,
     AdInsights,
     AdInsightsLevel,
+    AdMediaAsset,
+    AdMediaType,
+    UploadedAdMedia,
 )
-from bapp_connectors.core.errors import ConnectorError, ValidationError
+from bapp_connectors.core.errors import ConnectorError, UnsupportedFeatureError, ValidationError
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import AdsPort
 from bapp_connectors.providers.ads.google.client import GoogleAdsClient
@@ -96,7 +103,7 @@ def _numeric_id(entity: str, value: str) -> str:
     return value
 
 
-class GoogleAdsAdapter(AdsPort):
+class GoogleAdsAdapter(AdsPort, CreativeUploadCapability):
     """
     Google Ads REST API v17 adapter.
 
@@ -108,6 +115,8 @@ class GoogleAdsAdapter(AdsPort):
     - DELETED maps to Google's remove operation (status REMOVED); removed
       entities stay queryable.
     - Ads are immutable once created — only status can change.
+    - CreativeUploadCapability covers image assets only (``assets:mutate``);
+      video hosting and standalone creatives don't exist on Google Ads.
     """
 
     manifest = manifest
@@ -419,6 +428,59 @@ class GoogleAdsAdapter(AdsPort):
         update = {"resourceName": resource_name, "status": status_to_google(status)}
         self.client.mutate("adGroupAds", [{"update": update, "updateMask": "status"}])
         return self.get_ad(ad_id)
+
+    # ── CreativeUploadCapability ──
+
+    def upload_media(self, asset: AdMediaAsset) -> UploadedAdMedia:
+        """Upload an image to the Google Ads asset library via ``assets:mutate``.
+
+        Google needs the image data inline (base64), so provide ``content``
+        bytes or a local ``file_path`` — a ``url``-only asset is rejected.
+        The created IMAGE asset is usable for display / Performance Max
+        formats managed outside this adapter; responsive search ads created
+        by create_ad are text-only and don't reference it.
+        """
+        media_type = AdMediaType(asset.media_type)
+        if media_type == AdMediaType.VIDEO:
+            raise UnsupportedFeatureError(
+                "Google Ads cannot host video files — upload the video to YouTube "
+                "(e.g. via the social/youtube provider's publish capability) and "
+                "create a YOUTUBE_VIDEO asset from the video id instead."
+            )
+        if asset.content is not None:
+            data = asset.content
+        elif asset.file_path:
+            data = Path(asset.file_path).read_bytes()
+        else:
+            raise ValidationError(
+                "Google Ads image assets require the image data inline — provide "
+                "'content' bytes or a local 'file_path'; Google cannot fetch from a URL."
+            )
+        create_op = {
+            "name": asset.filename or "image asset",
+            "type": "IMAGE",
+            "imageAsset": {"data": base64.b64encode(data).decode("ascii")},
+        }
+        response = self.client.mutate("assets", [{"create": create_op}])
+        # The created resourceName is "customers/{cid}/assets/{asset_id}".
+        resource_name = self._mutated_resource_name(response)
+        return UploadedAdMedia(
+            id=resource_name,
+            media_type=AdMediaType.IMAGE,
+            extra={"asset_id": extract_resource_id(resource_name)},
+        )
+
+    def create_creative(self, creative: AdCreative, media: UploadedAdMedia | None = None) -> AdCreative:
+        """Not available on Google Ads — always raises UnsupportedFeatureError.
+
+        Image assets uploaded via upload_media are usable for display /
+        Performance Max formats managed outside this adapter.
+        """
+        raise UnsupportedFeatureError(
+            "Google search ads have no standalone creative resource — ad content is "
+            "inline in create_ad (a responsive search ad built from AdCreative "
+            "title/body/landing_url)."
+        )
 
     # ── Universal insights ──
 

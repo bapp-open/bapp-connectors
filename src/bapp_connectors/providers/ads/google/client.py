@@ -82,7 +82,7 @@ class GoogleAdsClient:
     def mutate(self, resource: str, operations: list[dict]) -> dict:
         """{resource}:mutate — apply create/update/remove operations.
 
-        ``resource`` is one of: campaignBudgets, campaigns, adGroups, adGroupAds.
+        ``resource`` is one of: campaignBudgets, campaigns, adGroups, adGroupAds, assets.
         Returns {"results": [{"resourceName": ...}, ...]}.
         """
         response = self.http.call(

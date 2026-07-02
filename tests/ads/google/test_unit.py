@@ -4,12 +4,14 @@ Google Ads adapter unit tests + contract tests.
 
 from __future__ import annotations
 
+import base64
 import re
 from datetime import datetime
 from decimal import Decimal
 
 import pytest
 
+from bapp_connectors.core.capabilities import CreativeUploadCapability
 from bapp_connectors.core.dto.ads import (
     Ad,
     AdCampaign,
@@ -17,9 +19,11 @@ from bapp_connectors.core.dto.ads import (
     AdEntityStatus,
     AdGroup,
     AdInsightsLevel,
+    AdMediaAsset,
+    AdMediaType,
     AdObjective,
 )
-from bapp_connectors.core.errors import PermanentProviderError, ValidationError
+from bapp_connectors.core.errors import PermanentProviderError, UnsupportedFeatureError, ValidationError
 from bapp_connectors.providers.ads.google.adapter import GoogleAdsAdapter
 from bapp_connectors.providers.ads.google.client import GoogleAdsClient, sanitize_customer_id
 from bapp_connectors.providers.ads.google.errors import extract_ad_id, extract_resource_id
@@ -196,6 +200,7 @@ def fake_http() -> FakeHttpClient:
     fake.add(
         "POST", "adGroupAds:mutate", {"results": [{"resourceName": f"customers/{CUSTOMER_ID}/adGroupAds/333~888"}]}
     )
+    fake.add("POST", "assets:mutate", {"results": [{"resourceName": f"customers/{CUSTOMER_ID}/assets/999"}]})
     return fake
 
 
@@ -451,3 +456,56 @@ class TestGoogleAdsAdapter:
         result = adapter.test_connection()
         assert result.success is True
         assert "CB Soft" in result.message
+
+
+IMAGE_BYTES = b"\x89PNG\r\n\x1a\nfake-image-bytes"
+
+
+class TestGoogleAdsCreativeUpload:
+    """CreativeUploadCapability: image assets via assets:mutate, honest boundaries elsewhere."""
+
+    def test_supports_creative_upload_capability(self, adapter):
+        assert adapter.supports(CreativeUploadCapability) is True
+
+    def test_upload_image_from_bytes(self, adapter, fake_http):
+        asset = AdMediaAsset(media_type=AdMediaType.IMAGE, content=IMAGE_BYTES, filename="banner.png")
+        uploaded = adapter.upload_media(asset)
+
+        mutate_call = next(call for call in fake_http.calls if "assets:mutate" in call.path)
+        assert mutate_call.path == f"customers/{CUSTOMER_ID}/assets:mutate"
+        create_op = mutate_call.kwargs["json"]["operations"][0]["create"]
+        assert create_op["name"] == "banner.png"
+        assert create_op["type"] == "IMAGE"
+        assert base64.b64decode(create_op["imageAsset"]["data"]) == IMAGE_BYTES
+
+        assert uploaded.id == f"customers/{CUSTOMER_ID}/assets/999"
+        assert uploaded.media_type is AdMediaType.IMAGE
+        assert uploaded.extra["asset_id"] == "999"
+
+    def test_upload_image_from_file_path(self, adapter, fake_http, tmp_path):
+        image_file = tmp_path / "banner.png"
+        image_file.write_bytes(IMAGE_BYTES)
+        uploaded = adapter.upload_media(AdMediaAsset(media_type=AdMediaType.IMAGE, file_path=str(image_file)))
+
+        mutate_call = next(call for call in fake_http.calls if "assets:mutate" in call.path)
+        create_op = mutate_call.kwargs["json"]["operations"][0]["create"]
+        assert create_op["name"] == "image asset"  # no filename given
+        assert base64.b64decode(create_op["imageAsset"]["data"]) == IMAGE_BYTES
+        assert uploaded.id == f"customers/{CUSTOMER_ID}/assets/999"
+        assert uploaded.extra["asset_id"] == "999"
+
+    def test_upload_image_url_only_rejected(self, adapter, fake_http):
+        with pytest.raises(ValidationError, match="inline"):
+            adapter.upload_media(AdMediaAsset(media_type=AdMediaType.IMAGE, url="https://example.com/banner.png"))
+        assert fake_http.calls == []
+
+    def test_upload_video_unsupported(self, adapter, fake_http):
+        with pytest.raises(UnsupportedFeatureError, match="YouTube"):
+            adapter.upload_media(AdMediaAsset(media_type=AdMediaType.VIDEO, content=b"video-bytes"))
+        assert fake_http.calls == []
+
+    def test_create_creative_unsupported(self, adapter, fake_http):
+        creative = AdCreative(title="Headline", body="Description", landing_url="https://example.com")
+        with pytest.raises(UnsupportedFeatureError, match="creative resource"):
+            adapter.create_creative(creative)
+        assert fake_http.calls == []

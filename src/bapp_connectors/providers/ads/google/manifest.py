@@ -4,6 +4,7 @@ Google Ads provider manifest — declares capabilities, auth, rate limits.
 Uses the Google Ads REST API v17 (https://developers.google.com/google-ads/api/rest/overview).
 """
 
+from bapp_connectors.core.capabilities import CreativeUploadCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -63,6 +64,7 @@ manifest = ProviderManifest(
     ),
     capabilities=[
         AdsPort,
+        CreativeUploadCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,
