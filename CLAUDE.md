@@ -101,3 +101,4 @@ Separate package at `packages/django/` (`django-bapp-connectors`). Provides abst
 
 - `docs/PROVIDER_GUIDE.md` — How to add a new provider
 - `docs/DJANGO_INTEGRATION.md` — How to use the Django package
+- `docs/connecting/` — Credential setup guides for social and ads providers
