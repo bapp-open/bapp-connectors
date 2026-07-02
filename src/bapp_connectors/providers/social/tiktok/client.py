@@ -78,3 +78,16 @@ class TikTokApiClient:
         body = {"filters": {"video_ids": video_ids}}
         response = self.http.call("POST", "video/query/", params={"fields": VIDEO_FIELDS}, json=body)
         return check_response(response)
+
+    def publish_video_init(self, post_info: dict, source_info: dict) -> dict:
+        """POST post/publish/video/init/ — returns ``data`` containing ``publish_id``."""
+        body = {"post_info": post_info, "source_info": source_info}
+        response = self.http.call("POST", "post/publish/video/init/", json=body)
+        return check_response(response)
+
+    def publish_status_fetch(self, publish_id: str) -> dict:
+        """POST post/publish/status/fetch/ — returns ``data`` with ``status``,
+        ``publicaly_available_post_id`` (sic) and ``fail_reason``."""
+        body = {"publish_id": publish_id}
+        response = self.http.call("POST", "post/publish/status/fetch/", json=body)
+        return check_response(response)

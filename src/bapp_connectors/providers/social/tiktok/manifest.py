@@ -4,6 +4,7 @@ TikTok Display API provider manifest — declares capabilities, auth, rate limit
 Uses TikTok Display API v2 (https://developers.tiktok.com/doc/display-api-get-started).
 """
 
+from bapp_connectors.core.capabilities import SocialPublishCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -18,7 +19,10 @@ manifest = ProviderManifest(
     name="tiktok",
     family=ProviderFamily.SOCIAL,
     display_name="TikTok",
-    description="TikTok Display API v2 integration for account profile, videos, and universal statistics.",
+    description=(
+        "TikTok Display API v2 integration for account profile, videos, and universal "
+        "statistics, with direct-post publishing via the Content Posting API."
+    ),
     base_url="https://open.tiktokapis.com/v2/",
     auth=AuthConfig(
         strategy=AuthStrategy.BEARER,
@@ -29,13 +33,15 @@ manifest = ProviderManifest(
                 sensitive=True,
                 help_text=(
                     "TikTok Login Kit OAuth user access token with scopes "
-                    "user.info.basic, user.info.profile, user.info.stats, video.list."
+                    "user.info.basic, user.info.profile, user.info.stats, video.list. "
+                    "Publishing additionally requires the video.publish scope."
                 ),
             ),
         ],
     ),
     capabilities=[
         SocialPort,
+        SocialPublishCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,

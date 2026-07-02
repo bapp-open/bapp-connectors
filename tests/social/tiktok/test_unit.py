@@ -8,7 +8,13 @@ from datetime import UTC, datetime
 
 import pytest
 
-from bapp_connectors.core.dto.social import SocialMediaType
+from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.dto.social import (
+    PublishStatus,
+    SocialMediaType,
+    SocialPostDraft,
+    SocialPrivacy,
+)
 from bapp_connectors.core.errors import (
     AuthenticationError,
     PermanentProviderError,
@@ -21,8 +27,10 @@ from bapp_connectors.providers.social.tiktok.errors import check_response
 from bapp_connectors.providers.social.tiktok.mappers import (
     account_from_tiktok,
     account_stats_from_tiktok,
+    draft_to_post_info,
     post_from_tiktok,
     post_stats_from_tiktok,
+    publish_result_from_status,
 )
 from tests.fake_http import FakeHttpClient
 from tests.social.contract import SocialContractTests
@@ -243,6 +251,135 @@ class TestTikTokAdapter:
         result = adapter.test_connection()
         assert result.success is False
         assert "invalid" in result.message
+
+
+PUBLISH_INIT_RESPONSE = {"data": {"publish_id": "v_pub_url~v2.123456789"}, "error": OK_ERROR}
+
+
+def _status_response(status: str, **extra) -> dict:
+    return {"data": {"status": status, **extra}, "error": OK_ERROR}
+
+
+class TestTikTokPublish:
+    """Content Posting API publish tests."""
+
+    @pytest.fixture
+    def draft(self) -> SocialPostDraft:
+        return SocialPostDraft(
+            title="My video #python",
+            description="fallback description",
+            media_type=SocialMediaType.SHORT_VIDEO,
+            media_url="https://cdn.example.com/video.mp4",
+            privacy=SocialPrivacy.PUBLIC,
+            extra={"disable_comment": True},
+        )
+
+    def test_supports_publish_capability(self, adapter):
+        assert adapter.supports(SocialPublishCapability) is True
+
+    def test_publish_post_sends_post_info_and_source_info(self, adapter, fake_http, draft):
+        fake_http.add("POST", "post/publish/video/init/", PUBLISH_INIT_RESPONSE)
+        result = adapter.publish_post(draft)
+
+        call = fake_http.last_call()
+        assert call.method == "POST"
+        assert call.path == "post/publish/video/init/"
+        assert call.kwargs["json"] == {
+            "post_info": {
+                "title": "My video #python",
+                "privacy_level": "PUBLIC_TO_EVERYONE",
+                "disable_comment": True,
+                "disable_duet": False,
+                "disable_stitch": False,
+            },
+            "source_info": {
+                "source": "PULL_FROM_URL",
+                "video_url": "https://cdn.example.com/video.mp4",
+            },
+        }
+        assert result.status == PublishStatus.PROCESSING
+        assert result.publish_id == "v_pub_url~v2.123456789"
+
+    def test_publish_post_private_maps_to_self_only(self, adapter, fake_http, draft):
+        fake_http.add("POST", "post/publish/video/init/", PUBLISH_INIT_RESPONSE)
+        adapter.publish_post(draft.model_copy(update={"privacy": SocialPrivacy.PRIVATE}))
+        call = fake_http.last_call()
+        assert call.kwargs["json"]["post_info"]["privacy_level"] == "SELF_ONLY"
+
+    def test_publish_post_requires_media_url(self, adapter, draft):
+        with pytest.raises(ValidationError, match="PULL_FROM_URL"):
+            adapter.publish_post(draft.model_copy(update={"media_url": "", "file_path": "/tmp/video.mp4"}))
+        with pytest.raises(ValidationError, match="PULL_FROM_URL"):
+            adapter.publish_post(draft.model_copy(update={"media_url": "", "content": b"video-bytes"}))
+
+    def test_publish_post_rejects_non_video(self, adapter, draft):
+        with pytest.raises(ValidationError, match="only supports videos"):
+            adapter.publish_post(draft.model_copy(update={"media_type": SocialMediaType.IMAGE}))
+
+    def test_check_publish_status_complete(self, adapter, fake_http):
+        fake_http.add("POST", "post/publish/status/fetch/", _status_response(
+            "PUBLISH_COMPLETE", publicaly_available_post_id=[7345678901234567890],
+        ))
+        result = adapter.check_publish_status("v_pub_url~v2.123456789")
+        call = fake_http.last_call()
+        assert call.kwargs["json"] == {"publish_id": "v_pub_url~v2.123456789"}
+        assert result.status == PublishStatus.PUBLISHED
+        assert result.post_id == "7345678901234567890"
+        assert result.publish_id == "v_pub_url~v2.123456789"
+        assert result.extra["tiktok_status"] == "PUBLISH_COMPLETE"
+
+    def test_check_publish_status_failed(self, adapter, fake_http):
+        fake_http.add("POST", "post/publish/status/fetch/", _status_response(
+            "FAILED", fail_reason="video_pull_failed",
+        ))
+        result = adapter.check_publish_status("v_pub_url~v2.123456789")
+        assert result.status == PublishStatus.FAILED
+        assert result.error == "video_pull_failed"
+        assert result.extra["tiktok_status"] == "FAILED"
+
+    def test_check_publish_status_processing(self, adapter, fake_http):
+        fake_http.add("POST", "post/publish/status/fetch/", _status_response("PROCESSING_DOWNLOAD"))
+        result = adapter.check_publish_status("v_pub_url~v2.123456789")
+        assert result.status == PublishStatus.PROCESSING
+        assert result.post_id == ""
+        assert result.extra["tiktok_status"] == "PROCESSING_DOWNLOAD"
+
+
+class TestTikTokPublishMappers:
+    """Publish mapper tests."""
+
+    def test_title_falls_back_to_description_and_truncates(self):
+        draft = SocialPostDraft(title="", description="x" * 3000)
+        info = draft_to_post_info(draft)
+        assert info["title"] == "x" * 2200
+
+    def test_unlisted_maps_to_self_only(self):
+        draft = SocialPostDraft(title="t", privacy=SocialPrivacy.UNLISTED)
+        assert draft_to_post_info(draft)["privacy_level"] == "SELF_ONLY"
+
+    def test_extra_flags_default_false(self):
+        info = draft_to_post_info(SocialPostDraft(title="t"))
+        assert info["disable_comment"] is False
+        assert info["disable_duet"] is False
+        assert info["disable_stitch"] is False
+
+    def test_publish_result_corrected_spelling_fallback(self):
+        result = publish_result_from_status("pub-1", {
+            "status": "PUBLISH_COMPLETE",
+            "publicly_available_post_id": [42],
+        })
+        assert result.status == PublishStatus.PUBLISHED
+        assert result.post_id == "42"
+
+    def test_publish_result_complete_without_post_id_list(self):
+        result = publish_result_from_status("pub-1", {"status": "PUBLISH_COMPLETE"})
+        assert result.status == PublishStatus.PUBLISHED
+        assert result.post_id == ""
+
+    def test_publish_result_inbox_status_is_processing(self):
+        result = publish_result_from_status("pub-1", {"status": "SEND_TO_USER_INBOX"})
+        assert result.status == PublishStatus.PROCESSING
+        assert result.extra["tiktok_status"] == "SEND_TO_USER_INBOX"
 
 
 class TestCheckResponse:

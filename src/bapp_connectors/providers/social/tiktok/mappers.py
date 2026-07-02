@@ -12,15 +12,28 @@ import re
 from datetime import UTC, datetime
 
 from bapp_connectors.core.dto.social import (
+    PublishResult,
+    PublishStatus,
     SocialAccount,
     SocialAccountStats,
     SocialMediaType,
     SocialPost,
+    SocialPostDraft,
     SocialPostStats,
+    SocialPrivacy,
 )
 from bapp_connectors.providers.social.tiktok.models import TikTokUser, TikTokVideo
 
 _HASHTAG_RE = re.compile(r"#(\w+)")
+
+# TikTok has no unlisted visibility — UNLISTED maps to SELF_ONLY.
+PRIVACY_TO_TIKTOK = {
+    SocialPrivacy.PUBLIC: "PUBLIC_TO_EVERYONE",
+    SocialPrivacy.PRIVATE: "SELF_ONLY",
+    SocialPrivacy.UNLISTED: "SELF_ONLY",
+}
+
+_TITLE_MAX_LENGTH = 2200  # TikTok caption limit
 
 
 def _extract_hashtags(*texts: str) -> list[str]:
@@ -84,6 +97,49 @@ def post_from_tiktok(video: dict) -> SocialPost:
         hashtags=_extract_hashtags(v.video_description, v.title),
         stats=post_stats_from_tiktok(video),
         extra={"embed_link": v.embed_link} if v.embed_link else {},
+    )
+
+
+def draft_to_post_info(draft: SocialPostDraft) -> dict:
+    """Map a SocialPostDraft to a Content Posting API ``post_info`` object."""
+    return {
+        "title": (draft.title or draft.description)[:_TITLE_MAX_LENGTH],
+        "privacy_level": PRIVACY_TO_TIKTOK[draft.privacy],
+        "disable_comment": draft.extra.get("disable_comment", False),
+        "disable_duet": draft.extra.get("disable_duet", False),
+        "disable_stitch": draft.extra.get("disable_stitch", False),
+    }
+
+
+def publish_result_from_status(publish_id: str, data: dict) -> PublishResult:
+    """Map a post/publish/status/fetch/ ``data`` object to a PublishResult.
+
+    TikTok statuses: PUBLISH_COMPLETE → PUBLISHED, FAILED → FAILED, anything
+    else (PROCESSING_UPLOAD, PROCESSING_DOWNLOAD, SEND_TO_USER_INBOX, ...) →
+    PROCESSING. The raw status is kept in ``extra["tiktok_status"]``.
+    """
+    tiktok_status = data.get("status", "")
+    if tiktok_status == "PUBLISH_COMPLETE":
+        # "publicaly" (sic) is TikTok's actual field name; check the corrected
+        # spelling too in case they ever fix it.
+        post_ids = data.get("publicaly_available_post_id") or data.get("publicly_available_post_id") or []
+        return PublishResult(
+            post_id=str(post_ids[0]) if post_ids else "",
+            publish_id=publish_id,
+            status=PublishStatus.PUBLISHED,
+            extra={"tiktok_status": tiktok_status},
+        )
+    if tiktok_status == "FAILED":
+        return PublishResult(
+            publish_id=publish_id,
+            status=PublishStatus.FAILED,
+            error=data.get("fail_reason", ""),
+            extra={"tiktok_status": tiktok_status},
+        )
+    return PublishResult(
+        publish_id=publish_id,
+        status=PublishStatus.PROCESSING,
+        extra={"tiktok_status": tiktok_status},
     )
 
 

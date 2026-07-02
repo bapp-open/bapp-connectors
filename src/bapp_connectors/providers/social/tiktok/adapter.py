@@ -11,8 +11,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from bapp_connectors.core.capabilities import SocialPublishCapability
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
-from bapp_connectors.core.errors import PermanentProviderError
+from bapp_connectors.core.dto.social import PublishResult, PublishStatus, SocialMediaType
+from bapp_connectors.core.errors import PermanentProviderError, ValidationError
 from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
 from bapp_connectors.core.ports import SocialPort
 from bapp_connectors.providers.social.tiktok.client import TikTokApiClient
@@ -20,7 +22,9 @@ from bapp_connectors.providers.social.tiktok.manifest import manifest
 from bapp_connectors.providers.social.tiktok.mappers import (
     account_from_tiktok,
     account_stats_from_tiktok,
+    draft_to_post_info,
     post_from_tiktok,
+    publish_result_from_status,
 )
 
 if TYPE_CHECKING:
@@ -30,16 +34,19 @@ if TYPE_CHECKING:
         SocialAccount,
         SocialAccountStats,
         SocialPost,
+        SocialPostDraft,
         SocialPostStats,
     )
 
 
-class TikTokSocialAdapter(SocialPort):
+class TikTokSocialAdapter(SocialPort, SocialPublishCapability):
     """
     TikTok Display API v2 adapter.
 
     Implements SocialPort: account profile, video listing with cursor
     pagination, single-video lookup, and the universal stats interface.
+    Implements SocialPublishCapability via the Content Posting API
+    (direct post, PULL_FROM_URL only).
 
     TikTok exposes lifetime counters only — account stats ignore the
     since/until period for filtering but pass it through in the result.
@@ -120,3 +127,36 @@ class TikTokSocialAdapter(SocialPort):
         data = self.client.get_user_info()
         stats = account_stats_from_tiktok(data.get("user", {}))
         return stats.model_copy(update={"period_start": since, "period_end": until})
+
+    # ── SocialPublishCapability ──
+
+    def publish_post(self, draft: SocialPostDraft) -> PublishResult:
+        """Publish a video via the Content Posting API (direct post).
+
+        TikTok pulls the video from a public URL (PULL_FROM_URL); publishing
+        is asynchronous — poll ``check_publish_status`` with the returned
+        ``publish_id`` until PUBLISHED or FAILED.
+        """
+        if draft.media_type not in (SocialMediaType.VIDEO, SocialMediaType.SHORT_VIDEO):
+            raise ValidationError(
+                f"TikTok direct post only supports videos, got media_type={draft.media_type}. "
+                "Photo posts use a different endpoint and are not supported."
+            )
+        if not draft.media_url:
+            raise ValidationError(
+                "TikTok direct post requires a publicly accessible media_url "
+                "(PULL_FROM_URL); chunked file upload from file_path/content "
+                "is not supported yet."
+            )
+        source_info = {"source": "PULL_FROM_URL", "video_url": draft.media_url}
+        data = self.client.publish_video_init(draft_to_post_info(draft), source_info)
+        return PublishResult(
+            publish_id=str(data.get("publish_id", "")),
+            status=PublishStatus.PROCESSING,
+            extra=data,
+        )
+
+    def check_publish_status(self, publish_id: str) -> PublishResult:
+        """Poll a publish operation via post/publish/status/fetch/."""
+        data = self.client.publish_status_fetch(publish_id)
+        return publish_result_from_status(publish_id, data)
