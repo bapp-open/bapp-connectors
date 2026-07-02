@@ -6,7 +6,7 @@ This file provides context for Claude Code when working in this repository.
 
 Ports-and-adapters integration framework. Zero Django dependencies in the core package.
 
-### Provider Families (8)
+### Provider Families (10)
 
 | Family | Port | Providers |
 |--------|------|-----------|
@@ -18,6 +18,8 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 | storage | `StoragePort` | Dropbox, FTP, SFTP, S3, WebDAV |
 | llm | `LLMPort` | OpenAI, Anthropic, Ollama, Gemini |
 | feed | `FeedPort` | Google Merchant, Facebook Commerce, Compari.ro |
+| social | `SocialPort` | TikTok, YouTube Shorts, Facebook Page |
+| ads | `AdsPort` | Facebook Ads, TikTok Ads, Google Ads |
 
 ### Provider File Structure (7 files each)
 
@@ -40,6 +42,8 @@ providers/{family}/{provider}/
 - **MessagingPort.reply():** Concrete method that builds OutboundMessage with reply_to from InboundMessage
 - **LLM platform-key fallback:** `api_key` credential is `required=False`, adapter checks `credentials.api_key` OR `config.platform_api_key`
 - **Conditional registration:** SFTP, S3, and MobilPay providers only register if paramiko/boto3/pyOpenSSL are installed
+- **Universal social stats:** `SocialPostStats`/`SocialAccountStats` fields are `None` when a platform doesn't expose a metric (never 0); platform-specific metrics go in `extra`
+- **Universal ads insights:** `AdsPort.get_insights(level, ...)` returns normalized `AdInsights` on the campaign → ad group → ad hierarchy (Meta "ad set" = TikTok "adgroup" = Google "ad group"); status changes go through `set_*_status`
 
 ### Optional Capabilities
 
