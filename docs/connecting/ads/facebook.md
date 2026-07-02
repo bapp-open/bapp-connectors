@@ -8,7 +8,8 @@ Creates and manages campaigns, ad sets, and ads, and reads performance, via the
 | Provider key | `ads` / `facebook` |
 | Auth | Access token (Bearer) |
 | Credentials | `token`, `ad_account_id` (numeric, without the `act_` prefix) |
-| Settings | `default_optimization_goal` (default `LINK_CLICKS`), `default_billing_event` (default `IMPRESSIONS`) |
+| Settings | `default_optimization_goal` (default `LINK_CLICKS`), `default_billing_event` (default `IMPRESSIONS`), `page_id` (required for creative creation) |
+| Capabilities | `CreativeUploadCapability` |
 
 ## What you get
 
@@ -67,14 +68,37 @@ for row in ads.get_insights(AdInsightsLevel.AD):
     print(row.entity_id, row.impressions, row.clicks, row.spend, row.conversions)
 ```
 
+## Uploading media & creating creatives
+
+Set the `page_id` setting (ads publish on behalf of a Page), then:
+
+```python
+from bapp_connectors.core.dto.ads import AdCreative, AdMediaAsset, AdMediaType
+
+media = ads.upload_media(AdMediaAsset(media_type=AdMediaType.VIDEO,
+                                      url="https://cdn.example.com/promo.mp4"))
+creative = ads.create_creative(
+    AdCreative(title="Summer sale", body="Up to 40% off", landing_url="https://example.com",
+               call_to_action="SHOP_NOW"),
+    media=media,
+)
+ads.create_ad(Ad(ad_group_id=ad_set.id, name="Promo video", creative=creative))
+```
+
+- **Images** upload from `file_path`/`content` (multipart to `adimages`; Meta
+  can't fetch image URLs) and become an `image_hash` used in link ads.
+- **Videos** upload from a fetchable `url` (`file_url`) or `file_path`/`content`.
+- The token needs `pages_read_engagement` (and the app advertiser access to
+  the Page) for `object_story_spec` creatives.
+
 ## Notes & limitations
 
 - **Budgets** are sent to Meta in minor units (cents) automatically — the DTOs
   use whole-currency `Decimal`s. Campaigns are created `PAUSED` by default;
   activate explicitly.
-- **Creatives:** pass an existing `creative.id`, or a raw
-  `object_story_spec` via `ad.extra["object_story_spec"]`. Creating creatives /
-  uploading media is not wrapped yet.
+- **Creatives:** use `upload_media` + `create_creative` (above), pass an
+  existing `creative.id`, or a raw `object_story_spec` via
+  `ad.extra["object_story_spec"]`.
 - New campaigns must declare `special_ad_categories`; the adapter sends `[]`
   (none) — housing/credit/employment/politics advertisers must set the correct
   category via the update payload.

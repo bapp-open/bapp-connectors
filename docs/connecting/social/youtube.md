@@ -9,6 +9,7 @@ with built-in filtering to Shorts-length videos.
 | Auth | API key **or** OAuth2 access token |
 | Credentials | `api_key` (optional), `access_token` (optional — at least one required) |
 | Settings | `channel_id`, `shorts_only` (default `true`), `shorts_max_seconds` (default `180`) |
+| Capabilities | `SocialPublishCapability` |
 
 ## What you get
 
@@ -34,7 +35,9 @@ with built-in filtering to Shorts-length videos.
 
 1. Same project/API enablement as above; configure the OAuth consent screen.
 2. Create OAuth client credentials and run the flow with scope
-   `https://www.googleapis.com/auth/youtube.readonly`.
+   `https://www.googleapis.com/auth/youtube.readonly` — add
+   `https://www.googleapis.com/auth/youtube.upload` if you will publish videos
+   with `publish_post`.
 3. Use the resulting access token as the `access_token` credential. When set,
    `channel_id` may be omitted — the authorized user's own channel is used.
 
@@ -56,6 +59,29 @@ adapter = registry.create_adapter(
 for short in adapter.list_posts(limit=25).items:
     print(short.title, short.duration_seconds, short.stats.views)
 ```
+
+## Publishing (uploading videos)
+
+```python
+from bapp_connectors.core.dto.social import SocialPostDraft, SocialPrivacy
+
+result = adapter.publish_post(SocialPostDraft(
+    title="Behind the scenes", description="#shorts",
+    file_path="/videos/clip.mp4",             # or content=<bytes>
+    privacy=SocialPrivacy.UNLISTED,           # public / private / unlisted
+))
+print(result.post_id, result.url)             # id is available immediately
+status = adapter.check_publish_status(result.post_id)  # processing → published
+```
+
+- Requires the **`access_token`** credential with the `youtube.upload` scope —
+  API keys cannot publish.
+- Upload needs the bytes (`file_path` or `content`); `media_url` is rejected —
+  YouTube does not pull from URLs.
+- There is no separate Shorts endpoint: a video **≤ 3 minutes with a vertical
+  or square aspect ratio** becomes a Short automatically.
+- `extra` passes through `category_id` and `made_for_kids`.
+- Quota: an upload costs ~1,600 Data API units (of the default 10,000/day).
 
 ## Notes & limitations
 

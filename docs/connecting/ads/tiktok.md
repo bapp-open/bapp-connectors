@@ -9,6 +9,7 @@ the **TikTok Business API v1.3**.
 | Auth | Long-term access token (`Access-Token` header) |
 | Credentials | `access_token`, `advertiser_id` |
 | Settings | — |
+| Capabilities | `CreativeUploadCapability` |
 
 ## What you get
 
@@ -68,6 +69,27 @@ for row in ads.get_insights(AdInsightsLevel.AD, entity_id=ad.id):
     print(row.date_start, row.impressions, row.clicks, row.spend)
 ```
 
+## Uploading media
+
+```python
+from bapp_connectors.core.dto.ads import AdCreative, AdMediaAsset, AdMediaType
+
+media = ads.upload_media(AdMediaAsset(media_type=AdMediaType.VIDEO,
+                                      file_path="/videos/promo.mp4"))   # or url=
+creative = ads.create_creative(
+    AdCreative(body="Shop the drop", landing_url="https://example.com",
+               call_to_action="SHOP_NOW"),
+    media=media,
+)
+ads.create_ad(Ad(ad_group_id=group.id, name="Promo", creative=creative))
+```
+
+- Images and videos upload **by URL or by file/bytes** (file uploads send the
+  MD5 signature TikTok requires automatically).
+- TikTok creatives are **inline to the ad** — `create_creative` returns the
+  creative with `video_id`/`image_ids` merged into `extra`, which
+  `create_ad` consumes; there is no standalone creative id.
+
 ## Notes & limitations
 
 - **Budgets** are whole-currency `Decimal`s; the adapter picks the TikTok
@@ -77,8 +99,8 @@ for row in ads.get_insights(AdInsightsLevel.AD, entity_id=ad.id):
 - **Geo targeting** uses TikTok numeric location IDs, not ISO codes — fetch
   them from TikTok's `tool/region/` endpoint upstream and pass
   `targeting.extra["location_ids"]`.
-- **Creatives** reference pre-uploaded assets (`video_id`, `image_ids` in
-  `ad.extra`); the file upload endpoints aren't wrapped yet. Spark Ads
+- **Creatives** come from `upload_media` + `create_creative` (above) or
+  pre-uploaded assets (`video_id`, `image_ids` in `ad.extra`). Spark Ads
   (`identity_id`/`identity_type`) pass through `ad.extra`.
 - Insights default to the **last 7 days** when no period is given, one row per
   day per entity.

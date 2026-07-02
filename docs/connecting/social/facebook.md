@@ -9,6 +9,7 @@ the posts edge), and engagement/insights via the **Graph API v19.0**.
 | Auth | Page access token (Bearer) |
 | Credentials | `token`, `page_id` |
 | Settings | — |
+| Capabilities | `SocialPublishCapability` |
 
 ## What you get
 
@@ -28,6 +29,7 @@ the posts edge), and engagement/insights via the **Graph API v19.0**.
    - `pages_show_list` — list your pages
    - `pages_read_engagement` — posts, likes, comments, shares
    - `read_insights` — post & page insights (impressions, reach)
+   - `pages_manage_posts` — only if you use `publish_post`
 4. Get a **Page access token**:
    - Quick test: [Graph API Explorer](https://developers.facebook.com/tools/explorer/)
      → select your app → *Get Page Access Token* → pick the page.
@@ -62,6 +64,33 @@ from datetime import datetime, timedelta
 week = adapter.get_account_stats(since=datetime.now() - timedelta(days=7), until=datetime.now())
 print("Weekly impressions:", week.impressions, "reach:", week.reach)
 ```
+
+## Publishing
+
+```python
+from bapp_connectors.core.dto.social import PublishStatus, SocialMediaType, SocialPostDraft
+
+# Text / link post — published immediately
+adapter.publish_post(SocialPostDraft(description="Big news!", link="https://example.com",
+                                     media_type=SocialMediaType.TEXT))
+
+# Photo — from a URL or a local file
+adapter.publish_post(SocialPostDraft(description="New arrivals",
+                                     media_type=SocialMediaType.IMAGE,
+                                     media_url="https://cdn.example.com/photo.jpg"))
+
+# Video — async while Meta transcodes
+result = adapter.publish_post(SocialPostDraft(title="Launch", description="…",
+                                              media_url="https://cdn.example.com/clip.mp4"))
+while result.status == PublishStatus.PROCESSING:
+    result = adapter.check_publish_status(result.publish_id)
+```
+
+- Pages publish **publicly** — a non-public `privacy` is rejected. Use
+  `extra={"published": False}` for unpublished posts or
+  `extra={"scheduled_publish_time": <unix>, "published": False}` to schedule.
+- Photos/videos accept a fetchable `media_url`, a local `file_path`, or raw
+  `content` bytes (multipart upload).
 
 ## Notes & limitations
 

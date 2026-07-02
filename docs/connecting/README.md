@@ -109,12 +109,69 @@ Same `None`-means-unavailable rule as social stats. TikTok returns one row per
 day (`stat_time_day`); Meta and Google aggregate over the requested range
 unless the platform segments it.
 
+### Uploading media and creating creatives
+
+Ads providers implement `CreativeUploadCapability` — from a media file to a
+running ad in one flow:
+
+```python
+from bapp_connectors.core.capabilities import CreativeUploadCapability
+from bapp_connectors.core.dto.ads import Ad, AdCreative, AdMediaAsset, AdMediaType
+
+assert ads.supports(CreativeUploadCapability)
+
+media = ads.upload_media(AdMediaAsset(media_type=AdMediaType.VIDEO, url="https://cdn.example.com/promo.mp4"))
+creative = ads.create_creative(
+    AdCreative(title="Summer sale", body="Up to 40% off", landing_url="https://example.com",
+               call_to_action="SHOP_NOW"),
+    media=media,
+)
+ads.create_ad(Ad(ad_group_id=group.id, name="Promo video", creative=creative))
+```
+
+Platform boundaries (raised as clear errors, see each guide):
+
+- **Meta** — images upload from file/bytes, videos from file/bytes or URL;
+  `create_creative` needs the `page_id` setting (creatives publish as a Page).
+- **TikTok** — images and videos upload by URL or file; creatives are inline
+  to the ad, so `create_creative` returns the creative with the media
+  reference merged into `extra` for `create_ad` to consume.
+- **Google** — image assets upload from file/bytes; video is not hosted by
+  Google Ads (upload to YouTube — e.g. via the social/youtube provider — and
+  reference the video id), and search-ad creatives are inline text, so
+  `create_creative` raises `UnsupportedFeatureError`.
+
+## Publishing to social platforms
+
+Social providers implement `SocialPublishCapability` — the write counterpart
+of the universal stats interface:
+
+```python
+from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.dto.social import PublishStatus, SocialPostDraft
+
+result = adapter.publish_post(SocialPostDraft(
+    title="New drop", description="Behind the scenes #shorts",
+    media_url="https://cdn.example.com/clip.mp4",  # or file_path= / content=
+))
+while result.status == PublishStatus.PROCESSING:
+    result = adapter.check_publish_status(result.publish_id or result.post_id)
+print(result.post_id, result.url)
+```
+
+Platform boundaries:
+
+- **TikTok** — direct post pulls the video from a public URL you host
+  (`media_url`); publishing is async (poll `check_publish_status`). Needs the
+  `video.publish` scope.
+- **YouTube** — resumable upload from `file_path`/`content` (OAuth
+  `youtube.upload` scope required; API keys cannot publish). Videos ≤ 3
+  minutes with vertical/square aspect become Shorts automatically.
+- **Facebook Page** — text/link posts, photos (URL or file), and videos (URL
+  or file); videos are async while Meta transcodes. Needs `pages_manage_posts`.
+
 ### Known gaps (not yet implemented)
 
-- **Creative/media upload** — adapters reference existing creatives (Meta
-  creative IDs, TikTok `video_id`/`image_ids`, Google responsive search ad
-  text). Uploading images/videos to the platforms' asset libraries is not
-  covered yet.
 - **Custom / lookalike audiences & retargeting** — pass platform audience IDs
   through `targeting.extra`; there is no API for creating audiences.
 - **Placements, dayparting, bidding strategies** — platform defaults are used;

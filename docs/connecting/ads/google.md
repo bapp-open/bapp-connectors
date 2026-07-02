@@ -9,6 +9,7 @@ the **Google Ads REST API v17** (GAQL).
 | Auth | OAuth2 access token + developer token (headers) |
 | Credentials | `developer_token`, `access_token`, `customer_id`, `login_customer_id` (optional) |
 | Settings | `currency` (default `USD`, fallback label for spend) |
+| Capabilities | `CreativeUploadCapability` (image assets only — see below) |
 
 ## What you get
 
@@ -71,6 +72,25 @@ rows = ads.get_insights(AdInsightsLevel.AD, since=datetime.now() - timedelta(day
 for row in rows:
     print(row.entity_id, row.impressions, row.clicks, row.spend, row.conversions)
 ```
+
+## Uploading media
+
+```python
+from bapp_connectors.core.dto.ads import AdMediaAsset, AdMediaType
+
+asset = ads.upload_media(AdMediaAsset(media_type=AdMediaType.IMAGE,
+                                      file_path="/img/banner.png"))
+# asset.id is the Google asset resourceName, usable in display/PMax formats
+```
+
+- **Images** upload from `file_path`/`content` as IMAGE assets (Google needs
+  the bytes inline; URLs are rejected).
+- **Video** raises `UnsupportedFeatureError` — Google Ads doesn't host video.
+  Upload to YouTube instead (the social/youtube provider's `publish_post`
+  works) and reference the YouTube video id.
+- **`create_creative` raises `UnsupportedFeatureError`** — search-ad content
+  is inline: `create_ad` builds the responsive search ad directly from
+  `AdCreative(title, body, landing_url)`.
 
 ## Notes & limitations
 

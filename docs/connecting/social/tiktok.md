@@ -8,6 +8,7 @@ Reads a TikTok user's profile, videos, and stats via the **TikTok Display API v2
 | Auth | OAuth2 user access token (Bearer) |
 | Credentials | `token` |
 | Settings | — |
+| Capabilities | `SocialPublishCapability` |
 
 ## What you get
 
@@ -24,6 +25,9 @@ Reads a TikTok user's profile, videos, and stats via the **TikTok Display API v2
    - `user.info.profile` — username, bio, verified flag, profile link
    - `user.info.stats` — follower/following/likes/video counts
    - `video.list` — the user's public videos
+   - `video.publish` — only if you use `publish_post` (Content Posting API;
+     the app additionally needs the **Content Posting API** product added and
+     audited for direct posting)
 3. Submit the app for review (required before non-sandbox users can authorize).
 4. Run the OAuth authorization-code flow against `https://www.tiktok.com/v2/auth/authorize/`;
    exchange the code at `https://open.tiktokapis.com/v2/oauth/token/` for an access token.
@@ -50,6 +54,27 @@ for video in page.items:
 if page.has_more:
     next_page = adapter.list_posts(limit=20, cursor=page.cursor)
 ```
+
+## Publishing
+
+```python
+from bapp_connectors.core.dto.social import PublishStatus, SocialPostDraft
+
+result = adapter.publish_post(SocialPostDraft(
+    title="New drop 🔥", media_url="https://cdn.example.com/clip.mp4",
+))
+# TikTok publishes asynchronously — poll until done
+while result.status == PublishStatus.PROCESSING:
+    result = adapter.check_publish_status(result.publish_id)
+```
+
+- TikTok **pulls the video from a public URL** you host (`media_url`); the
+  domain must be verified in the developer portal for pull-from-URL. Local
+  file/bytes upload (chunked FILE_UPLOAD) is not supported yet.
+- Privacy: `PUBLIC` → everyone, `PRIVATE`/`UNLISTED` → only the creator
+  (TikTok has no unlisted). `extra` passes through `disable_comment`,
+  `disable_duet`, `disable_stitch`.
+- Photo posts use a different endpoint and are not supported.
 
 ## Notes & limitations
 

@@ -47,7 +47,7 @@ providers/{family}/{provider}/
 
 ### Optional Capabilities
 
-EmbeddingCapability, TranscriptionCapability, StreamingCapability, ImageGenerationCapability, BulkUpdateCapability, BulkImportCapability, WebhookCapability, OAuthCapability, InvoiceAttachmentCapability, ProductFeedCapability, FeedUploadCapability
+EmbeddingCapability, TranscriptionCapability, StreamingCapability, ImageGenerationCapability, BulkUpdateCapability, BulkImportCapability, WebhookCapability, OAuthCapability, InvoiceAttachmentCapability, ProductFeedCapability, FeedUploadCapability, CreativeUploadCapability (ads: media upload + creative creation), SocialPublishCapability (social: post publishing with async status polling)
 
 ## Testing
 
