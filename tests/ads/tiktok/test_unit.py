@@ -1,0 +1,410 @@
+"""
+TikTok Ads provider unit tests — contract suite + provider-specific behavior.
+
+All HTTP is faked with canned TikTok Business API envelopes:
+    {"code": 0, "message": "OK", "request_id": "...", "data": {...}}
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from decimal import Decimal
+
+import pytest
+
+from bapp_connectors.core.dto.ads import (
+    Ad,
+    AdCampaign,
+    AdCreative,
+    AdGroup,
+    AdInsightsLevel,
+    AdObjective,
+    AdTargeting,
+)
+from bapp_connectors.core.errors import (
+    AuthenticationError,
+    PermanentProviderError,
+    ProviderError,
+    RateLimitError,
+    ValidationError,
+)
+from bapp_connectors.providers.ads.tiktok import TikTokAdsAdapter
+from bapp_connectors.providers.ads.tiktok.errors import check_response
+from bapp_connectors.providers.ads.tiktok.mappers import (
+    age_groups_to_range,
+    age_range_to_groups,
+    campaign_to_tiktok_payload,
+    insights_from_tiktok,
+)
+from tests.ads.contract import AdsContractTests
+from tests.fake_http import FakeHttpClient
+
+# ── Canned TikTok payloads ──
+
+CAMPAIGN_RAW = {
+    "campaign_id": "cmp1",
+    "campaign_name": "Summer Sale",
+    "operation_status": "ENABLE",
+    "objective_type": "TRAFFIC",
+    "budget_mode": "BUDGET_MODE_DAY",
+    "budget": 50.0,
+    "create_time": "2026-06-01 10:00:00",
+    "modify_time": "2026-06-02 10:00:00",
+}
+
+ADGROUP_RAW = {
+    "adgroup_id": "ag1",
+    "adgroup_name": "Women 18-34",
+    "campaign_id": "cmp1",
+    "operation_status": "ENABLE",
+    "budget_mode": "BUDGET_MODE_DAY",
+    "budget": 20.0,
+    "bid_price": 0.5,
+    "schedule_start_time": "2026-06-01 00:00:00",
+    "schedule_end_time": "2026-06-30 23:59:59",
+    "location_ids": ["6252001"],
+    "age_groups": ["AGE_18_24", "AGE_25_34"],
+    "gender": "GENDER_FEMALE",
+}
+
+AD_RAW = {
+    "ad_id": "ad1",
+    "ad_name": "Video Ad",
+    "adgroup_id": "ag1",
+    "campaign_id": "cmp1",
+    "operation_status": "ENABLE",
+    "ad_text": "Buy now",
+    "call_to_action": "SHOP_NOW",
+    "landing_page_url": "https://example.com",
+    "video_id": "v123",
+}
+
+REPORT_ROW = {
+    "dimensions": {"campaign_id": "cmp1", "stat_time_day": "2026-06-01 00:00:00"},
+    "metrics": {
+        "spend": "12.34",
+        "impressions": "1000",
+        "clicks": "50",
+        "ctr": "5.0",
+        "cpc": "0.25",
+        "cpm": "12.34",
+        "reach": "800",
+        "frequency": "1.25",
+        "conversion": "3",
+        "video_play_actions": "600",
+    },
+}
+
+
+def envelope(data: dict) -> dict:
+    return {"code": 0, "message": "OK", "request_id": "req-1", "data": data}
+
+
+def list_envelope(rows: list[dict], page: int = 1, total_page: int = 1, total_number: int | None = None) -> dict:
+    return envelope(
+        {
+            "list": rows,
+            "page_info": {
+                "page": page,
+                "page_size": 20,
+                "total_number": total_number if total_number is not None else len(rows),
+                "total_page": total_page,
+            },
+        }
+    )
+
+
+@pytest.fixture
+def fake_http() -> FakeHttpClient:
+    fake = FakeHttpClient()
+
+    def campaigns_pager(method, path, kwargs):
+        page = int(kwargs.get("params", {}).get("page", 1))
+        return list_envelope([CAMPAIGN_RAW], page=page, total_page=3, total_number=60)
+
+    fake.add("GET", "campaign/get/", campaigns_pager)
+    fake.add("POST", "campaign/create/", envelope({"campaign_id": "cmp1"}))
+    fake.add("POST", "campaign/status/update/", envelope({"campaign_ids": ["cmp1"]}))
+    fake.add("POST", "campaign/update/", envelope({"campaign_id": "cmp1"}))
+
+    fake.add("GET", "adgroup/get/", list_envelope([ADGROUP_RAW]))
+    fake.add("POST", "adgroup/create/", envelope({"adgroup_id": "ag1"}))
+    fake.add("POST", "adgroup/status/update/", envelope({"adgroup_ids": ["ag1"]}))
+    fake.add("POST", "adgroup/update/", envelope({"adgroup_id": "ag1"}))
+
+    fake.add("GET", "ad/get/", list_envelope([AD_RAW]))
+    fake.add("POST", "ad/create/", envelope({"ad_ids": ["ad1"], "creatives": [{"ad_id": "ad1"}]}))
+    fake.add("POST", "ad/status/update/", envelope({"ad_ids": ["ad1"]}))
+    fake.add("POST", "ad/update/", envelope({"ad_ids": ["ad1"]}))
+
+    fake.add("GET", "report/integrated/get/", list_envelope([REPORT_ROW]))
+    return fake
+
+
+@pytest.fixture
+def tiktok_adapter(fake_http: FakeHttpClient) -> TikTokAdsAdapter:
+    return TikTokAdsAdapter(
+        credentials={"access_token": "test-token", "advertiser_id": "adv1"},
+        http_client=fake_http,
+    )
+
+
+@pytest.fixture
+def adapter(tiktok_adapter: TikTokAdsAdapter) -> TikTokAdsAdapter:
+    return tiktok_adapter
+
+
+@pytest.fixture
+def sample_campaign_id() -> str:
+    return "cmp1"
+
+
+@pytest.fixture
+def sample_ad_group_id() -> str:
+    return "ag1"
+
+
+@pytest.fixture
+def sample_ad_id() -> str:
+    return "ad1"
+
+
+@pytest.fixture
+def campaign_draft() -> AdCampaign:
+    return AdCampaign(name="Summer Sale", objective=AdObjective.TRAFFIC, daily_budget=Decimal("50"))
+
+
+@pytest.fixture
+def ad_group_draft() -> AdGroup:
+    return AdGroup(
+        campaign_id="cmp1",
+        name="Women 18-34",
+        daily_budget=Decimal("20"),
+        targeting=AdTargeting(age_min=18, age_max=34, genders=["female"]),
+    )
+
+
+@pytest.fixture
+def ad_draft() -> Ad:
+    return Ad(
+        ad_group_id="ag1",
+        name="Video Ad",
+        creative=AdCreative(body="Buy now", landing_url="https://example.com"),
+        extra={"video_id": "v123"},
+    )
+
+
+class TestTikTokAdsContract(AdsContractTests):
+    """TikTok Ads must pass the shared AdsPort contract."""
+
+    @pytest.fixture
+    def adapter(self, tiktok_adapter: TikTokAdsAdapter) -> TikTokAdsAdapter:
+        # Override the contract's placeholder fixture with the fake-backed adapter.
+        return tiktok_adapter
+
+
+class TestCheckResponse:
+    """Envelope error code mapping."""
+
+    def test_success_returns_data(self):
+        assert check_response(envelope({"list": []})) == {"list": []}
+
+    def test_success_without_data_returns_empty_dict(self):
+        assert check_response({"code": 0, "message": "OK"}) == {}
+
+    @pytest.mark.parametrize("code", [40100, 40101, 40102, 40104, 40105])
+    def test_auth_codes(self, code: int):
+        with pytest.raises(AuthenticationError):
+            check_response({"code": code, "message": "Access token invalid"})
+
+    @pytest.mark.parametrize("code", [40016, 40033])
+    def test_rate_limit_codes(self, code: int):
+        with pytest.raises(RateLimitError):
+            check_response({"code": code, "message": "Slow down"})
+
+    def test_rate_limit_by_message(self):
+        with pytest.raises(RateLimitError):
+            check_response({"code": 40999, "message": "Too Many Requests, please retry"})
+        with pytest.raises(RateLimitError):
+            check_response({"code": 40999, "message": "API Rate Limit exceeded"})
+
+    @pytest.mark.parametrize("code", [40001, 40002, 40007])
+    def test_validation_codes(self, code: int):
+        with pytest.raises(ValidationError):
+            check_response({"code": code, "message": "Invalid parameter"})
+
+    def test_other_4xxxx_is_permanent(self):
+        with pytest.raises(PermanentProviderError):
+            check_response({"code": 40300, "message": "Not allowed"})
+
+    def test_5xxxx_is_provider_error(self):
+        with pytest.raises(ProviderError):
+            check_response({"code": 50000, "message": "Internal error"})
+
+    def test_error_includes_code_and_message(self):
+        with pytest.raises(ProviderError, match=r"50000.*Internal error"):
+            check_response({"code": 50000, "message": "Internal error"})
+
+
+class TestClientRequests:
+    """Outgoing request shape: headers, params, bodies."""
+
+    def test_access_token_header_on_get(self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient):
+        adapter.list_campaigns()
+        call = fake_http.last_call()
+        assert call.method == "GET"
+        assert call.kwargs["headers"] == {"Access-Token": "test-token"}
+
+    def test_access_token_header_on_post(self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient):
+        adapter.set_campaign_status("cmp1", "paused")
+        post_call = next(c for c in fake_http.calls if c.path == "campaign/status/update/")
+        assert post_call.kwargs["headers"] == {"Access-Token": "test-token"}
+        assert post_call.kwargs["json"]["advertiser_id"] == "adv1"
+        assert post_call.kwargs["json"]["operation_status"] == "DISABLE"
+
+    def test_get_filtering_is_json_encoded(self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient):
+        adapter.get_campaign("cmp1")
+        params = fake_http.last_call().kwargs["params"]
+        assert params["advertiser_id"] == "adv1"
+        assert json.loads(params["filtering"]) == {"campaign_ids": ["cmp1"]}
+
+    def test_create_ad_sends_creative_with_video_id(
+        self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient, ad_draft: Ad
+    ):
+        adapter.create_ad(ad_draft)
+        create_call = next(c for c in fake_http.calls if c.path == "ad/create/")
+        creative = create_call.kwargs["json"]["creatives"][0]
+        assert creative["ad_name"] == "Video Ad"
+        assert creative["ad_text"] == "Buy now"
+        assert creative["landing_page_url"] == "https://example.com"
+        assert creative["video_id"] == "v123"
+
+    def test_create_ad_group_sends_targeting(
+        self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient, ad_group_draft: AdGroup
+    ):
+        adapter.create_ad_group(ad_group_draft)
+        create_call = next(c for c in fake_http.calls if c.path == "adgroup/create/")
+        body = create_call.kwargs["json"]
+        assert body["age_groups"] == ["AGE_18_24", "AGE_25_34"]
+        assert body["gender"] == "GENDER_FEMALE"
+        assert body["budget_mode"] == "BUDGET_MODE_DAY"
+        assert body["budget"] == 20.0
+
+
+class TestBudgetMapping:
+    """budget_mode selection from normalized budget fields."""
+
+    def test_daily_budget(self):
+        payload = campaign_to_tiktok_payload({"name": "c", "daily_budget": Decimal("50")})
+        assert payload["budget_mode"] == "BUDGET_MODE_DAY"
+        assert payload["budget"] == 50.0
+
+    def test_lifetime_budget(self):
+        payload = campaign_to_tiktok_payload({"name": "c", "lifetime_budget": Decimal("500")})
+        assert payload["budget_mode"] == "BUDGET_MODE_TOTAL"
+        assert payload["budget"] == 500.0
+
+    def test_no_budget_defaults_to_infinite(self):
+        payload = campaign_to_tiktok_payload({"name": "c"})
+        assert payload["budget_mode"] == "BUDGET_MODE_INFINITE"
+        assert "budget" not in payload
+
+    def test_partial_update_without_budget_omits_budget_mode(self):
+        payload = campaign_to_tiktok_payload({"name": "c"}, partial=True)
+        assert "budget_mode" not in payload
+
+
+class TestAgeBrackets:
+    """age_min/age_max ↔ TikTok age group brackets."""
+
+    def test_range_to_groups(self):
+        assert age_range_to_groups(18, 34) == ["AGE_18_24", "AGE_25_34"]
+
+    def test_range_to_groups_partial_overlap(self):
+        assert age_range_to_groups(16, 40) == ["AGE_13_17", "AGE_18_24", "AGE_25_34", "AGE_35_44"]
+
+    def test_range_to_groups_open_ends(self):
+        assert age_range_to_groups(55, None) == ["AGE_55_100"]
+        assert age_range_to_groups(None, 17) == ["AGE_13_17"]
+
+    def test_groups_to_range(self):
+        assert age_groups_to_range(["AGE_18_24", "AGE_25_34"]) == (18, 34)
+        assert age_groups_to_range(["AGE_55_100"]) == (55, 100)
+
+    def test_groups_to_range_empty(self):
+        assert age_groups_to_range([]) == (None, None)
+
+    def test_roundtrip_via_adapter(self, adapter: TikTokAdsAdapter):
+        ad_group = adapter.get_ad_group("ag1")
+        assert ad_group.targeting is not None
+        assert ad_group.targeting.age_min == 18
+        assert ad_group.targeting.age_max == 34
+        assert ad_group.targeting.genders == ["female"]
+        assert ad_group.targeting.extra["location_ids"] == ["6252001"]
+
+
+class TestInsightsMapping:
+    """Report row → universal AdInsights."""
+
+    def test_report_row_maps_to_universal_fields(self):
+        insights = insights_from_tiktok(REPORT_ROW, AdInsightsLevel.CAMPAIGN)
+        assert insights.entity_id == "cmp1"
+        assert insights.level == AdInsightsLevel.CAMPAIGN
+        assert insights.spend == Decimal("12.34")
+        assert isinstance(insights.spend, Decimal)
+        assert insights.impressions == 1000
+        assert insights.clicks == 50
+        assert insights.reach == 800
+        assert insights.video_views == 600
+        assert insights.ctr == 5.0
+        assert insights.frequency == 1.25
+        assert insights.cpc == Decimal("0.25")
+        assert insights.conversions == 3.0
+        assert insights.date_start == datetime(2026, 6, 1)
+        assert insights.date_stop == datetime(2026, 6, 1)
+
+    def test_get_insights_builds_report_request(self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient):
+        rows = adapter.get_insights(AdInsightsLevel.CAMPAIGN, entity_id="cmp1")
+        assert len(rows) == 1
+        params = fake_http.last_call().kwargs["params"]
+        assert params["data_level"] == "AUCTION_CAMPAIGN"
+        assert json.loads(params["dimensions"]) == ["campaign_id", "stat_time_day"]
+        assert json.loads(params["filtering"]) == [
+            {"field_name": "campaign_ids", "filter_type": "IN", "filter_value": ["cmp1"]}
+        ]
+        assert params["start_date"] < params["end_date"]
+
+
+class TestPagination:
+    """Page-number cursor pagination."""
+
+    def test_first_page_has_more(self, adapter: TikTokAdsAdapter):
+        result = adapter.list_campaigns()
+        assert result.has_more is True
+        assert result.cursor == "2"
+        assert result.total == 60
+
+    def test_cursor_requests_that_page(self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient):
+        result = adapter.list_campaigns(cursor="2")
+        assert fake_http.last_call().kwargs["params"]["page"] == 2
+        assert result.cursor == "3"
+
+    def test_last_page_has_no_cursor(self, adapter: TikTokAdsAdapter):
+        result = adapter.list_campaigns(cursor="3")
+        assert result.has_more is False
+        assert result.cursor is None
+
+
+class TestStatusMapping:
+    """Status write mapping and invalid statuses."""
+
+    def test_set_status_rejects_unmappable_status(self, adapter: TikTokAdsAdapter):
+        with pytest.raises(ValidationError):
+            adapter.set_campaign_status("cmp1", "archived")
+
+    def test_set_status_sends_enable(self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient):
+        adapter.set_ad_status("ad1", "active")
+        post_call = next(c for c in fake_http.calls if c.path == "ad/status/update/")
+        assert post_call.kwargs["json"]["operation_status"] == "ENABLE"
+        assert post_call.kwargs["json"]["ad_ids"] == ["ad1"]
