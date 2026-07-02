@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 
 from bapp_connectors.core.dto import ProviderMeta
 from bapp_connectors.core.dto.social import (
+    PublishResult,
+    PublishStatus,
     SocialAccount,
     SocialAccountStats,
     SocialMediaType,
@@ -93,6 +95,35 @@ def _media_type_from_post(post: dict) -> SocialMediaType:
         return SocialMediaType.TEXT
     media_type = attachments[0].get("media_type", "")
     return _MEDIA_TYPE_MAP.get(media_type, SocialMediaType.OTHER)
+
+
+# ── Publishing ──
+
+
+def publish_result_from_graph(response: dict, page_id: str, is_video: bool) -> PublishResult:
+    """
+    Map a Graph publish response ({page_id}/feed, /photos or /videos) to a PublishResult.
+
+    Feed posts and photos publish synchronously: the response carries the post id
+    ({"id": "pageid_postid"}, photos additionally return "post_id"). Videos publish
+    asynchronously — Meta transcodes first — so only the video id comes back; poll
+    ``check_publish_status`` with it until the video is ready.
+    """
+    if is_video:
+        return PublishResult(
+            post_id="",
+            publish_id=str(response.get("id", "")),
+            status=PublishStatus.PROCESSING,
+            extra=response,
+        )
+
+    post_id = str(response.get("post_id") or response.get("id", ""))
+    return PublishResult(
+        post_id=post_id,
+        status=PublishStatus.PUBLISHED,
+        url=f"https://www.facebook.com/{post_id}",
+        extra=response,
+    )
 
 
 # ── Stats ──

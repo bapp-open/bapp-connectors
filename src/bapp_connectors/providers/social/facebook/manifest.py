@@ -3,9 +3,11 @@ Facebook Page social provider manifest — declares capabilities, auth, rate lim
 
 Uses the Facebook Graph API v19.0 (https://developers.facebook.com/docs/graph-api).
 Covers a Facebook *Page*: profile, published posts (including Reels as they
-appear in the posts edge), and page/post insights.
+appear in the posts edge), page/post insights, and publishing (feed posts,
+photos, videos).
 """
 
+from bapp_connectors.core.capabilities import SocialPublishCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -20,7 +22,10 @@ manifest = ProviderManifest(
     name="facebook",
     family=ProviderFamily.SOCIAL,
     display_name="Facebook Page",
-    description="Facebook Graph API integration for a Facebook Page: profile, posts (incl. Reels), and insights.",
+    description=(
+        "Facebook Graph API integration for a Facebook Page: profile, posts (incl. Reels), "
+        "insights, and publishing."
+    ),
     base_url="https://graph.facebook.com/v19.0/",
     auth=AuthConfig(
         strategy=AuthStrategy.BEARER,
@@ -29,7 +34,10 @@ manifest = ProviderManifest(
                 name="token",
                 label="Page Access Token",
                 sensitive=True,
-                help_text="Long-lived Page access token with pages_read_engagement and read_insights permissions.",
+                help_text=(
+                    "Long-lived Page access token with pages_read_engagement and read_insights "
+                    "permissions; pages_manage_posts is required for publishing."
+                ),
             ),
             CredentialField(
                 name="page_id",
@@ -40,6 +48,7 @@ manifest = ProviderManifest(
     ),
     capabilities=[
         SocialPort,
+        SocialPublishCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=10,

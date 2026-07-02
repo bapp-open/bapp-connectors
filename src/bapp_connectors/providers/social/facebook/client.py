@@ -2,7 +2,8 @@
 Facebook Graph API client — raw HTTP calls only, no business logic.
 
 Auth is a Page access token sent as a Bearer header by the shared HTTP client.
-All calls are GETs against https://graph.facebook.com/v19.0/{object_id}[/{edge}].
+Reads are GETs against https://graph.facebook.com/v19.0/{object_id}[/{edge}];
+publishing POSTs to an object's edge (feed/photos/videos), JSON or multipart.
 """
 
 from __future__ import annotations
@@ -50,6 +51,16 @@ class FacebookGraphClient:
         query = {"fields": fields, "limit": limit, "after": after, **params}
         query = {k: v for k, v in query.items() if v is not None}
         response = self.http.call("GET", f"{object_id}/{edge}", params=query)
+        return check_payload(response)
+
+    def post_edge(self, object_id: str, edge: str, payload: dict) -> dict:
+        """POST {object_id}/{edge} — create an object on a connection (JSON payload)."""
+        response = self.http.call("POST", f"{object_id}/{edge}", json=payload)
+        return check_payload(response)
+
+    def post_edge_multipart(self, object_id: str, edge: str, files: dict, data: dict) -> dict:
+        """POST {object_id}/{edge} — create an object with a multipart body (local file/bytes uploads)."""
+        response = self.http.call("POST", f"{object_id}/{edge}", files=files, data=data)
         return check_payload(response)
 
     def get_insights(

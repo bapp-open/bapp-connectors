@@ -10,7 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from bapp_connectors.core.dto.social import SocialMediaType
+from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.dto.social import (
+    PublishStatus,
+    SocialMediaType,
+    SocialPostDraft,
+    SocialPrivacy,
+)
 from bapp_connectors.core.errors import (
     AuthenticationError,
     ProviderError,
@@ -26,6 +32,7 @@ from bapp_connectors.providers.social.facebook.mappers import (
     insights_to_totals,
     post_from_graph,
     post_stats_from_graph,
+    publish_result_from_graph,
 )
 from tests.fake_http import FakeHttpClient
 from tests.social.contract import SocialContractTests
@@ -338,6 +345,172 @@ class TestGraphErrors:
         fake.add("GET", PAGE_ID, {"error": {"code": 190, "message": "expired token"}})
         with pytest.raises(AuthenticationError):
             make_adapter(fake).get_account()
+
+
+# ── Publishing ──
+
+
+class TestPublishPost:
+
+    def test_text_post_hits_feed_edge(self):
+        fake = FakeHttpClient()
+        fake.add("POST", f"{PAGE_ID}/feed", {"id": f"{PAGE_ID}_111"})
+        draft = SocialPostDraft(
+            media_type=SocialMediaType.TEXT,
+            description="Hello world",
+            link="https://example.com/offer",
+        )
+        result = make_adapter(fake).publish_post(draft)
+
+        call = fake.last_call()
+        assert call.method == "POST"
+        assert call.path == f"{PAGE_ID}/feed"
+        assert call.kwargs["json"] == {"message": "Hello world", "link": "https://example.com/offer"}
+        assert result.status == PublishStatus.PUBLISHED
+        assert result.post_id == f"{PAGE_ID}_111"
+        assert result.url == f"https://www.facebook.com/{PAGE_ID}_111"
+
+    def test_text_post_without_message_or_link_raises(self):
+        draft = SocialPostDraft(media_type=SocialMediaType.TEXT)
+        with pytest.raises(ValidationError):
+            make_adapter().publish_post(draft)
+
+    def test_photo_via_url(self):
+        fake = FakeHttpClient()
+        fake.add("POST", f"{PAGE_ID}/photos", {"id": "777", "post_id": f"{PAGE_ID}_777"})
+        draft = SocialPostDraft(
+            media_type=SocialMediaType.IMAGE,
+            media_url="https://cdn.example.com/pic.jpg",
+            description="Nice pic",
+        )
+        result = make_adapter(fake).publish_post(draft)
+
+        call = fake.last_call()
+        assert call.path == f"{PAGE_ID}/photos"
+        assert call.kwargs["json"] == {"url": "https://cdn.example.com/pic.jpg", "caption": "Nice pic"}
+        assert result.status == PublishStatus.PUBLISHED
+        assert result.post_id == f"{PAGE_ID}_777"
+        assert result.url == f"https://www.facebook.com/{PAGE_ID}_777"
+
+    def test_photo_via_content_bytes_is_multipart(self):
+        fake = FakeHttpClient()
+        fake.add("POST", f"{PAGE_ID}/photos", {"id": "778", "post_id": f"{PAGE_ID}_778"})
+        draft = SocialPostDraft(
+            media_type=SocialMediaType.IMAGE,
+            content=b"jpegbytes",
+            filename="pic.jpg",
+            description="Uploaded pic",
+        )
+        result = make_adapter(fake).publish_post(draft)
+
+        call = fake.last_call()
+        assert call.path == f"{PAGE_ID}/photos"
+        assert call.kwargs["files"] == {"source": ("pic.jpg", b"jpegbytes")}
+        assert call.kwargs["data"] == {"caption": "Uploaded pic"}
+        assert result.post_id == f"{PAGE_ID}_778"
+
+    def test_video_via_url_returns_processing(self):
+        fake = FakeHttpClient()
+        fake.add("POST", f"{PAGE_ID}/videos", {"id": "555"})
+        draft = SocialPostDraft(
+            media_type=SocialMediaType.VIDEO,
+            media_url="https://cdn.example.com/clip.mp4",
+            title="Clip",
+            description="A clip",
+        )
+        result = make_adapter(fake).publish_post(draft)
+
+        call = fake.last_call()
+        assert call.path == f"{PAGE_ID}/videos"
+        assert call.kwargs["json"] == {
+            "file_url": "https://cdn.example.com/clip.mp4",
+            "description": "A clip",
+            "title": "Clip",
+        }
+        assert result.status == PublishStatus.PROCESSING
+        assert result.publish_id == "555"
+        assert result.post_id == ""
+
+    def test_extra_is_merged_into_payload_last(self):
+        fake = FakeHttpClient()
+        fake.add("POST", f"{PAGE_ID}/feed", {"id": f"{PAGE_ID}_112"})
+        draft = SocialPostDraft(
+            media_type=SocialMediaType.TEXT,
+            description="Scheduled",
+            extra={"published": False, "scheduled_publish_time": 1780000000},
+        )
+        make_adapter(fake).publish_post(draft)
+
+        payload = fake.last_call().kwargs["json"]
+        assert payload["published"] is False
+        assert payload["scheduled_publish_time"] == 1780000000
+
+    def test_non_public_privacy_raises(self):
+        draft = SocialPostDraft(
+            media_type=SocialMediaType.TEXT,
+            description="Secret",
+            privacy=SocialPrivacy.PRIVATE,
+        )
+        with pytest.raises(ValidationError):
+            make_adapter().publish_post(draft)
+
+
+class TestPublishResultMapping:
+
+    def test_photo_response_prefers_post_id(self):
+        result = publish_result_from_graph({"id": "777", "post_id": "1234_777"}, PAGE_ID, is_video=False)
+        assert result.post_id == "1234_777"
+        assert result.status == PublishStatus.PUBLISHED
+
+    def test_video_response_is_processing(self):
+        result = publish_result_from_graph({"id": "555"}, PAGE_ID, is_video=True)
+        assert result.status == PublishStatus.PROCESSING
+        assert result.publish_id == "555"
+        assert result.post_id == ""
+
+
+class TestCheckPublishStatus:
+
+    VIDEO_ID = "555"
+
+    def _status(self, payload: dict):
+        fake = FakeHttpClient()
+        fake.add("GET", self.VIDEO_ID, payload)
+        return make_adapter(fake).check_publish_status(self.VIDEO_ID)
+
+    def test_ready_is_published_with_absolute_url(self):
+        result = self._status({
+            "id": self.VIDEO_ID,
+            "status": {"video_status": "ready"},
+            "permalink_url": f"/{PAGE_ID}/videos/{self.VIDEO_ID}",
+        })
+        assert result.status == PublishStatus.PUBLISHED
+        assert result.post_id == self.VIDEO_ID
+        assert result.url == f"https://www.facebook.com/{PAGE_ID}/videos/{self.VIDEO_ID}"
+
+    def test_processing_stays_processing(self):
+        result = self._status({"id": self.VIDEO_ID, "status": {"video_status": "processing"}})
+        assert result.status == PublishStatus.PROCESSING
+        assert result.publish_id == self.VIDEO_ID
+
+    def test_error_is_failed(self):
+        result = self._status({"id": self.VIDEO_ID, "status": {"video_status": "error"}})
+        assert result.status == PublishStatus.FAILED
+        assert result.error != ""
+
+    def test_object_without_status_is_published(self):
+        fake = FakeHttpClient()
+        fake.add("GET", POST_ID, {"id": POST_ID, "permalink_url": "https://www.facebook.com/1234/posts/5678"})
+        result = make_adapter(fake).check_publish_status(POST_ID)
+        assert result.status == PublishStatus.PUBLISHED
+        assert result.post_id == POST_ID
+        assert result.url == "https://www.facebook.com/1234/posts/5678"
+
+
+class TestPublishCapability:
+
+    def test_adapter_supports_social_publish(self):
+        assert make_adapter().supports(SocialPublishCapability) is True
 
 
 # ── Connection test ──
