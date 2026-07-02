@@ -13,8 +13,10 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 
-from bapp_connectors.core.capabilities import CreativeUploadCapability
+from bapp_connectors.core.capabilities import CreativeUploadCapability, OAuthCapability
+from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import (
     Ad,
     AdCampaign,
@@ -29,10 +31,11 @@ from bapp_connectors.core.dto import (
     PaginatedResult,
     UploadedAdMedia,
 )
-from bapp_connectors.core.errors import PermanentProviderError, ValidationError
+from bapp_connectors.core.errors import PermanentProviderError, UnsupportedFeatureError, ValidationError
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import AdsPort
 from bapp_connectors.providers.ads.tiktok.client import TikTokAdsClient
+from bapp_connectors.providers.ads.tiktok.errors import check_response
 from bapp_connectors.providers.ads.tiktok.manifest import manifest
 from bapp_connectors.providers.ads.tiktok.mappers import (
     ad_creative_to_tiktok,
@@ -48,6 +51,8 @@ from bapp_connectors.providers.ads.tiktok.mappers import (
 )
 
 DEFAULT_PAGE_SIZE = 20
+
+_TIKTOK_BUSINESS_AUTH_URL = "https://business-api.tiktok.com/portal/auth"
 
 DATA_LEVELS = {
     AdInsightsLevel.ACCOUNT: "AUCTION_ADVERTISER",
@@ -70,7 +75,7 @@ REPORT_METRICS = [
 ]
 
 
-class TikTokAdsAdapter(AdsPort, CreativeUploadCapability):
+class TikTokAdsAdapter(AdsPort, CreativeUploadCapability, OAuthCapability):
     """
     TikTok Business API v1.3 ads adapter.
 
@@ -78,6 +83,8 @@ class TikTokAdsAdapter(AdsPort, CreativeUploadCapability):
     page-number cursor pagination, and the universal insights interface via
     the synchronous integrated report. CreativeUploadCapability uploads
     images/videos to the asset library and prepares inline creatives.
+    OAuthCapability drives the TikTok for Business portal authorization —
+    the resulting access token is long-term and has no refresh endpoint.
     """
 
     manifest = manifest
@@ -92,6 +99,8 @@ class TikTokAdsAdapter(AdsPort, CreativeUploadCapability):
         self.credentials = credentials
         self.config = config or {}
         self.advertiser_id = str(credentials.get("advertiser_id", ""))
+        self._app_id = credentials.get("app_id", "")
+        self._app_secret = credentials.get("app_secret", "")
 
         if http_client is None:
             http_client = ResilientHttpClient(
@@ -110,7 +119,13 @@ class TikTokAdsAdapter(AdsPort, CreativeUploadCapability):
 
     def validate_credentials(self) -> bool:
         missing = self.manifest.auth.validate_credentials(self.credentials)
-        return len(missing) == 0
+        if missing:
+            return False
+        # Either a ready-to-use access token, or the developer app
+        # credentials needed to obtain one via the OAuth flow.
+        has_token = bool(self.credentials.get("access_token"))
+        has_oauth_app = bool(self._app_id and self._app_secret)
+        return has_token or has_oauth_app
 
     def test_connection(self) -> ConnectionTestResult:
         try:
@@ -121,6 +136,49 @@ class TikTokAdsAdapter(AdsPort, CreativeUploadCapability):
             )
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
+
+    # ── OAuthCapability ──
+
+    def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
+        # Business API scopes are configured on the developer app, not the URL.
+        params = {
+            "app_id": self._app_id,
+            "state": state,
+            "redirect_uri": redirect_uri,
+        }
+        return f"{_TIKTOK_BUSINESS_AUTH_URL}?{urlencode(params)}"
+
+    def exchange_code_for_token(self, code: str, redirect_uri: str, state: str = "") -> OAuthTokens:
+        response = self.client.http.call(
+            "POST",
+            "oauth2/access_token/",
+            json={
+                "app_id": self._app_id,
+                "secret": self._app_secret,
+                "auth_code": code,
+            },
+        )
+        data = check_response(response)
+        access_token = data.get("access_token", "")
+        return OAuthTokens(
+            access_token=access_token,
+            extra={
+                "credentials": {
+                    "access_token": access_token,
+                    "app_id": self._app_id,
+                    "app_secret": self._app_secret,
+                },
+                # Handy for picking the advertiser_id credential afterwards.
+                "advertiser_ids": data.get("advertiser_ids", []),
+                "scope": data.get("scope", []),
+            },
+        )
+
+    def refresh_token(self, refresh_token: str) -> OAuthTokens:
+        raise UnsupportedFeatureError(
+            "TikTok Business access tokens are long-term and cannot be refreshed; "
+            "re-run the authorization flow to rotate them."
+        )
 
     # ── Pagination ──
 

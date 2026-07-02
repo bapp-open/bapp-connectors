@@ -4,10 +4,11 @@ TikTok Display API provider manifest — declares capabilities, auth, rate limit
 Uses TikTok Display API v2 (https://developers.tiktok.com/doc/display-api-get-started).
 """
 
-from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.capabilities import OAuthCapability, SocialPublishCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
+    OAuthConfig,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
@@ -31,17 +32,47 @@ manifest = ProviderManifest(
                 name="token",
                 label="Access Token",
                 sensitive=True,
+                required=False,
                 help_text=(
                     "TikTok Login Kit OAuth user access token with scopes "
                     "user.info.basic, user.info.profile, user.info.stats, video.list. "
-                    "Publishing additionally requires the video.publish scope."
+                    "Publishing additionally requires the video.publish scope. "
+                    "Leave empty when connecting via OAuth."
                 ),
             ),
+            CredentialField(
+                name="client_key",
+                label="Client Key",
+                required=False,
+                help_text="TikTok Login Kit app client key (needed for the OAuth flow).",
+            ),
+            CredentialField(
+                name="client_secret",
+                label="Client Secret",
+                sensitive=True,
+                required=False,
+                help_text="TikTok Login Kit app client secret (needed for the OAuth flow).",
+            ),
         ],
+        oauth=OAuthConfig(
+            credential_fields=[
+                CredentialField(name="client_key", label="Client Key"),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+            ],
+            scopes=[
+                "user.info.basic",
+                "user.info.profile",
+                "user.info.stats",
+                "video.list",
+                "video.publish",
+            ],
+            display_name="Connect with TikTok",
+        ),
     ),
     capabilities=[
         SocialPort,
         SocialPublishCapability,
+        OAuthCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,

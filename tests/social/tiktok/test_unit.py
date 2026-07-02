@@ -5,10 +5,11 @@ TikTok social adapter unit tests + contract tests.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from bapp_connectors.core.capabilities import SocialPublishCapability
+from bapp_connectors.core.capabilities import OAuthCapability, SocialPublishCapability
 from bapp_connectors.core.dto.social import (
     PublishStatus,
     SocialMediaType,
@@ -24,6 +25,7 @@ from bapp_connectors.core.errors import (
 )
 from bapp_connectors.providers.social.tiktok.adapter import TikTokSocialAdapter
 from bapp_connectors.providers.social.tiktok.errors import check_response
+from bapp_connectors.providers.social.tiktok.manifest import manifest
 from bapp_connectors.providers.social.tiktok.mappers import (
     account_from_tiktok,
     account_stats_from_tiktok,
@@ -408,3 +410,133 @@ class TestCheckResponse:
     def test_unknown_code_raises_provider_error(self):
         with pytest.raises(ProviderError, match="something broke"):
             check_response({"data": {}, "error": {"code": "internal_error", "message": "something broke"}})
+
+
+TOKEN_RESPONSE = {
+    "access_token": "act.example-access-token",
+    "expires_in": 86400,
+    "refresh_token": "rft.first-refresh-token",
+    "refresh_expires_in": 31536000,
+    "open_id": "open-id-abc123",
+    "scope": "user.info.basic,video.list",
+    "token_type": "Bearer",
+}
+
+
+class TestTikTokOAuth:
+    """Login Kit v2 OAuth flow tests."""
+
+    @pytest.fixture
+    def oauth_credentials(self) -> dict:
+        return {"client_key": "test_client_key", "client_secret": "test_client_secret"}
+
+    @pytest.fixture
+    def oauth_adapter(self, oauth_credentials) -> TikTokSocialAdapter:
+        return TikTokSocialAdapter(credentials=oauth_credentials)
+
+    def test_oauth_capability_declared_in_manifest(self):
+        assert OAuthCapability in manifest.capabilities
+        assert manifest.auth.oauth is not None
+        assert manifest.auth.oauth.display_name == "Connect with TikTok"
+        assert [f.name for f in manifest.auth.oauth.credential_fields] == ["client_key", "client_secret"]
+        assert "video.publish" in manifest.auth.oauth.scopes
+
+    def test_token_not_required_in_manifest(self):
+        token_field = next(f for f in manifest.auth.required_fields if f.name == "token")
+        assert token_field.required is False
+
+    def test_supports_oauth_capability(self, oauth_adapter):
+        assert oauth_adapter.supports(OAuthCapability) is True
+
+    def test_adapter_constructible_with_only_app_credentials(self, oauth_adapter):
+        assert oauth_adapter._client_key == "test_client_key"
+        assert oauth_adapter._client_secret == "test_client_secret"
+        assert oauth_adapter.validate_credentials() is True
+
+    def test_validate_credentials_keeps_token_only_behavior(self):
+        adapter = TikTokSocialAdapter(credentials={"token": "test-token"})
+        assert adapter.validate_credentials() is True
+
+    def test_validate_credentials_rejects_empty_credentials(self):
+        adapter = TikTokSocialAdapter(credentials={})
+        assert adapter.validate_credentials() is False
+        adapter = TikTokSocialAdapter(credentials={"client_key": "only-key"})
+        assert adapter.validate_credentials() is False
+
+    def test_get_authorize_url(self, oauth_adapter):
+        url = oauth_adapter.get_authorize_url("https://example.com/callback", state="abc123")
+        assert url.startswith("https://www.tiktok.com/v2/auth/authorize/?")
+        params = parse_qs(urlparse(url).query)
+        assert params["client_key"] == ["test_client_key"]
+        assert params["response_type"] == ["code"]
+        assert params["redirect_uri"] == ["https://example.com/callback"]
+        assert params["state"] == ["abc123"]
+        # Scopes are comma-separated in a single scope parameter.
+        assert params["scope"] == ["user.info.basic,user.info.profile,user.info.stats,video.list,video.publish"]
+
+    def test_exchange_code_for_token(self, oauth_credentials):
+        fake = FakeHttpClient()
+        fake.add("POST", "oauth/token/", TOKEN_RESPONSE)
+        adapter = TikTokSocialAdapter(credentials=oauth_credentials, http_client=fake)
+
+        tokens = adapter.exchange_code_for_token("auth-code-123", "https://example.com/callback")
+
+        call = fake.last_call()
+        assert call.method == "POST"
+        assert call.path == "https://open.tiktokapis.com/v2/oauth/token/"
+        assert call.kwargs["data"] == {
+            "client_key": "test_client_key",
+            "client_secret": "test_client_secret",
+            "code": "auth-code-123",
+            "grant_type": "authorization_code",
+            "redirect_uri": "https://example.com/callback",
+        }
+        assert tokens.access_token == "act.example-access-token"
+        assert tokens.refresh_token == "rft.first-refresh-token"
+        assert tokens.expires_in == 86400
+        assert tokens.token_type == "Bearer"
+        assert tokens.extra["credentials"] == {
+            "token": "act.example-access-token",
+            "client_key": "test_client_key",
+            "client_secret": "test_client_secret",
+        }
+        assert tokens.extra["open_id"] == "open-id-abc123"
+
+    def test_exchange_error_raises_authentication_error(self, oauth_credentials):
+        fake = FakeHttpClient()
+        fake.add("POST", "oauth/token/", {
+            "error": "invalid_grant",
+            "error_description": "Authorization code is expired.",
+        })
+        adapter = TikTokSocialAdapter(credentials=oauth_credentials, http_client=fake)
+        with pytest.raises(AuthenticationError, match="Authorization code is expired"):
+            adapter.exchange_code_for_token("stale-code", "https://example.com/callback")
+
+    def test_refresh_token_rotates_refresh_token(self, oauth_credentials):
+        fake = FakeHttpClient()
+        fake.add("POST", "oauth/token/", {**TOKEN_RESPONSE, "refresh_token": "rft.rotated-refresh-token"})
+        adapter = TikTokSocialAdapter(credentials=oauth_credentials, http_client=fake)
+
+        tokens = adapter.refresh_token("rft.first-refresh-token")
+
+        call = fake.last_call()
+        assert call.path == "https://open.tiktokapis.com/v2/oauth/token/"
+        assert call.kwargs["data"] == {
+            "client_key": "test_client_key",
+            "client_secret": "test_client_secret",
+            "grant_type": "refresh_token",
+            "refresh_token": "rft.first-refresh-token",
+        }
+        # TikTok rotates the refresh token — the returned one must be used.
+        assert tokens.refresh_token == "rft.rotated-refresh-token"
+        assert tokens.extra["credentials"]["token"] == "act.example-access-token"
+
+    def test_refresh_error_raises_authentication_error(self, oauth_credentials):
+        fake = FakeHttpClient()
+        fake.add("POST", "oauth/token/", {
+            "error": "invalid_grant",
+            "error_description": "Refresh token is invalid.",
+        })
+        adapter = TikTokSocialAdapter(credentials=oauth_credentials, http_client=fake)
+        with pytest.raises(AuthenticationError, match="Refresh token is invalid"):
+            adapter.refresh_token("rft.bad")

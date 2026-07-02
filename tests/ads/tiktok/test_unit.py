@@ -11,10 +11,11 @@ import hashlib
 import json
 from datetime import datetime
 from decimal import Decimal
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from bapp_connectors.core.capabilities import CreativeUploadCapability
+from bapp_connectors.core.capabilities import CreativeUploadCapability, OAuthCapability
 from bapp_connectors.core.dto.ads import (
     Ad,
     AdCampaign,
@@ -32,10 +33,12 @@ from bapp_connectors.core.errors import (
     PermanentProviderError,
     ProviderError,
     RateLimitError,
+    UnsupportedFeatureError,
     ValidationError,
 )
 from bapp_connectors.providers.ads.tiktok import TikTokAdsAdapter
 from bapp_connectors.providers.ads.tiktok.errors import check_response
+from bapp_connectors.providers.ads.tiktok.manifest import manifest
 from bapp_connectors.providers.ads.tiktok.mappers import (
     age_groups_to_range,
     age_range_to_groups,
@@ -492,3 +495,97 @@ class TestStatusMapping:
         post_call = next(c for c in fake_http.calls if c.path == "ad/status/update/")
         assert post_call.kwargs["json"]["operation_status"] == "ENABLE"
         assert post_call.kwargs["json"]["ad_ids"] == ["ad1"]
+
+
+class TestTikTokAdsOAuth:
+    """TikTok for Business portal OAuth flow tests."""
+
+    @pytest.fixture
+    def oauth_credentials(self) -> dict:
+        return {"app_id": "test_app_id", "app_secret": "test_app_secret"}
+
+    @pytest.fixture
+    def oauth_adapter(self, oauth_credentials) -> TikTokAdsAdapter:
+        return TikTokAdsAdapter(credentials=oauth_credentials)
+
+    def test_oauth_capability_declared_in_manifest(self):
+        assert OAuthCapability in manifest.capabilities
+        assert manifest.auth.oauth is not None
+        assert manifest.auth.oauth.display_name == "Connect with TikTok for Business"
+        assert [f.name for f in manifest.auth.oauth.credential_fields] == ["app_id", "app_secret"]
+        # Business API scopes are configured on the developer app, not the URL.
+        assert manifest.auth.oauth.scopes == []
+
+    def test_access_token_not_required_advertiser_id_still_required(self):
+        access_token_field = next(f for f in manifest.auth.required_fields if f.name == "access_token")
+        assert access_token_field.required is False
+        advertiser_id_field = next(f for f in manifest.auth.required_fields if f.name == "advertiser_id")
+        assert advertiser_id_field.required is True
+
+    def test_supports_oauth_capability(self, oauth_adapter: TikTokAdsAdapter):
+        assert oauth_adapter.supports(OAuthCapability) is True
+
+    def test_adapter_constructible_with_only_app_credentials(self, oauth_adapter: TikTokAdsAdapter):
+        assert oauth_adapter._app_id == "test_app_id"
+        assert oauth_adapter._app_secret == "test_app_secret"
+
+    def test_validate_credentials_accepts_app_credentials_without_token(self):
+        adapter = TikTokAdsAdapter(
+            credentials={"app_id": "test_app_id", "app_secret": "test_app_secret", "advertiser_id": "adv1"},
+        )
+        assert adapter.validate_credentials() is True
+
+    def test_validate_credentials_keeps_token_behavior(self):
+        adapter = TikTokAdsAdapter(credentials={"access_token": "test-token", "advertiser_id": "adv1"})
+        assert adapter.validate_credentials() is True
+        adapter = TikTokAdsAdapter(credentials={"advertiser_id": "adv1"})
+        assert adapter.validate_credentials() is False
+
+    def test_get_authorize_url(self, oauth_adapter: TikTokAdsAdapter):
+        url = oauth_adapter.get_authorize_url("https://example.com/callback", state="xyz789")
+        assert url.startswith("https://business-api.tiktok.com/portal/auth?")
+        params = parse_qs(urlparse(url).query)
+        assert params["app_id"] == ["test_app_id"]
+        assert params["state"] == ["xyz789"]
+        assert params["redirect_uri"] == ["https://example.com/callback"]
+
+    def test_exchange_code_for_token(self, oauth_credentials):
+        fake = FakeHttpClient()
+        fake.add(
+            "POST",
+            "oauth2/access_token/",
+            envelope({"access_token": "long-term-token", "advertiser_ids": ["adv1", "adv2"], "scope": [4]}),
+        )
+        adapter = TikTokAdsAdapter(credentials=oauth_credentials, http_client=fake)
+
+        tokens = adapter.exchange_code_for_token("auth-code-123", "https://example.com/callback")
+
+        call = fake.last_call()
+        assert call.method == "POST"
+        assert call.path == "oauth2/access_token/"
+        assert call.kwargs["json"] == {
+            "app_id": "test_app_id",
+            "secret": "test_app_secret",
+            "auth_code": "auth-code-123",
+        }
+        assert tokens.access_token == "long-term-token"
+        assert tokens.refresh_token == ""
+        assert tokens.expires_in is None
+        assert tokens.extra["credentials"] == {
+            "access_token": "long-term-token",
+            "app_id": "test_app_id",
+            "app_secret": "test_app_secret",
+        }
+        # Surfaced so the caller can pick the advertiser_id credential.
+        assert tokens.extra["advertiser_ids"] == ["adv1", "adv2"]
+
+    def test_exchange_error_routes_through_check_response(self, oauth_credentials):
+        fake = FakeHttpClient()
+        fake.add("POST", "oauth2/access_token/", {"code": 40105, "message": "Auth code is invalid"})
+        adapter = TikTokAdsAdapter(credentials=oauth_credentials, http_client=fake)
+        with pytest.raises(AuthenticationError, match="Auth code is invalid"):
+            adapter.exchange_code_for_token("bad-code", "https://example.com/callback")
+
+    def test_refresh_token_is_unsupported(self, oauth_adapter: TikTokAdsAdapter):
+        with pytest.raises(UnsupportedFeatureError, match="long-term"):
+            oauth_adapter.refresh_token("anything")
