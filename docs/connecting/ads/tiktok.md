@@ -9,7 +9,7 @@ the **TikTok Business API v1.3**.
 | Auth | Long-term access token (`Access-Token` header) |
 | Credentials | `access_token`, `advertiser_id` |
 | Settings | — |
-| Capabilities | `CreativeUploadCapability` |
+| Capabilities | `CreativeUploadCapability`, `OAuthCapability` |
 
 ## What you get
 

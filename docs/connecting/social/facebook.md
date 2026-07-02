@@ -9,7 +9,7 @@ the posts edge), and engagement/insights via the **Graph API v19.0**.
 | Auth | Page access token (Bearer) |
 | Credentials | `token`, `page_id` |
 | Settings | — |
-| Capabilities | `SocialPublishCapability` |
+| Capabilities | `SocialPublishCapability`, `OAuthCapability` |
 
 ## What you get
 
@@ -42,7 +42,11 @@ the posts edge), and engagement/insights via the **Graph API v19.0**.
 
 > **Token lifetime:** page tokens derived from a long-lived user token do not
 > expire on a fixed schedule but are invalidated by password changes/permission
-> revocation. `test_connection()` is a cheap validity check.
+> revocation. `test_connection()` is a cheap validity check. The adapter
+> implements the OAuth flow (add `app_id` + `app_secret`): `get_authorize_url` →
+> `exchange_code_for_token` → `list_page_tokens(user_token)` to pick the Page's
+> token; `refresh_token(current)` runs the long-lived `fb_exchange_token`
+> exchange (Meta has no refresh tokens). See the [overview](../README.md#oauth-flows--token-refresh).
 
 ## Quick start
 

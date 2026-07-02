@@ -9,7 +9,7 @@ the **Google Ads REST API v17** (GAQL).
 | Auth | OAuth2 access token + developer token (headers) |
 | Credentials | `developer_token`, `access_token`, `customer_id`, `login_customer_id` (optional) |
 | Settings | `currency` (default `USD`, fallback label for spend) |
-| Capabilities | `CreativeUploadCapability` (image assets only — see below) |
+| Capabilities | `CreativeUploadCapability` (image assets only — see below), `OAuthCapability` |
 
 ## What you get
 
@@ -32,7 +32,10 @@ the **Google Ads REST API v17** (GAQL).
    enable the **Google Ads API**, configure the consent screen, create an OAuth
    client, and run the flow with scope `https://www.googleapis.com/auth/adwords`
    for a user with access to the ads account. Use the resulting access token as
-   `access_token` (refresh it outside the adapter — it expires after ~1 hour).
+   `access_token` — it expires after ~1 hour; the adapter implements the full
+   flow (`get_authorize_url` / `exchange_code_for_token` / `refresh_token`,
+   add the `client_id` + `client_secret` credentials). See the
+   [overview](../README.md#oauth-flows--token-refresh).
 3. **customer_id** — the 10-digit ID of the ads account to operate on (dashes
    are stripped automatically, `123-456-7890` is fine).
 4. **login_customer_id** — set to the manager account's ID when the OAuth user

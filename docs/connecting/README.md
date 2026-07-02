@@ -170,6 +170,44 @@ Platform boundaries:
 - **Facebook Page** — text/link posts, photos (URL or file), and videos (URL
   or file); videos are async while Meta transcodes. Needs `pages_manage_posts`.
 
+## OAuth flows & token refresh
+
+Every provider in these two families implements `OAuthCapability`, so the full
+token lifecycle — authorize, exchange, refresh — runs through the adapter:
+
+```python
+from bapp_connectors.core.capabilities import OAuthCapability
+
+# 1. Build an adapter with just the app credentials (no user token yet)
+adapter = registry.create_adapter("social", "youtube",
+                                  credentials={"client_id": "...", "client_secret": "..."})
+assert adapter.supports(OAuthCapability)
+
+# 2. Send the user to authorize, then exchange the callback code
+url = adapter.get_authorize_url("https://myapp.example/callback", state="xyz")
+tokens = adapter.exchange_code_for_token(code, "https://myapp.example/callback")
+
+# 3. tokens.extra["credentials"] is ready to merge into the stored Connection
+#    credentials — keys already match the provider's credential field names.
+
+# 4. When the access token expires, refresh it
+fresh = adapter.refresh_token(tokens.refresh_token)
+```
+
+Platform lifecycles differ — the adapters encode them honestly:
+
+| Platform | Access token | Refresh |
+|----------|--------------|---------|
+| Google (YouTube, Google Ads) | ~1 hour | standard `refresh_token` grant |
+| TikTok Login Kit (social) | ~24 hours | refresh grant; the refresh token **rotates** — store the returned one |
+| Meta (Facebook social + ads) | ~60 days long-lived | no refresh tokens: `refresh_token(current_token)` runs the `fb_exchange_token` long-lived exchange |
+| TikTok for Business (ads) | long-term | no refresh endpoint — `refresh_token` raises `UnsupportedFeatureError`; re-run the flow to rotate |
+
+Extras: the Facebook social adapter has `list_page_tokens(user_token)` to turn
+the flow's *user* token into per-Page tokens (`/me/accounts`), and the TikTok
+Ads exchange surfaces `advertiser_ids` in `tokens.extra` for picking the
+`advertiser_id` credential.
+
 ### Known gaps (not yet implemented)
 
 - **Custom / lookalike audiences & retargeting** — pass platform audience IDs
@@ -184,5 +222,3 @@ Platform boundaries:
   are allowed (create a new ad to change content).
 - **TikTok geo resolution** — TikTok targets numeric location IDs, not ISO
   country codes; resolve them upstream and pass via `targeting.extra["location_ids"]`.
-- **OAuth token refresh** — adapters expect a valid access token; refreshing
-  (Google, TikTok, Meta long-lived exchange) happens outside the adapter.

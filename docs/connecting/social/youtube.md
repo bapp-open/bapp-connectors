@@ -9,7 +9,7 @@ with built-in filtering to Shorts-length videos.
 | Auth | API key **or** OAuth2 access token |
 | Credentials | `api_key` (optional), `access_token` (optional — at least one required) |
 | Settings | `channel_id`, `shorts_only` (default `true`), `shorts_max_seconds` (default `180`) |
-| Capabilities | `SocialPublishCapability` |
+| Capabilities | `SocialPublishCapability`, `OAuthCapability` |
 
 ## What you get
 
@@ -41,8 +41,10 @@ with built-in filtering to Shorts-length videos.
 3. Use the resulting access token as the `access_token` credential. When set,
    `channel_id` may be omitted — the authorized user's own channel is used.
 
-> **Token lifetime:** OAuth access tokens expire after ~1 hour; refresh them
-> outside the adapter. API keys do not expire but only read public data.
+> **Token lifetime:** OAuth access tokens expire after ~1 hour. The adapter
+> implements the full flow — `get_authorize_url` / `exchange_code_for_token` /
+> `refresh_token` (add the `client_id` + `client_secret` credentials). API keys
+> do not expire but only read public data. See the [overview](../README.md#oauth-flows--token-refresh).
 
 ## Quick start
 

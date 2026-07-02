@@ -8,7 +8,7 @@ Reads a TikTok user's profile, videos, and stats via the **TikTok Display API v2
 | Auth | OAuth2 user access token (Bearer) |
 | Credentials | `token` |
 | Settings | — |
-| Capabilities | `SocialPublishCapability` |
+| Capabilities | `SocialPublishCapability`, `OAuthCapability` |
 
 ## What you get
 
@@ -34,8 +34,10 @@ Reads a TikTok user's profile, videos, and stats via the **TikTok Display API v2
 5. Use the resulting **access token** as the `token` credential.
 
 > **Token lifetime:** TikTok user access tokens expire after ~24 hours and come
-> with a refresh token (valid ~1 year). Refresh outside the adapter and update
-> the stored credential — the adapter expects a currently-valid token.
+> with a refresh token (valid ~1 year). The adapter implements the full flow —
+> `get_authorize_url` / `exchange_code_for_token` / `refresh_token` (add the
+> `client_key` + `client_secret` credentials). The refresh token **rotates** on
+> every refresh: store the returned one. See the [overview](../README.md#oauth-flows--token-refresh).
 
 ## Quick start
 

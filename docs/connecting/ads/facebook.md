@@ -9,7 +9,7 @@ Creates and manages campaigns, ad sets, and ads, and reads performance, via the
 | Auth | Access token (Bearer) |
 | Credentials | `token`, `ad_account_id` (numeric, without the `act_` prefix) |
 | Settings | `default_optimization_goal` (default `LINK_CLICKS`), `default_billing_event` (default `IMPRESSIONS`), `page_id` (required for creative creation) |
-| Capabilities | `CreativeUploadCapability` |
+| Capabilities | `CreativeUploadCapability`, `OAuthCapability` |
 
 ## What you get
 
