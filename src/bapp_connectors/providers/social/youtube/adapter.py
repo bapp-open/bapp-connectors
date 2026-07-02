@@ -1,19 +1,23 @@
 """
-YouTube Shorts social adapter — implements SocialPort.
+YouTube Shorts social adapter — implements SocialPort + SocialPublishCapability.
 
 Reads channel info, uploads (filtered to Shorts by default), and statistics
-via the YouTube Data API v3.
+via the YouTube Data API v3, and publishes videos via the resumable
+videos.insert flow.
 
 Auth: API key query parameter (public data) and/or OAuth2 bearer token
-(required for `mine=true` channel access).
+(required for `mine=true` channel access and for publishing).
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from bapp_connectors.core.capabilities import SocialPublishCapability
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
-from bapp_connectors.core.errors import PermanentProviderError
+from bapp_connectors.core.dto.social import PublishResult, PublishStatus, SocialMediaType
+from bapp_connectors.core.errors import AuthenticationError, PermanentProviderError, ValidationError
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import SocialPort
 from bapp_connectors.providers.social.youtube.client import YouTubeApiClient
@@ -22,17 +26,25 @@ from bapp_connectors.providers.social.youtube.manifest import manifest
 from bapp_connectors.providers.social.youtube.mappers import (
     account_from_channel,
     account_stats_from_channel,
+    draft_to_video_metadata,
     post_from_video,
+    publish_result_from_video,
     stats_from_video,
 )
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from bapp_connectors.core.dto.social import SocialAccount, SocialAccountStats, SocialPost, SocialPostStats
+    from bapp_connectors.core.dto.social import (
+        SocialAccount,
+        SocialAccountStats,
+        SocialPost,
+        SocialPostDraft,
+        SocialPostStats,
+    )
 
 
-class YouTubeSocialAdapter(SocialPort):
+class YouTubeSocialAdapter(SocialPort, SocialPublishCapability):
     """
     YouTube Data API v3 adapter.
 
@@ -137,7 +149,72 @@ class YouTubeSocialAdapter(SocialPort):
         """
         return account_stats_from_channel(self._fetch_channel())
 
+    # ── SocialPublishCapability ──
+
+    def publish_post(self, draft: SocialPostDraft) -> PublishResult:
+        """Upload a video via the resumable videos.insert flow.
+
+        Requires an OAuth2 access token with the
+        https://www.googleapis.com/auth/youtube.upload scope — an API key
+        alone cannot upload. A video not longer than 3 minutes with a
+        vertical or square aspect ratio becomes a Short automatically;
+        there is no separate Shorts endpoint.
+        """
+        if not self.credentials.get("access_token"):
+            raise AuthenticationError(
+                "YouTube upload requires an OAuth2 access_token credential; an API key cannot publish"
+            )
+        if draft.media_type not in (SocialMediaType.VIDEO, SocialMediaType.SHORT_VIDEO):
+            raise ValidationError(f"YouTube can only publish videos, got media_type '{draft.media_type}'")
+        content = self._resolve_draft_content(draft)
+        upload_url = self.client.upload_video_init(draft_to_video_metadata(draft))
+        video = self.client.upload_video_content(upload_url, content)
+        return publish_result_from_video(video)
+
+    def check_publish_status(self, publish_id: str) -> PublishResult:
+        """Poll a video's processing state; ``publish_id`` is the video ID.
+
+        Maps ``status.uploadStatus``: "failed"/"rejected" → FAILED (error from
+        failureReason/rejectionReason), "processed" → PUBLISHED, anything else
+        ("uploaded", ...) → PROCESSING. Raises PermanentProviderError when the
+        video ID does not exist.
+        """
+        response = self.client.list_videos([publish_id])
+        video = first_item_or_not_found(response.get("items"), "video", publish_id)
+        status = video.get("status", {})
+        upload_status = status.get("uploadStatus", "")
+
+        if upload_status in ("failed", "rejected"):
+            publish_status = PublishStatus.FAILED
+            error = status.get("failureReason") or status.get("rejectionReason") or upload_status
+        elif upload_status == "processed":
+            publish_status = PublishStatus.PUBLISHED
+            error = ""
+        else:
+            publish_status = PublishStatus.PROCESSING
+            error = ""
+
+        return PublishResult(
+            post_id=publish_id,
+            publish_id=publish_id,
+            status=publish_status,
+            url=f"https://www.youtube.com/watch?v={publish_id}",
+            error=error,
+            extra={"upload_status": upload_status},
+        )
+
     # ── Internal ──
+
+    def _resolve_draft_content(self, draft: SocialPostDraft) -> bytes:
+        """Resolve the draft's video bytes from ``content`` or ``file_path``."""
+        if draft.content is not None:
+            return draft.content
+        if draft.file_path:
+            return Path(draft.file_path).read_bytes()
+        raise ValidationError(
+            "YouTube requires the video bytes via draft.content or draft.file_path; "
+            "media_url is not supported (YouTube does not fetch remote media)"
+        )
 
     def _fetch_channel(self) -> dict:
         """Fetch the configured channel (by ID, or `mine=true` when only OAuth is set)."""

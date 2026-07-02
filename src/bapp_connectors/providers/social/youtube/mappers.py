@@ -10,11 +10,15 @@ import re
 from datetime import datetime
 
 from bapp_connectors.core.dto.social import (
+    PublishResult,
+    PublishStatus,
     SocialAccount,
     SocialAccountStats,
     SocialMediaType,
     SocialPost,
+    SocialPostDraft,
     SocialPostStats,
+    SocialPrivacy,
 )
 from bapp_connectors.providers.social.youtube.models import YouTubeChannel, YouTubeVideo
 
@@ -172,4 +176,48 @@ def post_from_video(video: dict, shorts_max_seconds: int = 180) -> SocialPost:
         published_at=_parse_rfc3339(snippet.get("publishedAt", "")),
         hashtags=_extract_hashtags(description, title),
         stats=stats_from_video(video),
+    )
+
+
+# ── Publishing ──
+
+PRIVACY_TO_YOUTUBE = {
+    SocialPrivacy.PUBLIC: "public",
+    SocialPrivacy.PRIVATE: "private",
+    SocialPrivacy.UNLISTED: "unlisted",
+}
+
+
+def draft_to_video_metadata(draft: SocialPostDraft) -> dict:
+    """Map a SocialPostDraft to videos.insert metadata (snippet + status parts)."""
+    snippet: dict = {
+        "title": draft.title or "Untitled",
+        "description": draft.description,
+    }
+    if draft.tags:
+        snippet["tags"] = draft.tags
+    if category_id := draft.extra.get("category_id"):
+        snippet["categoryId"] = category_id
+    return {
+        "snippet": snippet,
+        "status": {
+            "privacyStatus": PRIVACY_TO_YOUTUBE[draft.privacy],
+            "selfDeclaredMadeForKids": draft.extra.get("made_for_kids", False),
+        },
+    }
+
+
+def publish_result_from_video(video: dict) -> PublishResult:
+    """Map an uploaded video resource to a PublishResult.
+
+    The video id exists immediately after upload and its watch page is live,
+    so the result is PUBLISHED even while YouTube still processes the file.
+    """
+    video_id = video.get("id", "")
+    return PublishResult(
+        post_id=video_id,
+        publish_id=video_id,
+        status=PublishStatus.PUBLISHED,
+        url=f"https://www.youtube.com/watch?v={video_id}",
+        extra={"upload_status": video.get("status", {}).get("uploadStatus", "")},
     )

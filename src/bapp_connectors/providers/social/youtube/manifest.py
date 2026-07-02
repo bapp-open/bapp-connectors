@@ -4,6 +4,7 @@ YouTube Shorts provider manifest — declares capabilities, auth, rate limits.
 Uses the YouTube Data API v3 (https://developers.google.com/youtube/v3).
 """
 
+from bapp_connectors.core.capabilities import SocialPublishCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -20,7 +21,10 @@ manifest = ProviderManifest(
     name="youtube",
     family=ProviderFamily.SOCIAL,
     display_name="YouTube Shorts",
-    description="YouTube Data API v3 integration for reading channel info, Shorts/videos, and their statistics.",
+    description=(
+        "YouTube Data API v3 integration for reading channel info, Shorts/videos, "
+        "and their statistics, and for publishing videos via resumable upload."
+    ),
     base_url="https://www.googleapis.com/youtube/v3/",
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
@@ -37,7 +41,11 @@ manifest = ProviderManifest(
                 label="Access Token",
                 sensitive=True,
                 required=False,
-                help_text="OAuth2 access token; required for `mine=true` channel access.",
+                help_text=(
+                    "OAuth2 access token; required for `mine=true` channel access. "
+                    "Publishing (video upload) requires the "
+                    "https://www.googleapis.com/auth/youtube.upload scope."
+                ),
             ),
         ],
     ),
@@ -71,6 +79,7 @@ manifest = ProviderManifest(
     ),
     capabilities=[
         SocialPort,
+        SocialPublishCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=10,
