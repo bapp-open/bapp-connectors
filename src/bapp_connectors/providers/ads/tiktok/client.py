@@ -57,6 +57,20 @@ class TikTokAdsClient:
         response = self.http.call("POST", path, headers=self._headers(), json=body)
         return check_response(response)
 
+    def _post_upload(self, path: str, payload: dict | None, files: dict | None, data: dict | None) -> dict:
+        """POST an upload endpoint — JSON for UPLOAD_BY_URL, multipart for UPLOAD_BY_FILE.
+
+        advertiser_id is merged into the JSON body (URL uploads) or into the
+        multipart form fields (file uploads), matching other POST endpoints.
+        """
+        if files is not None:
+            form = {"advertiser_id": self.advertiser_id, **(data or {})}
+            response = self.http.call("POST", path, headers=self._headers(), files=files, data=form)
+        else:
+            body = {"advertiser_id": self.advertiser_id, **(payload or {})}
+            response = self.http.call("POST", path, headers=self._headers(), json=body)
+        return check_response(response)
+
     # ── Campaigns ──
 
     def get_campaigns(self, page: int = 1, page_size: int = 20, campaign_ids: list[str] | None = None) -> dict:
@@ -150,6 +164,16 @@ class TikTokAdsClient:
             "ad/status/update/",
             {"ad_ids": ad_ids, "operation_status": operation_status},
         )
+
+    # ── Media uploads ──
+
+    def upload_image(self, payload: dict | None = None, files: dict | None = None, data: dict | None = None) -> dict:
+        """file/image/ad/upload/ — JSON body (UPLOAD_BY_URL) or multipart (UPLOAD_BY_FILE)."""
+        return self._post_upload("file/image/ad/upload/", payload, files, data)
+
+    def upload_video(self, payload: dict | None = None, files: dict | None = None, data: dict | None = None) -> dict:
+        """file/video/ad/upload/ — JSON body (UPLOAD_BY_URL) or multipart (UPLOAD_BY_FILE)."""
+        return self._post_upload("file/video/ad/upload/", payload, files, data)
 
     # ── Reporting ──
 

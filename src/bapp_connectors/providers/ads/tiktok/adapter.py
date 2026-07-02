@@ -10,19 +10,26 @@ HTTP client itself uses NoAuth.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
+from bapp_connectors.core.capabilities import CreativeUploadCapability
 from bapp_connectors.core.dto import (
     Ad,
     AdCampaign,
+    AdCreative,
     AdEntityStatus,
     AdGroup,
     AdInsights,
     AdInsightsLevel,
+    AdMediaAsset,
+    AdMediaType,
     ConnectionTestResult,
     PaginatedResult,
+    UploadedAdMedia,
 )
-from bapp_connectors.core.errors import PermanentProviderError
+from bapp_connectors.core.errors import PermanentProviderError, ValidationError
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import AdsPort
 from bapp_connectors.providers.ads.tiktok.client import TikTokAdsClient
@@ -63,13 +70,14 @@ REPORT_METRICS = [
 ]
 
 
-class TikTokAdsAdapter(AdsPort):
+class TikTokAdsAdapter(AdsPort, CreativeUploadCapability):
     """
     TikTok Business API v1.3 ads adapter.
 
     Implements AdsPort: campaign/adgroup/ad CRUD + status changes with
     page-number cursor pagination, and the universal insights interface via
-    the synchronous integrated report.
+    the synchronous integrated report. CreativeUploadCapability uploads
+    images/videos to the asset library and prepares inline creatives.
     """
 
     manifest = manifest
@@ -226,6 +234,67 @@ class TikTokAdsAdapter(AdsPort):
     def set_ad_status(self, ad_id: str, status: AdEntityStatus) -> Ad:
         self.client.update_ad_status([ad_id], status_to_tiktok(status))
         return self.get_ad(ad_id)
+
+    # ── Creative upload ──
+
+    def upload_media(self, asset: AdMediaAsset) -> UploadedAdMedia:
+        """Upload an image or video to the TikTok Ads asset library.
+
+        Accepts any AdMediaAsset source: ``url`` becomes an UPLOAD_BY_URL JSON
+        request, ``content``/``file_path`` become an UPLOAD_BY_FILE multipart
+        request with the MD5 signature TikTok requires.
+        """
+        media_type = AdMediaType(asset.media_type)
+        kind = "video" if media_type == AdMediaType.VIDEO else "image"
+        upload = self.client.upload_video if media_type == AdMediaType.VIDEO else self.client.upload_image
+
+        if asset.url:
+            payload: dict = {"upload_type": "UPLOAD_BY_URL", f"{kind}_url": asset.url}
+            if asset.filename:
+                payload["file_name"] = asset.filename
+            data = upload(payload=payload)
+        elif asset.content is not None or asset.file_path:
+            content = asset.content if asset.content is not None else Path(asset.file_path).read_bytes()
+            filename = asset.filename or (Path(asset.file_path).name if asset.file_path else f"upload.{kind}")
+            signature = hashlib.md5(content).hexdigest()
+            data = upload(
+                files={f"{kind}_file": (filename, content)},
+                data={"upload_type": "UPLOAD_BY_FILE", f"{kind}_signature": signature, "file_name": filename},
+            )
+        else:
+            raise ValidationError("TikTok media upload needs a url, file_path, or content on the AdMediaAsset.")
+
+        # Image uploads return a dict; video uploads return a list of dicts.
+        # Tolerate both shapes for both media types.
+        entry = data[0] if isinstance(data, list) else data
+        entry = entry or {}
+        media_id = str(entry.get(f"{kind}_id", ""))
+        if not media_id:
+            raise PermanentProviderError(f"TikTok {kind} upload returned no {kind}_id.")
+
+        url = entry.get("image_url") or entry.get("url") or entry.get("video_cover_url") or ""
+        return UploadedAdMedia(id=media_id, media_type=media_type, url=url, extra=entry)
+
+    def create_creative(self, creative: AdCreative, media: UploadedAdMedia | None = None) -> AdCreative:
+        """Prepare an inline TikTok creative — no platform call is made.
+
+        TikTok has no standalone creative resource: creatives live inline in
+        the ``creatives`` list of ad/create/. This merges the uploaded media
+        reference into ``creative.extra`` (video → ``extra["video_id"]``,
+        image → appended to ``extra["image_ids"]``) so the returned creative
+        can be set as ``Ad.creative`` and fed to :meth:`create_ad`, whose
+        payload mapper picks video_id/image_ids up from the creative's extra.
+        Without ``media`` the creative is returned unchanged.
+        """
+        if media is None:
+            return creative
+
+        extra = dict(creative.extra)
+        if AdMediaType(media.media_type) == AdMediaType.VIDEO:
+            extra["video_id"] = media.id
+        else:
+            extra["image_ids"] = [*extra.get("image_ids", []), media.id]
+        return creative.model_copy(update={"extra": extra})
 
     # ── Universal insights ──
 

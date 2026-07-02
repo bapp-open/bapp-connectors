@@ -4,6 +4,7 @@ TikTok Ads provider manifest — declares capabilities, auth, and rate limits.
 Uses the TikTok Business API v1.3 (https://business-api.tiktok.com/).
 """
 
+from bapp_connectors.core.capabilities import CreativeUploadCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -38,6 +39,7 @@ manifest = ProviderManifest(
     ),
     capabilities=[
         AdsPort,
+        CreativeUploadCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,

@@ -377,7 +377,8 @@ def ad_creative_to_tiktok(data: dict) -> dict:
 
     Used inside the ``creatives`` list of ad/create/ and ad/update/ payloads.
     ``video_id``/``image_ids`` and ``identity_id``/``identity_type`` pass
-    through from ``Ad.extra``.
+    through from ``Ad.extra``, falling back to ``Ad.creative.extra`` (where
+    CreativeUploadCapability.create_creative merges uploaded media references).
     """
     creative = data.get("creative") or {}
     if isinstance(creative, AdCreative):
@@ -394,9 +395,12 @@ def ad_creative_to_tiktok(data: dict) -> dict:
         payload["landing_page_url"] = creative["landing_url"]
 
     extra = data.get("extra") or {}
+    creative_extra = creative.get("extra") or {}
     for key in ("video_id", "image_ids", "identity_id", "identity_type"):
         if key in extra:
             payload[key] = extra[key]
+        elif key in creative_extra:
+            payload[key] = creative_extra[key]
     return payload
 
 

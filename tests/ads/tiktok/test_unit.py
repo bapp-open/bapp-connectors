@@ -7,20 +7,25 @@ All HTTP is faked with canned TikTok Business API envelopes:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime
 from decimal import Decimal
 
 import pytest
 
+from bapp_connectors.core.capabilities import CreativeUploadCapability
 from bapp_connectors.core.dto.ads import (
     Ad,
     AdCampaign,
     AdCreative,
     AdGroup,
     AdInsightsLevel,
+    AdMediaAsset,
+    AdMediaType,
     AdObjective,
     AdTargeting,
+    UploadedAdMedia,
 )
 from bapp_connectors.core.errors import (
     AuthenticationError,
@@ -137,6 +142,13 @@ def fake_http() -> FakeHttpClient:
     fake.add("POST", "ad/create/", envelope({"ad_ids": ["ad1"], "creatives": [{"ad_id": "ad1"}]}))
     fake.add("POST", "ad/status/update/", envelope({"ad_ids": ["ad1"]}))
     fake.add("POST", "ad/update/", envelope({"ad_ids": ["ad1"]}))
+
+    fake.add(
+        "POST",
+        "file/image/ad/upload/",
+        envelope({"image_id": "img123", "image_url": "https://cdn.tiktok.example/img123.png"}),
+    )
+    fake.add("POST", "file/video/ad/upload/", envelope([{"video_id": "v456"}]))
 
     fake.add("GET", "report/integrated/get/", list_envelope([REPORT_ROW]))
     return fake
@@ -394,6 +406,78 @@ class TestPagination:
         result = adapter.list_campaigns(cursor="3")
         assert result.has_more is False
         assert result.cursor is None
+
+
+class TestCreativeUpload:
+    """CreativeUploadCapability: media uploads + inline creative preparation."""
+
+    def test_supports_creative_upload(self, adapter: TikTokAdsAdapter):
+        assert adapter.supports(CreativeUploadCapability) is True
+
+    def test_upload_image_by_url(self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient):
+        asset = AdMediaAsset(media_type=AdMediaType.IMAGE, url="https://example.com/pic.png", filename="pic.png")
+        media = adapter.upload_media(asset)
+
+        call = next(c for c in fake_http.calls if c.path == "file/image/ad/upload/")
+        body = call.kwargs["json"]
+        assert body["advertiser_id"] == "adv1"
+        assert body["upload_type"] == "UPLOAD_BY_URL"
+        assert body["image_url"] == "https://example.com/pic.png"
+        assert body["file_name"] == "pic.png"
+
+        assert media.id == "img123"
+        assert media.media_type == AdMediaType.IMAGE
+        assert media.url == "https://cdn.tiktok.example/img123.png"
+        assert media.extra["image_id"] == "img123"
+
+    def test_upload_video_by_file_bytes(self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient):
+        content = b"fake-video-bytes"
+        asset = AdMediaAsset(media_type=AdMediaType.VIDEO, content=content, filename="clip.mp4")
+        media = adapter.upload_media(asset)
+
+        call = next(c for c in fake_http.calls if c.path == "file/video/ad/upload/")
+        assert call.kwargs["files"] == {"video_file": ("clip.mp4", content)}
+        form = call.kwargs["data"]
+        assert form["advertiser_id"] == "adv1"
+        assert form["upload_type"] == "UPLOAD_BY_FILE"
+        assert form["video_signature"] == hashlib.md5(content).hexdigest()
+        assert form["file_name"] == "clip.mp4"
+
+        assert media.id == "v456"
+        assert media.media_type == AdMediaType.VIDEO
+
+    def test_upload_without_source_is_rejected(self, adapter: TikTokAdsAdapter):
+        with pytest.raises(ValidationError):
+            adapter.upload_media(AdMediaAsset(media_type=AdMediaType.IMAGE))
+
+    def test_create_creative_merges_video_id(self, adapter: TikTokAdsAdapter):
+        creative = AdCreative(body="Buy now", landing_url="https://example.com")
+        media = UploadedAdMedia(id="v456", media_type=AdMediaType.VIDEO)
+        prepared = adapter.create_creative(creative, media)
+        assert prepared.extra["video_id"] == "v456"
+        assert prepared.body == "Buy now"
+
+    def test_create_creative_appends_image_ids(self, adapter: TikTokAdsAdapter):
+        creative = AdCreative(body="Buy now")
+        first = adapter.create_creative(creative, UploadedAdMedia(id="img1", media_type=AdMediaType.IMAGE))
+        assert first.extra["image_ids"] == ["img1"]
+        second = adapter.create_creative(first, UploadedAdMedia(id="img2", media_type=AdMediaType.IMAGE))
+        assert second.extra["image_ids"] == ["img1", "img2"]
+
+    def test_create_creative_without_media_returns_creative_unchanged(self, adapter: TikTokAdsAdapter):
+        creative = AdCreative(body="Buy now", extra={"video_id": "v456"})
+        assert adapter.create_creative(creative) == creative
+
+    def test_create_ad_picks_video_id_from_creative_extra(self, adapter: TikTokAdsAdapter, fake_http: FakeHttpClient):
+        ad = Ad(
+            ad_group_id="ag1",
+            name="Video Ad",
+            creative=AdCreative(body="Buy now", extra={"video_id": "v456"}),
+        )
+        adapter.create_ad(ad)
+        create_call = next(c for c in fake_http.calls if c.path == "ad/create/")
+        creative = create_call.kwargs["json"]["creatives"][0]
+        assert creative["video_id"] == "v456"
 
 
 class TestStatusMapping:
