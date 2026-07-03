@@ -45,6 +45,19 @@ class LinkedInApiClient:
             "LinkedIn-Version": self.version,
         }
 
+    def get_raw(self, path: str, access_token: str | None = None) -> dict:
+        """GET an arbitrary REST path with the Rest.li headers.
+
+        ``access_token`` overrides the client's stored token for this call
+        only (used by connect-flow helpers that run before credentials are
+        stored). Non-dict bodies come back as ``{}``.
+        """
+        headers = self._headers()
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+        response = self.http.call("GET", path, headers=headers)
+        return response if isinstance(response, dict) else {}
+
     def get_organization(self, org_id: str) -> dict:
         """GET organizations/{org_id} — fetch the organization profile."""
         return self.http.call("GET", f"organizations/{org_id}", headers=self._headers())

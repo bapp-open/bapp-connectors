@@ -205,6 +205,39 @@ class MetaAdsAdapter(AdsPort, CreativeUploadCapability, OAuthCapability):
             },
         )
 
+    def list_ad_accounts(self, user_token: str) -> list[dict]:
+        """List the ad accounts the user can manage, for the connect-flow account picker.
+
+        Helper for completing the OAuth flow (not part of OAuthCapability):
+        call this with the user token returned by ``exchange_code_for_token``
+        (or ``refresh_token``), let the user pick an account, and store its
+        ``ad_account_id`` as the ``ad_account_id`` credential (the token
+        itself goes in the ``token`` credential).
+
+        Returns a list of ``{"ad_account_id", "name", "currency", "status"}``
+        dicts, where ``ad_account_id`` is the numeric account id (no ``act_``
+        prefix) and ``status`` is Meta's raw ``account_status`` code.
+        """
+        response = self.client.http.call(
+            "GET",
+            "me/adaccounts",
+            params={
+                "fields": "id,account_id,name,currency,account_status",
+                "access_token": user_token,
+            },
+        )
+        data = response if isinstance(response, dict) else {}
+        check_payload(data)
+        return [
+            {
+                "ad_account_id": str(account.get("account_id", "")),
+                "name": account.get("name", ""),
+                "currency": account.get("currency", ""),
+                "status": account.get("account_status"),
+            }
+            for account in data.get("data", [])
+        ]
+
     # ── Shared helpers ──
 
     def _paginate(self, response: dict, mapper: Callable[[dict], object]) -> PaginatedResult:

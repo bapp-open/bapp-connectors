@@ -251,6 +251,30 @@ class GoogleAdsAdapter(AdsPort, CreativeUploadCapability, OAuthCapability):
             },
         )
 
+    def list_accessible_customers(self, access_token: str | None = None) -> list[dict]:
+        """List the customer ids the token can access directly, for the connect-flow account picker.
+
+        Helper for completing the OAuth flow (not part of OAuthCapability):
+        call this with the token returned by ``exchange_code_for_token``
+        (defaults to the adapter's stored ``access_token`` credential), let
+        the user pick an account, and store its ``customer_id`` as the
+        ``customer_id`` credential. This endpoint needs no
+        ``login-customer-id`` header, so only the Bearer token and
+        developer-token headers are sent.
+
+        Returns a list of ``{"customer_id"}`` dicts (bare numeric ids).
+        Account names are not included — fetching them would require a
+        per-customer GAQL query with a ``login-customer-id`` header, which is
+        out of scope for this helper.
+        """
+        headers = {
+            "Authorization": f"Bearer {access_token or self.client.access_token}",
+            "developer-token": self.client.developer_token,
+        }
+        response = self.client.http.call("GET", "customers:listAccessibleCustomers", headers=headers)
+        data = response if isinstance(response, dict) else {}
+        return [{"customer_id": resource_name.rsplit("/", 1)[-1]} for resource_name in data.get("resourceNames", [])]
+
     # ── Internal helpers ──
 
     def _search(self, query: str, page_token: str | None = None) -> tuple[list[dict], str | None]:

@@ -514,3 +514,51 @@ class TestPinterestAdsOAuth:
         fake.add("POST", "oauth/token", {"access_token": "AT3", "refresh_token": "RT_NEW"})
         tokens = self.make_oauth_adapter(fake).refresh_token("RT_OLD")
         assert tokens.refresh_token == "RT_NEW"
+
+
+AD_ACCOUNTS_LIST = {
+    "items": [
+        {"id": ACCOUNT_ID, "name": "Test Account", "currency": "USD", "country": "US"},
+        {"id": "111111111111", "name": "Second Account", "currency": "EUR", "country": "RO"},
+    ],
+    "bookmark": None,
+}
+
+
+class TestListAdAccounts:
+    """Connect-flow helper: GET ad_accounts with an optional Bearer override."""
+
+    def make_helper_adapter(self, fake: FakeHttpClient) -> PinterestAdsAdapter:
+        return PinterestAdsAdapter(credentials={"token": "stored-token"}, http_client=fake)
+
+    def test_returns_picker_rows(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "ad_accounts", AD_ACCOUNTS_LIST)
+        accounts = self.make_helper_adapter(fake).list_ad_accounts()
+        assert accounts == [
+            {"ad_account_id": ACCOUNT_ID, "name": "Test Account", "currency": "USD", "country": "US"},
+            {"ad_account_id": "111111111111", "name": "Second Account", "currency": "EUR", "country": "RO"},
+        ]
+
+    def test_stored_token_call_shape(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "ad_accounts", AD_ACCOUNTS_LIST)
+        self.make_helper_adapter(fake).list_ad_accounts()
+        call = fake.last_call()
+        assert call.method == "GET"
+        assert call.path == "ad_accounts"
+        assert call.kwargs["params"] == {"page_size": 25}
+        assert call.kwargs["headers"] is None  # stored token: auth stays on the http client
+
+    def test_explicit_token_sent_as_bearer_header_override(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "ad_accounts", AD_ACCOUNTS_LIST)
+        self.make_helper_adapter(fake).list_ad_accounts(access_token="FRESH_TOKEN")
+        call = fake.last_call()
+        assert call.kwargs["headers"] == {"Authorization": "Bearer FRESH_TOKEN"}
+        assert call.kwargs["params"] == {"page_size": 25}
+
+    def test_empty_items_returns_empty_list(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "ad_accounts", {"items": [], "bookmark": None})
+        assert self.make_helper_adapter(fake).list_ad_accounts() == []

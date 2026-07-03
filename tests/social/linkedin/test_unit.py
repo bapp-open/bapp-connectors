@@ -539,6 +539,71 @@ class TestLinkedInOAuth:
         assert tokens.refresh_token == "NEW_REFRESH"
 
 
+# ── Organization discovery (connect-flow helper) ──
+
+
+ORG_ACLS = {
+    "elements": [
+        {"organization": ORG_URN, "role": "ADMINISTRATOR", "state": "APPROVED"},
+        {"organization": "urn:li:organization:999", "role": "ADMINISTRATOR", "state": "APPROVED"},
+    ],
+}
+
+
+class TestListOrganizations:
+    """Connect-flow helper: organizationAcls finder + per-org name lookups."""
+
+    def test_returns_picker_rows(self):
+        fake = make_fake_http()
+        fake.add("GET", "organizationAcls", ORG_ACLS)
+        fake.add("GET", "organizations/999", {"id": 999, "localizedName": "Other Co"})
+        organizations = make_adapter(fake).list_organizations()
+        assert organizations == [
+            {"organization_id": ORG_ID, "urn": ORG_URN, "name": "Test Co"},
+            {"organization_id": "999", "urn": "urn:li:organization:999", "name": "Other Co"},
+        ]
+
+    def test_acls_call_uses_stored_token_and_restli_headers(self):
+        fake = make_fake_http()
+        fake.add("GET", "organizationAcls", ORG_ACLS)
+        fake.add("GET", "organizations/999", {"id": 999, "localizedName": "Other Co"})
+        make_adapter(fake).list_organizations()
+        acls_call = next(c for c in fake.calls if "organizationAcls" in c.path)
+        assert acls_call.path == "organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED"
+        assert acls_call.kwargs["headers"]["Authorization"] == "Bearer test_token"
+        assert acls_call.kwargs["headers"]["X-Restli-Protocol-Version"] == "2.0.0"
+
+    def test_explicit_token_overrides_credential_on_every_call(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "organizationAcls", {"elements": [{"organization": ORG_URN}]})
+        fake.add("GET", f"organizations/{ORG_ID}", ORG_OBJECT)
+        organizations = make_adapter(fake).list_organizations(access_token="FRESH_TOKEN")
+        assert organizations == [{"organization_id": ORG_ID, "urn": ORG_URN, "name": "Test Co"}]
+        assert fake.calls
+        for call in fake.calls:
+            assert call.kwargs["headers"]["Authorization"] == "Bearer FRESH_TOKEN"
+
+    def test_org_name_fetch_failure_is_tolerated(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "organizationAcls", ORG_ACLS)
+        fake.add(
+            "GET",
+            f"organizations/{ORG_ID}",
+            lambda m, p, k: (_ for _ in ()).throw(ProviderError("forbidden")),
+        )
+        fake.add("GET", "organizations/999", {"id": 999, "localizedName": "Other Co"})
+        organizations = make_adapter(fake).list_organizations()
+        assert organizations == [
+            {"organization_id": ORG_ID, "urn": ORG_URN, "name": ""},  # failure tolerated
+            {"organization_id": "999", "urn": "urn:li:organization:999", "name": "Other Co"},
+        ]
+
+    def test_empty_elements_returns_empty_list(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "organizationAcls", {"elements": []})
+        assert make_adapter(fake).list_organizations() == []
+
+
 # ── Credentials & connection ──
 
 

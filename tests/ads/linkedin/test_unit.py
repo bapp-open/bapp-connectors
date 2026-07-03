@@ -588,3 +588,49 @@ class TestLinkedInOAuth:
         assert data["client_secret"] == "cs_456"
         assert tokens.access_token == "AT2"
         assert tokens.refresh_token == "RT"  # absent in the response — current one kept
+
+
+AD_ACCOUNTS_SEARCH = {
+    "elements": [
+        {"id": 512345678, "name": "Test Account", "currency": "USD", "status": "ACTIVE"},
+        {"id": 900000001, "name": "Second Account", "currency": "EUR", "status": "DRAFT"},
+    ],
+}
+
+
+class TestListAdAccounts:
+    """Connect-flow helper: the adAccounts?q=search finder."""
+
+    def test_returns_picker_rows(self, adapter, fake_http):
+        fake_http.responses.insert(0, ("GET", "adAccounts?q=search", AD_ACCOUNTS_SEARCH))
+        accounts = adapter.list_ad_accounts()
+        assert accounts == [
+            {"ad_account_id": "512345678", "name": "Test Account", "currency": "USD", "status": "ACTIVE"},
+            {"ad_account_id": "900000001", "name": "Second Account", "currency": "EUR", "status": "DRAFT"},
+        ]
+
+    def test_uses_stored_token_and_restli_headers(self, adapter, fake_http):
+        fake_http.responses.insert(0, ("GET", "adAccounts?q=search", AD_ACCOUNTS_SEARCH))
+        adapter.list_ad_accounts()
+        call = fake_http.last_call()
+        assert call.method == "GET"
+        assert call.path == "adAccounts?q=search"
+        assert call.kwargs["headers"]["Authorization"] == "Bearer test-token"
+        assert call.kwargs["headers"]["X-Restli-Protocol-Version"] == "2.0.0"
+        assert call.kwargs["headers"]["LinkedIn-Version"] == "202405"
+
+    def test_explicit_token_overrides_credential(self, adapter, fake_http):
+        fake_http.responses.insert(0, ("GET", "adAccounts?q=search", AD_ACCOUNTS_SEARCH))
+        adapter.list_ad_accounts(access_token="FRESH_TOKEN")
+        headers = fake_http.last_call().kwargs["headers"]
+        assert headers["Authorization"] == "Bearer FRESH_TOKEN"
+        assert headers["X-Restli-Protocol-Version"] == "2.0.0"
+
+    def test_empty_elements_returns_empty_list(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "adAccounts?q=search", {"elements": []})
+        adapter = LinkedInAdsAdapter(
+            credentials={"access_token": "test-token", "ad_account_id": ACCOUNT_ID},
+            http_client=fake,
+        )
+        assert adapter.list_ad_accounts() == []

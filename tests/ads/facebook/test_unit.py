@@ -25,7 +25,7 @@ from bapp_connectors.core.dto.ads import (
     AdTargeting,
     UploadedAdMedia,
 )
-from bapp_connectors.core.errors import ConfigurationError, ValidationError
+from bapp_connectors.core.errors import AuthenticationError, ConfigurationError, ValidationError
 from bapp_connectors.providers.ads.facebook.adapter import MetaAdsAdapter
 from bapp_connectors.providers.ads.facebook.manifest import manifest
 from bapp_connectors.providers.ads.facebook.mappers import (
@@ -616,3 +616,47 @@ class TestMetaAdsOAuth:
         assert tokens.access_token == "LONG_LIVED_TOKEN"
         assert tokens.refresh_token == ""
         assert tokens.expires_in == 5184000
+
+
+AD_ACCOUNTS_RESPONSE = {
+    "data": [
+        {"id": "act_123", "account_id": "123", "name": "Main Account", "currency": "RON", "account_status": 1},
+        {"id": "act_456", "account_id": 456, "name": "Backup", "currency": "EUR", "account_status": 2},
+    ],
+    "paging": {"cursors": {"before": "b", "after": "a"}},
+}
+
+
+class TestListAdAccounts:
+    """Connect-flow helper: me/adaccounts with the user token from the code exchange."""
+
+    def make_oauth_adapter(self, fake: FakeHttpClient) -> MetaAdsAdapter:
+        return MetaAdsAdapter(
+            credentials={"app_id": "app_123", "app_secret": "app_secret_456"},
+            http_client=fake,
+        )
+
+    def test_returns_picker_rows(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "me/adaccounts", AD_ACCOUNTS_RESPONSE)
+        accounts = self.make_oauth_adapter(fake).list_ad_accounts("USER_TOKEN")
+        assert accounts == [
+            {"ad_account_id": "123", "name": "Main Account", "currency": "RON", "status": 1},
+            {"ad_account_id": "456", "name": "Backup", "currency": "EUR", "status": 2},
+        ]
+
+    def test_user_token_sent_as_param(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "me/adaccounts", AD_ACCOUNTS_RESPONSE)
+        self.make_oauth_adapter(fake).list_ad_accounts("USER_TOKEN")
+        call = fake.last_call()
+        assert call.method == "GET"
+        assert call.path == "me/adaccounts"
+        assert call.kwargs["params"]["access_token"] == "USER_TOKEN"
+        assert call.kwargs["params"]["fields"] == "id,account_id,name,currency,account_status"
+
+    def test_error_payload_routed_through_check_payload(self):
+        fake = FakeHttpClient()
+        fake.add("GET", "me/adaccounts", {"error": {"message": "bad token", "type": "OAuthException", "code": 190}})
+        with pytest.raises(AuthenticationError):
+            self.make_oauth_adapter(fake).list_ad_accounts("EXPIRED_TOKEN")

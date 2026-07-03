@@ -161,6 +161,19 @@ class LinkedInAdsClient:
     def get_account(self) -> dict:
         return self._get(f"adAccounts/{self.account_id}")
 
+    def search_ad_accounts(self, access_token: str | None = None) -> dict:
+        """GET the adAccounts search finder — every ad account the token can access.
+
+        ``access_token`` overrides the client's stored token for this call
+        only (used by connect-flow helpers that run before credentials are
+        stored).
+        """
+        headers = self._headers()
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+        response = self.http.call("GET", "adAccounts?q=search", headers=headers)
+        return response if isinstance(response, dict) else {}
+
     def analytics(self, params: dict) -> dict:
         """GET adAnalytics with a manually built query string.
 

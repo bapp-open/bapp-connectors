@@ -204,6 +204,29 @@ class LinkedInAdsAdapter(AdsPort, OAuthCapability):
         data = response if isinstance(response, dict) else {}
         return self._tokens_from_response(data, fallback_refresh=refresh_token)
 
+    def list_ad_accounts(self, access_token: str | None = None) -> list[dict]:
+        """List the ad accounts the token can access, for the connect-flow account picker.
+
+        Helper for completing the OAuth flow (not part of OAuthCapability):
+        call this with the token returned by ``exchange_code_for_token``
+        (defaults to the adapter's stored ``access_token`` credential), let
+        the user pick an account, and store its ``ad_account_id`` as the
+        ``ad_account_id`` credential.
+
+        Returns a list of ``{"ad_account_id", "name", "currency", "status"}``
+        dicts, where ``ad_account_id`` is the numeric account id as a string.
+        """
+        response = self.client.search_ad_accounts(access_token=access_token)
+        return [
+            {
+                "ad_account_id": str(element.get("id", "")),
+                "name": element.get("name", ""),
+                "currency": element.get("currency", ""),
+                "status": element.get("status", ""),
+            }
+            for element in response.get("elements", [])
+        ]
+
     # ── Shared helpers ──
 
     @staticmethod

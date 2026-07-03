@@ -18,7 +18,7 @@ from bapp_connectors.core.capabilities import OAuthCapability, SocialPublishCapa
 from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
 from bapp_connectors.core.dto.social import PublishResult, PublishStatus, SocialPrivacy
-from bapp_connectors.core.errors import ValidationError
+from bapp_connectors.core.errors import ConnectorError, ValidationError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import SocialPort
 from bapp_connectors.providers.social.linkedin.client import LinkedInApiClient
@@ -187,6 +187,39 @@ class LinkedInSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapability
                 "refresh_token_expires_in": data.get("refresh_token_expires_in"),
             },
         )
+
+    def list_organizations(self, access_token: str | None = None) -> list[dict]:
+        """List the organizations the member administers, for the connect-flow account picker.
+
+        Helper for completing the OAuth flow (not part of OAuthCapability):
+        call this with the token returned by ``exchange_code_for_token``
+        (defaults to the adapter's stored ``access_token`` credential), let
+        the user pick an organization, and store its ``organization_id`` as
+        the ``organization_id`` credential.
+
+        Per-organization name lookups are tolerated to fail (missing
+        ``r_organization_admin`` visibility, deleted pages) — ``name`` comes
+        back as ``""`` in that case.
+
+        Returns a list of ``{"organization_id", "urn", "name"}`` dicts.
+        """
+        payload = self.client.get_raw(
+            "organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED",
+            access_token=access_token,
+        )
+        organizations = []
+        for element in payload.get("elements", []):
+            urn = element.get("organization", "")
+            organization_id = urn.rsplit(":", 1)[-1] if urn else ""
+            name = ""
+            if organization_id:
+                try:
+                    org = self.client.get_raw(f"organizations/{organization_id}", access_token=access_token)
+                    name = org.get("localizedName", "")
+                except ConnectorError:
+                    name = ""
+            organizations.append({"organization_id": organization_id, "urn": urn, "name": name})
+        return organizations
 
     # ── SocialPort ──
 

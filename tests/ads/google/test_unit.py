@@ -613,3 +613,37 @@ class TestGoogleAdsOAuth:
 
     def test_supports_oauth_capability(self, adapter):
         assert adapter.supports(OAuthCapability) is True
+
+
+ACCESSIBLE_CUSTOMERS = {"resourceNames": [f"customers/{CUSTOMER_ID}", "customers/2222222222"]}
+
+
+class TestListAccessibleCustomers:
+    """Connect-flow helper: customers:listAccessibleCustomers with an optional token override."""
+
+    def test_returns_picker_rows_with_stored_token(self, adapter, fake_http):
+        fake_http.add("GET", "customers:listAccessibleCustomers", ACCESSIBLE_CUSTOMERS)
+        customers = adapter.list_accessible_customers()
+        assert customers == [{"customer_id": CUSTOMER_ID}, {"customer_id": "2222222222"}]
+        call = fake_http.last_call()
+        assert call.method == "GET"
+        assert call.path == "customers:listAccessibleCustomers"
+        assert call.kwargs["headers"]["Authorization"] == "Bearer access-token"
+        assert call.kwargs["headers"]["developer-token"] == "dev-token"
+
+    def test_no_login_customer_id_header_even_when_configured(self, adapter, fake_http):
+        # The adapter fixture sets login_customer_id — this endpoint must not send it.
+        fake_http.add("GET", "customers:listAccessibleCustomers", ACCESSIBLE_CUSTOMERS)
+        adapter.list_accessible_customers()
+        assert "login-customer-id" not in fake_http.last_call().kwargs["headers"]
+
+    def test_explicit_token_overrides_credential(self, adapter, fake_http):
+        fake_http.add("GET", "customers:listAccessibleCustomers", ACCESSIBLE_CUSTOMERS)
+        adapter.list_accessible_customers(access_token="FRESH_TOKEN")
+        headers = fake_http.last_call().kwargs["headers"]
+        assert headers["Authorization"] == "Bearer FRESH_TOKEN"
+        assert headers["developer-token"] == "dev-token"
+
+    def test_empty_resource_names_returns_empty_list(self, adapter, fake_http):
+        fake_http.add("GET", "customers:listAccessibleCustomers", {})
+        assert adapter.list_accessible_customers() == []

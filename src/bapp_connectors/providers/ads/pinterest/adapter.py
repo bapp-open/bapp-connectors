@@ -180,6 +180,33 @@ class PinterestAdsAdapter(AdsPort, OAuthCapability):
         data = response if isinstance(response, dict) else {}
         return self._token_response(data, fallback_refresh_token=refresh_token)
 
+    def list_ad_accounts(self, access_token: str | None = None) -> list[dict]:
+        """List the ad accounts the token can access, for the connect-flow account picker.
+
+        Helper for completing the OAuth flow (not part of OAuthCapability):
+        the adapter's http client authenticates with the stored ``token``
+        credential — pass ``access_token`` (e.g. the fresh token from
+        ``exchange_code_for_token``) to override it with a Bearer header on
+        this call only. Let the user pick an account and store its
+        ``ad_account_id`` as the ``ad_account_id`` credential.
+
+        Returns a list of ``{"ad_account_id", "name", "currency", "country"}`` dicts.
+        """
+        kwargs: dict = {"params": {"page_size": DEFAULT_PAGE_SIZE}}
+        if access_token:
+            kwargs["headers"] = {"Authorization": f"Bearer {access_token}"}
+        response = self.client.http.call("GET", "ad_accounts", **kwargs)
+        data = response if isinstance(response, dict) else {}
+        return [
+            {
+                "ad_account_id": account.get("id", ""),
+                "name": account.get("name", ""),
+                "currency": account.get("currency", ""),
+                "country": account.get("country", ""),
+            }
+            for account in data.get("items", [])
+        ]
+
     # ── Shared helpers ──
 
     @staticmethod
