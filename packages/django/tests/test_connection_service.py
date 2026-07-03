@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from django_bapp_connectors.services.connection import ConnectionService
-
 from tests.testapp.models import Connection
 
 
@@ -160,3 +159,21 @@ class TestListAvailableProviders:
 
         mock_registry.list_providers.assert_called_once_with(family="courier")
         assert result == mock_manifests
+
+
+# ── FAMILY_DEFAULTS ──
+
+
+class TestFamilyDefaults:
+    def test_every_provider_family_has_display_metadata(self):
+        """Each ProviderFamily must have label/icon/color so the connection
+        picker never falls back to the generic gray plug entry."""
+        from bapp_connectors.core.types import ProviderFamily
+        from django_bapp_connectors.services.connection import FAMILY_DEFAULTS
+
+        for family in ProviderFamily:
+            assert family in FAMILY_DEFAULTS, f"FAMILY_DEFAULTS missing entry for {family!r}"
+            meta = FAMILY_DEFAULTS[family]
+            assert meta.get("label"), f"{family!r} entry has no label"
+            assert meta.get("icon"), f"{family!r} entry has no icon"
+            assert meta.get("color"), f"{family!r} entry has no color"

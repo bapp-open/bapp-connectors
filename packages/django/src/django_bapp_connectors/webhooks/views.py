@@ -137,14 +137,62 @@ def oauth_callback(request: HttpRequest, provider: str) -> HttpResponse:
     """
     OAuth2 callback handler.
 
-    Receives the authorization code and exchanges it for tokens.
+    When the flow was started via ``OAuthService.get_authorize_url`` (the
+    ``state`` param carries a signed connection reference), the authorization
+    code is exchanged for tokens, the tokens are stored on the connection's
+    encrypted credentials, and the connection is marked connected.
+
+    Responses are JSON by default; set ``BAPP_CONNECTORS["OAUTH_SUCCESS_REDIRECT"]``
+    / ``["OAUTH_ERROR_REDIRECT"]`` to redirect the user's browser instead.
+
+    Callbacks without a ``state`` (flows driven outside OAuthService) are
+    acknowledged with ``{"status": "ok"}`` and left to the application.
     """
+    from urllib.parse import urlencode
+
+    from django.http import HttpResponseRedirect
+
+    from django_bapp_connectors.settings import get_setting
+
     code = request.GET.get("code", "")
     state = request.GET.get("state", "")
+    provider_error = request.GET.get("error", "")
+
+    def _fail(message: str) -> HttpResponse:
+        error_redirect = get_setting("OAUTH_ERROR_REDIRECT")
+        if error_redirect:
+            return HttpResponseRedirect(f"{error_redirect}?{urlencode({'error': message})}")
+        return JsonResponse({"error": message, "provider": provider}, status=400)
+
+    if provider_error:
+        logger.warning("OAuth callback error from provider %s: %s", provider, provider_error)
+        return _fail(provider_error)
 
     if not code:
-        return JsonResponse({"error": "Missing authorization code"}, status=400)
+        return _fail("Missing authorization code")
 
-    logger.info("OAuth callback: provider=%s state=%s", provider, state)
+    if not state:
+        logger.info("OAuth callback without state: provider=%s", provider)
+        return JsonResponse({"status": "ok", "provider": provider})
 
-    return JsonResponse({"status": "ok", "provider": provider})
+    from django.core import signing
+
+    from django_bapp_connectors.services.oauth import OAuthService
+
+    try:
+        connection = OAuthService.complete_authorization(state=state, code=code)
+    except signing.BadSignature:
+        logger.warning("OAuth callback with invalid state: provider=%s", provider)
+        return _fail("Invalid or expired state")
+    except Exception:
+        logger.exception("OAuth authorization failed: provider=%s", provider)
+        return _fail("Authorization could not be completed")
+
+    success_redirect = get_setting("OAUTH_SUCCESS_REDIRECT")
+    if success_redirect:
+        return HttpResponseRedirect(
+            f"{success_redirect}?{urlencode({'connection_id': connection.pk})}"
+        )
+    return JsonResponse(
+        {"status": "connected", "provider": provider, "connection_id": connection.pk}
+    )

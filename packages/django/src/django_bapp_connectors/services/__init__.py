@@ -1,5 +1,6 @@
 from .connection import ConnectionService
 from .inbox import InboxPollRecord, InboxPollResult, InboxPollService
+from .oauth import OAuthService
 from .sync import SyncService
 from .webhook import WebhookService
 
@@ -8,6 +9,7 @@ __all__ = [
     "InboxPollRecord",
     "InboxPollResult",
     "InboxPollService",
+    "OAuthService",
     "SyncService",
     "WebhookService",
 ]

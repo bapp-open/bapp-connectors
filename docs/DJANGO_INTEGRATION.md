@@ -117,6 +117,15 @@ BAPP_CONNECTORS = {
 
     # Base URL for webhook endpoints
     "WEBHOOK_BASE_URL": "https://yourdomain.com/webhooks/",
+
+    # Concrete model paths — required for the bundled webhook/OAuth views
+    "CONNECTION_MODEL": "myapp.Connection",
+    "WEBHOOK_EVENT_MODEL": "myapp.WebhookEvent",
+
+    # OAuth flow (see "OAuth Connections" below)
+    "OAUTH_STATE_MAX_AGE": 900,        # seconds a signed state stays valid
+    "OAUTH_SUCCESS_REDIRECT": "",      # browser redirect after connect (else JSON)
+    "OAUTH_ERROR_REDIRECT": "",        # browser redirect on failure (else JSON 400)
 }
 ```
 
@@ -433,6 +442,77 @@ process_webhook.delay(
     model_name="WebhookEvent",
 )
 ```
+
+---
+
+## OAuth Connections (social & ads)
+
+Every social and ads provider implements `OAuthCapability`, and `OAuthService`
+drives the whole lifecycle against your `Connection` model. Requires
+`BAPP_CONNECTORS["CONNECTION_MODEL"]` to be set.
+
+### 1. Start the flow
+
+Create the connection with the provider's app credentials (the manifest's
+`auth.oauth.credential_fields`), then redirect the user:
+
+```python
+from django_bapp_connectors.services import OAuthService
+
+conn = Connection.objects.create(provider_family="social", provider_name="facebook")
+conn.credentials = {"app_id": "...", "app_secret": "..."}
+conn.save()
+
+redirect_uri = "https://yourdomain.com/webhooks/oauth/callback/facebook/"
+authorize_url = OAuthService.get_authorize_url(conn, redirect_uri)
+# redirect(authorize_url)
+```
+
+The `state` parameter carries a signed reference to the connection (15-minute
+validity by default — `BAPP_CONNECTORS["OAUTH_STATE_MAX_AGE"]`).
+
+### 2. The callback completes automatically
+
+The bundled `oauth_callback` view verifies the state, exchanges the code
+through the adapter, merges the returned tokens into the connection's
+encrypted credentials, and calls `mark_connected()`. By default it responds
+with JSON; for browser flows configure redirects:
+
+```python
+BAPP_CONNECTORS = {
+    # ...
+    "OAUTH_SUCCESS_REDIRECT": "/settings/connections/",   # gets ?connection_id=<pk>
+    "OAUTH_ERROR_REDIRECT": "/settings/connections/",     # gets ?error=<message>
+}
+```
+
+Callbacks arriving without a `state` (flows started outside `OAuthService`)
+are acknowledged with `{"status": "ok"}` and left to your application.
+
+### 3. Account pickers
+
+Some providers need one more choice after the redirect (which Page, which ad
+account). Use the adapter's discovery helper and store the result — see
+"Account pickers" in `docs/connecting/README.md` for the per-provider table:
+
+```python
+adapter = conn.get_adapter()
+pages = adapter.list_page_tokens(conn.credentials["token"])   # facebook example
+conn.credentials = {**conn.credentials, "token": pages[0].access_token, "page_id": pages[0].id}
+conn.save()
+```
+
+### 4. Refresh tokens
+
+```python
+OAuthService.refresh_tokens(conn)  # e.g. from a periodic Celery task
+```
+
+Picks the right grant per platform: providers with refresh tokens use them
+(TikTok social rotates its refresh token — the rotated one is stored
+automatically); Meta-style providers exchange the current access token for a
+fresh long-lived one. TikTok for Business (ads) has no refresh endpoint —
+re-run the authorize flow when its token expires.
 
 ---
 

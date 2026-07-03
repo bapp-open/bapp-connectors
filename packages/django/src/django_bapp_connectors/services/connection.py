@@ -34,6 +34,8 @@ FAMILY_DEFAULTS: dict[str, dict] = {
     ProviderFamily.STORAGE:   {"label": _("File Storage"),         "icon": "fad fa-cloud-upload-alt", "color": "#8b5cf6"},
     ProviderFamily.LLM:       {"label": _("AI & Language Models"), "icon": "fad fa-brain",            "color": "#6366f1"},
     ProviderFamily.FEED:      {"label": _("Product Feeds"),        "icon": "fad fa-rss",              "color": "#ef4444"},
+    ProviderFamily.SOCIAL:    {"label": _("Social Media"),         "icon": "fad fa-share-nodes",      "color": "#d946ef"},
+    ProviderFamily.ADS:       {"label": _("Advertising"),          "icon": "fad fa-bullhorn",         "color": "#f97316"},
 }
 
 
