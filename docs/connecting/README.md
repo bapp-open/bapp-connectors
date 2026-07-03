@@ -215,10 +215,31 @@ Platform lifecycles differ — the adapters encode them honestly:
 | Meta (Facebook social + ads) | ~60 days long-lived | no refresh tokens: `refresh_token(current_token)` runs the `fb_exchange_token` long-lived exchange |
 | TikTok for Business (ads) | long-term | no refresh endpoint — `refresh_token` raises `UnsupportedFeatureError`; re-run the flow to rotate |
 
-Extras: the Facebook social adapter has `list_page_tokens(user_token)` to turn
-the flow's *user* token into per-Page tokens (`/me/accounts`), and the TikTok
-Ads exchange surfaces `advertiser_ids` in `tokens.extra` for picking the
-`advertiser_id` credential.
+### Account pickers — finishing the connection
+
+After the OAuth redirect, most platforms still need to know *which* account
+the connection targets. Every provider that needs an extra ID has a discovery
+helper (or surfaces it in the token exchange), so the whole initial connection
+can be: authorize → pick from a list → done.
+
+| Provider | Helper | Store as |
+|----------|--------|----------|
+| social/facebook | `list_page_tokens(user_token)` | `token` (page token) + `page_id` |
+| social/instagram | `list_instagram_accounts(user_token)` | `token` (page token) + `ig_user_id` |
+| social/linkedin | `list_organizations()` | `organization_id` |
+| social/threads | user id in `tokens.extra` | — (token is enough) |
+| ads/facebook | `list_ad_accounts(user_token)` | `ad_account_id` |
+| ads/tiktok | `advertiser_ids` in `tokens.extra` | `advertiser_id` |
+| ads/google | `list_accessible_customers()` | `customer_id` |
+| ads/linkedin | `list_ad_accounts()` | `ad_account_id` |
+| ads/pinterest | `list_ad_accounts()` | `ad_account_id` |
+
+TikTok (social), YouTube, and Pinterest (social) need no picker — the token
+alone identifies the account. Two things stay manual: Google/Microsoft
+`developer_token`s (one-time per organization; platform policy, not
+replaceable by OAuth), and Microsoft's `customer_id`/`account_id` (the Bing
+Customer Management service isn't wrapped — read them from the Microsoft
+Advertising UI).
 
 ### Known gaps (not yet implemented)
 
