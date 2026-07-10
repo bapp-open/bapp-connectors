@@ -129,8 +129,8 @@ def _map_billing_contact(data: dict) -> Contact | None:
 
     return Contact(
         name=f"{first_name} {last_name}".strip(),
-        company_name=billing_info.get("company", "").strip(),
-        vat_id=billing_info.get("cui", "").strip(),
+        company_name=(billing_info.get("company") or "").strip(),
+        vat_id=(billing_info.get("cui") or "").strip(),
         email=buyer_contact.get("email", "").lower().strip() if buyer_contact.get("email") else "",
         phone=buyer_contact.get("phone", "").strip() if buyer_contact.get("phone") else "",
         address=Address(
