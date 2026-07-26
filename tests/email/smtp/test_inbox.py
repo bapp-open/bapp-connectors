@@ -431,20 +431,20 @@ class TestIMAPClientWrites:
     def test_delete_uid_flags_and_expunges(self):
         client, conn = self._client_with_mock_conn()
         client.delete_uid("42", folder="INBOX")
-        conn.select.assert_called_once_with("INBOX", readonly=False)
+        conn.select.assert_called_once_with('"INBOX"', readonly=False)
         conn.uid.assert_called_once_with("store", "42", "+FLAGS", "(\\Deleted)")
         conn.expunge.assert_called_once()
 
     def test_move_uid_uses_server_move_when_supported(self):
         client, conn = self._client_with_mock_conn(capabilities=("MOVE",))
         client.move_uid("42", "Archive", folder="INBOX")
-        conn.uid.assert_called_once_with("move", "42", "Archive")
-        conn.select.assert_called_once_with("INBOX", readonly=False)
+        conn.uid.assert_called_once_with("move", "42", '"Archive"')
+        conn.select.assert_called_once_with('"INBOX"', readonly=False)
 
     def test_move_uid_falls_back_to_copy(self):
         client, conn = self._client_with_mock_conn(capabilities=())
         client.move_uid("42", "Archive", folder="INBOX")
-        conn.uid.assert_any_call("copy", "42", "Archive")
+        conn.uid.assert_any_call("copy", "42", '"Archive"')
         conn.uid.assert_any_call("store", "42", "+FLAGS", "(\\Deleted)")
         conn.expunge.assert_called_once()
 
@@ -468,6 +468,73 @@ class TestIMAPClientWrites:
     def test_move_uid_copy_fallback_uses_uid_expunge_with_uidplus(self):
         client, conn = self._client_with_mock_conn(capabilities=("UIDPLUS",))
         client.move_uid("42", "Archive", folder="INBOX")
-        conn.uid.assert_any_call("copy", "42", "Archive")
+        conn.uid.assert_any_call("copy", "42", '"Archive"')
         conn.uid.assert_any_call("expunge", "42")
         conn.expunge.assert_not_called()
+
+
+class TestIMAPMailboxQuoting:
+    """Mailbox names must be quoted on the wire.
+
+    imaplib concatenates command arguments verbatim, so an unquoted folder
+    containing a space is parsed by the server as two tokens:
+    `EXAMINE Shared Folders/x@y.ro/Junk Mail` -> BAD Unexpected value ...
+    """
+
+    SHARED = "Shared Folders/office@example.ro/Junk Mail"
+
+    def _client_with_mock_conn(self, capabilities=()):
+        from bapp_connectors.providers.email.smtp.client import IMAPClient
+
+        client = IMAPClient(host="imap.example.com", username="u", password="p")
+        conn = MagicMock()
+        conn.capabilities = capabilities
+        conn.select.return_value = ("OK", [b"1"])
+        conn.uid.return_value = ("OK", [b""])
+        client._connect = MagicMock(return_value=conn)
+        return client, conn
+
+    def test_quote_mailbox_escapes_specials(self):
+        from bapp_connectors.providers.email.smtp.client import _quote_mailbox
+
+        assert _quote_mailbox("INBOX") == '"INBOX"'
+        assert _quote_mailbox(self.SHARED) == f'"{self.SHARED}"'
+        assert _quote_mailbox('od"d') == '"od\\"d"'
+        assert _quote_mailbox("back\\slash") == '"back\\\\slash"'
+
+    def test_fetch_uids_quotes_folder(self):
+        client, conn = self._client_with_mock_conn()
+        client.fetch_uids(folder=self.SHARED)
+        conn.select.assert_called_once_with(f'"{self.SHARED}"', readonly=True)
+
+    def test_fetch_headers_quotes_folder(self):
+        client, conn = self._client_with_mock_conn()
+        client.fetch_headers(["1"], folder=self.SHARED)
+        conn.select.assert_called_once_with(f'"{self.SHARED}"', readonly=True)
+
+    def test_fetch_message_quotes_folder(self):
+        client, conn = self._client_with_mock_conn()
+        conn.uid.return_value = ("OK", [(b"1 (FLAGS ())", b"Subject: x\r\n\r\n")])
+        client.fetch_message("1", folder=self.SHARED)
+        conn.select.assert_called_once_with(f'"{self.SHARED}"', readonly=True)
+
+    def test_set_seen_quotes_folder(self):
+        client, conn = self._client_with_mock_conn()
+        client.set_seen("42", folder=self.SHARED)
+        conn.select.assert_called_once_with(f'"{self.SHARED}"', readonly=False)
+
+    def test_delete_uid_quotes_folder(self):
+        client, conn = self._client_with_mock_conn()
+        client.delete_uid("42", folder=self.SHARED)
+        conn.select.assert_called_once_with(f'"{self.SHARED}"', readonly=False)
+
+    def test_move_uid_quotes_source_and_target(self):
+        client, conn = self._client_with_mock_conn(capabilities=("MOVE",))
+        client.move_uid("42", "Deleted Items", folder=self.SHARED)
+        conn.select.assert_called_once_with(f'"{self.SHARED}"', readonly=False)
+        conn.uid.assert_called_once_with("move", "42", '"Deleted Items"')
+
+    def test_move_uid_copy_fallback_quotes_target(self):
+        client, conn = self._client_with_mock_conn(capabilities=())
+        client.move_uid("42", "Deleted Items", folder=self.SHARED)
+        conn.uid.assert_any_call("copy", "42", '"Deleted Items"')

@@ -172,6 +172,23 @@ def _decode_header_value(value: str) -> str:
     return " ".join(decoded)
 
 
+def _quote_mailbox(folder: str) -> str:
+    """Return an IMAP mailbox name as a quoted string.
+
+    imaplib concatenates command arguments verbatim -- it never quotes the
+    mailbox itself -- so a folder containing a space is split by the server
+    into two tokens and the command is rejected:
+
+        EXAMINE Shared Folders/office@example.ro/Junk Mail
+        -> BAD Unexpected value 'Folders/office@example.ro/Junk'
+
+    A quoted string is always a valid mailbox (RFC 3501 astring), so quote
+    unconditionally rather than guessing which names need it.
+    """
+    escaped = folder.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 def _parse_email_address(raw: str) -> tuple[str, str]:
     """Return (name, address) from a raw header value like 'Name <addr>'."""
     from email.utils import parseaddr
@@ -234,7 +251,7 @@ class IMAPClient:
         """Search for message UIDs matching the date window."""
         conn = self._connect()
         try:
-            status, _ = conn.select(folder, readonly=True)
+            status, _ = conn.select(_quote_mailbox(folder), readonly=True)
             if status != "OK":
                 msg = f"Failed to select folder: {folder}"
                 raise IMAPFolderError(msg)
@@ -274,7 +291,7 @@ class IMAPClient:
 
         conn = self._connect()
         try:
-            conn.select(folder, readonly=True)
+            conn.select(_quote_mailbox(folder), readonly=True)
             uid_str = ",".join(uids)
             status, data = conn.uid(
                 "fetch", uid_str, "(FLAGS BODY[HEADER] BODYSTRUCTURE)"
@@ -323,7 +340,7 @@ class IMAPClient:
         """Fetch the full RFC822 message for a single UID."""
         conn = self._connect()
         try:
-            conn.select(folder, readonly=True)
+            conn.select(_quote_mailbox(folder), readonly=True)
             status, data = conn.uid("fetch", uid, "(FLAGS RFC822)")
             if status != "OK" or not data or data[0] is None:
                 msg = f"Message {uid} not found in {folder}"
@@ -352,7 +369,7 @@ class IMAPClient:
         """Add or remove the \\Seen flag on a message."""
         conn = self._connect()
         try:
-            conn.select(folder, readonly=False)
+            conn.select(_quote_mailbox(folder), readonly=False)
             op = "+FLAGS" if seen else "-FLAGS"
             conn.uid("store", uid, op, "(\\Seen)")
         finally:
@@ -363,7 +380,7 @@ class IMAPClient:
         """Delete a message: flag \\Deleted then expunge."""
         conn = self._connect()
         try:
-            conn.select(folder, readonly=False)
+            conn.select(_quote_mailbox(folder), readonly=False)
             conn.uid("store", uid, "+FLAGS", "(\\Deleted)")
             self._expunge_uid(conn, uid)
         finally:
@@ -378,12 +395,12 @@ class IMAPClient:
         """
         conn = self._connect()
         try:
-            conn.select(folder, readonly=False)
+            conn.select(_quote_mailbox(folder), readonly=False)
             capabilities = getattr(conn, "capabilities", ())
             if "MOVE" in capabilities:
-                conn.uid("move", uid, target_folder)
+                conn.uid("move", uid, _quote_mailbox(target_folder))
             else:
-                conn.uid("copy", uid, target_folder)
+                conn.uid("copy", uid, _quote_mailbox(target_folder))
                 conn.uid("store", uid, "+FLAGS", "(\\Deleted)")
                 self._expunge_uid(conn, uid)
         finally:
