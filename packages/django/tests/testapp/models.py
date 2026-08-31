@@ -5,6 +5,7 @@ from django.db import models
 from django_bapp_connectors.models import (
     AbstractConnection,
     AbstractExecutionLog,
+    AbstractSyncLink,
     AbstractSyncState,
     AbstractWebhookEvent,
 )
@@ -34,3 +35,13 @@ class ExecutionLog(AbstractExecutionLog):
 
     class Meta:
         app_label = "testapp"
+
+
+class SyncLink(AbstractSyncLink):
+    connection = models.ForeignKey(Connection, on_delete=models.CASCADE, related_name="sync_links")
+
+    class Meta:
+        app_label = "testapp"
+        constraints = [
+            models.UniqueConstraint(fields=["connection", "resource_type", "local_id"], name="testapp_synclink_local_uniq"),
+        ]
