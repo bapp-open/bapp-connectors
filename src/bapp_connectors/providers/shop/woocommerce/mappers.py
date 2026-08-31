@@ -334,8 +334,8 @@ def product_to_woocommerce(product, price_to_provider=None) -> dict:
             {"src": photo.url, "alt": photo.alt_text, "position": photo.position}
             for photo in product.photos
         ]
-    if product.categories:
-        data["categories"] = [{"name": cat} for cat in product.categories]
+    if product.category_ids:
+        data["categories"] = [{"id": int(cid)} for cid in product.category_ids]
     if product.attributes:
         data["attributes"] = product_attributes_to_woocommerce(product.attributes)
         # If any attribute is used_for_variants, set product type to variable
@@ -366,8 +366,8 @@ def product_update_to_woocommerce(update, price_to_provider=None) -> dict:
             {"src": p.url, "alt": p.alt_text, "position": p.position}
             for p in update.photos
         ]
-    if update.categories is not None:
-        data["categories"] = [{"name": cat} for cat in update.categories]
+    if update.category_ids is not None:
+        data["categories"] = [{"id": int(cid)} for cid in update.category_ids]
     if update.attributes is not None:
         data["attributes"] = product_attributes_to_woocommerce(update.attributes)
     if update.extra:

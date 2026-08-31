@@ -231,6 +231,7 @@ class ProductSyncEngine:
             stock=product.stock,
             active=product.active,
             categories=product.categories if product.categories else None,
+            category_ids=product.category_ids if product.category_ids else None,
             photos=product.photos if product.photos else None,
             extra=product.extra,
         )

@@ -133,6 +133,7 @@ class ProductUpdate(BaseDTO):
     stock: int | None = None
     active: bool | None = None
     categories: list[str] | None = None
+    category_ids: list[str] | None = None  # provider category ids; None = leave untouched, [] = clear
     photos: list[ProductPhoto] | None = None
     attributes: list[ProductAttribute] | None = None
     variants: list[ProductVariant] | None = None
