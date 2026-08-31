@@ -17,6 +17,7 @@ from urllib.parse import urlencode
 from bapp_connectors.core.capabilities import (
     AttributeManagementCapability,
     BulkUpdateCapability,
+    BulkUpsertCapability,
     CategoryManagementCapability,
     OAuthCapability,
     ProductCreationCapability,
@@ -30,7 +31,9 @@ from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import (
     AttributeDefinition,
     AttributeValue,
+    BulkItemResult,
     BulkResult,
+    BulkUpsertResult,
     ConnectionTestResult,
     Order,
     OrderStatus,
@@ -72,9 +75,30 @@ if TYPE_CHECKING:
     from decimal import Decimal
 
 
+def _batch_items(items: list[dict]) -> list[BulkItemResult]:
+    out: list[BulkItemResult] = []
+    for idx, item in enumerate(items or []):
+        error = item.get("error") if isinstance(item, dict) else None
+        if error:
+            out.append(BulkItemResult(
+                index=idx,
+                error=str(error.get("message", "")) or "error",
+                error_code=str(error.get("code", "")),
+                extra=dict(error.get("data") or {}),
+            ))
+        else:
+            out.append(BulkItemResult(
+                index=idx,
+                remote_id=str(item.get("id", "")),
+                extra={"date_modified_gmt": item.get("date_modified_gmt", "")},
+            ))
+    return out
+
+
 class WooCommerceShopAdapter(
     ShopPort,
     BulkUpdateCapability,
+    BulkUpsertCapability,
     CategoryManagementCapability,
     AttributeManagementCapability,
     OAuthCapability,
@@ -450,6 +474,28 @@ class WooCommerceShopAdapter(
             succeeded=succeeded,
             failed=len(updates) - succeeded,
             errors=errors,
+        )
+
+    # ── BulkUpsertCapability ──
+
+    def bulk_upsert_products(self, creates: list[Product], updates: list[ProductUpdate]) -> BulkUpsertResult:
+        total = len(creates) + len(updates)
+        if total == 0:
+            return BulkUpsertResult()
+        if total > self.max_batch_size:
+            raise ValueError(f"WooCommerce batch accepts at most {self.max_batch_size} items, got {total}")
+        payload: dict = {}
+        if creates:
+            payload["create"] = [product_to_woocommerce(p, price_to_provider=self._price_to_provider) for p in creates]
+        if updates:
+            payload["update"] = [
+                {"id": int(u.product_id), **product_update_to_woocommerce(u, price_to_provider=self._price_to_provider)}
+                for u in updates
+            ]
+        response = self.client.batch_products(payload) or {}
+        return BulkUpsertResult(
+            created=_batch_items(response.get("create", [])),
+            updated=_batch_items(response.get("update", [])),
         )
 
     # ── WebhookCapability ──

@@ -106,6 +106,10 @@ class WooCommerceApiClient:
     def batch_update_products(self, updates: list[dict], **kwargs) -> dict:
         return self._call("POST", "products/batch", json={"update": updates}, **kwargs)
 
+    def batch_products(self, payload: dict, **kwargs) -> dict:
+        """Raw POST products/batch with any of create/update/delete lists."""
+        return self._call("POST", "products/batch", json=payload, **kwargs)
+
     # ── Categories ──
 
     def get_categories(self, page: int = 1, per_page: int = 100, **kwargs) -> list[dict]:

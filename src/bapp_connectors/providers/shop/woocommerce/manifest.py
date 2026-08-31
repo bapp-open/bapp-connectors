@@ -5,6 +5,7 @@ WooCommerce provider manifest — declares capabilities, auth, rate limits, and 
 from bapp_connectors.core.capabilities import (
     AttributeManagementCapability,
     BulkUpdateCapability,
+    BulkUpsertCapability,
     CategoryManagementCapability,
     OAuthCapability,
     ProductCreationCapability,
@@ -79,6 +80,8 @@ manifest = ProviderManifest(
     capabilities=[
         ShopPort,
         BulkUpdateCapability,
+    BulkUpsertCapability,
+        BulkUpsertCapability,
         CategoryManagementCapability,
         AttributeManagementCapability,
         OAuthCapability,

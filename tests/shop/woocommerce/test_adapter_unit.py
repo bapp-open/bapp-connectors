@@ -59,3 +59,43 @@ def test_woocommerce_declares_lookup_capability():
     from bapp_connectors.providers.shop.woocommerce.manifest import manifest
 
     assert ProductLookupCapability in manifest.capabilities
+
+
+def test_bulk_upsert_sends_create_and_update_and_maps_positionally(adapter, fake):
+    from decimal import Decimal
+
+    from bapp_connectors.core.dto import Product, ProductUpdate
+
+    fake.add("POST", "products/batch", {
+        "create": [
+            {"id": 101, "sku": "A", "date_modified_gmt": "2026-08-31T10:00:00"},
+            {"id": 0, "error": {"code": "product_invalid_sku", "message": "SKU exists", "data": {"resource_id": 77, "unique_sku": "B"}}},
+        ],
+        "update": [{"id": 9, "date_modified_gmt": "2026-08-31T10:00:01"}],
+    })
+    result = adapter.bulk_upsert_products(
+        creates=[Product(product_id="a", sku="A", name="A", price=Decimal("1")), Product(product_id="b", sku="B", name="B")],
+        updates=[ProductUpdate(product_id="9", name="Nine")],
+    )
+    payload = fake.last_call().kwargs["json"]
+    assert [c["sku"] for c in payload["create"]] == ["A", "B"]
+    assert payload["update"] == [{"id": 9, "name": "Nine"}]
+    assert result.created[0].remote_id == "101"
+    assert result.created[0].extra["date_modified_gmt"] == "2026-08-31T10:00:00"
+    assert result.created[1].error_code == "product_invalid_sku"
+    assert result.created[1].extra["resource_id"] == 77
+    assert result.updated[0].remote_id == "9"
+    assert result.failed == 1
+
+
+def test_bulk_upsert_empty_input_makes_no_call(adapter, fake):
+    result = adapter.bulk_upsert_products(creates=[], updates=[])
+    assert result.created == [] and result.updated == [] and fake.calls == []
+
+
+def test_bulk_upsert_rejects_more_than_max_batch(adapter):
+    from bapp_connectors.core.dto import Product
+
+    creates = [Product(product_id=str(i), name=str(i)) for i in range(101)]
+    with pytest.raises(ValueError):
+        adapter.bulk_upsert_products(creates=creates, updates=[])

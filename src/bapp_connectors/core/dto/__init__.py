@@ -16,7 +16,15 @@ from .ads import (
     AdTargeting,
     UploadedAdMedia,
 )
-from .base import BaseDTO, BulkResult, ConnectionTestResult, PaginatedResult, ProviderMeta
+from .base import (
+    BaseDTO,
+    BulkItemResult,
+    BulkResult,
+    BulkUpsertResult,
+    ConnectionTestResult,
+    PaginatedResult,
+    ProviderMeta,
+)
 from .email import (
     EmailAddress,
     EmailAttachmentContent,
@@ -101,7 +109,9 @@ __all__ = [
     "AttributeValue",
     "BaseDTO",
     "BillingDetails",
+    "BulkItemResult",
     "BulkResult",
+    "BulkUpsertResult",
     "CardBrand",
     "ChatMessage",
     "ChatRole",

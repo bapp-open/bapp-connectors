@@ -55,3 +55,32 @@ class BulkResult(BaseModel):
     succeeded: int = 0
     failed: int = 0
     errors: list[dict] = []
+
+
+class BulkItemResult(BaseModel):
+    """Outcome of one item in a bulk upsert, matched to the input by position."""
+
+    index: int
+    remote_id: str = ""
+    error: str = ""
+    error_code: str = ""
+    extra: dict = {}
+
+    @property
+    def ok(self) -> bool:
+        return not self.error
+
+
+class BulkUpsertResult(BaseModel):
+    """Positional results of a bulk create+update call."""
+
+    created: list[BulkItemResult] = []
+    updated: list[BulkItemResult] = []
+
+    @property
+    def failed(self) -> int:
+        return sum(1 for i in self.created + self.updated if i.error)
+
+    @property
+    def succeeded(self) -> int:
+        return sum(1 for i in self.created + self.updated if not i.error)

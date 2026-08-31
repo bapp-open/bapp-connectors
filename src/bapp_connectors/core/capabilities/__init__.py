@@ -1,6 +1,6 @@
 """Optional capability interfaces for feature discovery."""
 
-from .bulk_operations import BulkImportCapability, BulkUpdateCapability
+from .bulk_operations import BulkImportCapability, BulkUpdateCapability, BulkUpsertCapability
 from .creative_upload import CreativeUploadCapability
 from .embedding import EmbeddingCapability
 from .financial import FinancialCapability
@@ -31,6 +31,7 @@ __all__ = [
     "AttributeManagementCapability",
     "BulkImportCapability",
     "BulkUpdateCapability",
+    "BulkUpsertCapability",
     "CategoryManagementCapability",
     "CreativeUploadCapability",
     "EmbeddingCapability",
@@ -44,8 +45,8 @@ __all__ = [
     "OAuthTokens",
     "ProductCreationCapability",
     "ProductFeedCapability",
-    "ProductLookupCapability",
     "ProductFullUpdateCapability",
+    "ProductLookupCapability",
     "RelatedProductCapability",
     "RichMessagingCapability",
     "SavedPaymentCapability",
