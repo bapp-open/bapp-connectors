@@ -1,6 +1,6 @@
 """Product sync engine — pure Python, no Django dependencies."""
 
-from .dto import CategoryMapping, SyncError, SyncResult
+from .dto import CategoryMapping, CategorySyncResult, SyncError, SyncResult
 from .engine import ProductSyncEngine
 
-__all__ = ["CategoryMapping", "ProductSyncEngine", "SyncError", "SyncResult"]
+__all__ = ["CategoryMapping", "CategorySyncResult", "ProductSyncEngine", "SyncError", "SyncResult"]

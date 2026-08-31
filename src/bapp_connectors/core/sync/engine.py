@@ -8,9 +8,11 @@ adapter and a consumer-provided persistence layer via callbacks.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from typing import Protocol
 
+from bapp_connectors.core.capabilities.bulk_operations import BulkUpsertCapability
 from bapp_connectors.core.capabilities.product_management import (
     CategoryManagementCapability,
     ProductCreationCapability,
@@ -18,7 +20,7 @@ from bapp_connectors.core.capabilities.product_management import (
 )
 from bapp_connectors.core.dto import Product, ProductCategory, ProductUpdate
 from bapp_connectors.core.ports import ShopPort
-from bapp_connectors.core.sync.dto import CategoryMapping, SyncError, SyncResult
+from bapp_connectors.core.sync.dto import CategoryMapping, CategorySyncResult, SyncError, SyncResult
 
 logger = logging.getLogger(__name__)
 
@@ -100,32 +102,44 @@ class ProductSyncEngine:
         adapter: ShopPort,
         products: list[Product],
         match_fn: ProductMatcher | None = None,
+        *,
+        batch_size: int = 20,
+        pause_seconds: float = 0.0,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> SyncResult:
         """Push products to the provider (create or update).
+
+        Uses BulkUpsertCapability when the adapter has it (batched, with a pause
+        between consecutive batches to spare the remote server); otherwise falls
+        back to the sequential per-product path.
 
         Args:
             adapter: A connected ShopPort adapter.
             products: Products to push (framework DTOs with net prices).
             match_fn: Called for each product — returns remote product_id if
                       it already exists on the provider, None if new.
-                      If None, all products are treated as creates.
+            batch_size: Items per bulk call, capped by adapter.max_batch_size.
+            pause_seconds: Slept between consecutive batches (never before the first).
+            sleep: Injectable sleep for tests.
 
         Returns:
-            SyncResult with created/updated/skipped/failed counts.
+            SyncResult with created/updated/skipped/failed counts, remote_ids and remote_meta.
         """
+        if isinstance(adapter, BulkUpsertCapability):
+            return self._push_products_bulk(adapter, products, match_fn, batch_size, pause_seconds, sleep)
+        return self._push_products_sequential(adapter, products, match_fn)
+
+    def _push_products_sequential(self, adapter, products, match_fn) -> SyncResult:
         result = SyncResult()
         can_create = isinstance(adapter, ProductCreationCapability)
         can_full_update = isinstance(adapter, ProductFullUpdateCapability)
-
         for product in products:
             try:
                 remote_id = match_fn(product) if match_fn else None
-
                 if remote_id:
                     # Product exists on provider → update
                     if can_full_update:
-                        update = self._product_to_update(product, remote_id)
-                        adapter.update_product(update)
+                        adapter.update_product(self._product_to_update(product, remote_id))
                     else:
                         # Fall back to stock/price only
                         if product.stock is not None:
@@ -133,12 +147,13 @@ class ProductSyncEngine:
                         if product.price is not None:
                             adapter.update_product_price(remote_id, product.price, product.currency)
                     result.updated += 1
+                    result.remote_ids[product.product_id] = remote_id
                 elif can_create:
-                    # New product → create
-                    adapter.create_product(product)
+                    created = adapter.create_product(product)
                     result.created += 1
+                    if created is not None and created.product_id:
+                        result.remote_ids[product.product_id] = created.product_id
                 else:
-                    # Can't create → skip
                     result.skipped += 1
             except Exception as e:
                 result.failed += 1
@@ -147,8 +162,65 @@ class ProductSyncEngine:
                     error=str(e),
                     retryable=getattr(e, "retryable", False),
                 ))
-
         return result
+
+    def _push_products_bulk(self, adapter, products, match_fn, batch_size, pause_seconds, sleep) -> SyncResult:
+        result = SyncResult()
+        size = max(1, min(int(batch_size), int(getattr(adapter, "max_batch_size", 100) or 100)))
+        first = True
+        for start in range(0, len(products), size):
+            chunk = products[start:start + size]
+            creates: list[Product] = []
+            updates: list[ProductUpdate] = []
+            update_src: list[Product] = []
+            for product in chunk:
+                remote_id = match_fn(product) if match_fn else None
+                if remote_id:
+                    updates.append(self._product_to_update(product, remote_id))
+                    update_src.append(product)
+                else:
+                    creates.append(product)
+            if not creates and not updates:
+                continue
+            if not first and pause_seconds:
+                sleep(pause_seconds)
+            first = False
+            try:
+                bulk = adapter.bulk_upsert_products(creates, updates)
+            except Exception as e:
+                for product in creates + update_src:
+                    result.failed += 1
+                    result.errors.append(SyncError(
+                        product_id=product.product_id, error=str(e), retryable=getattr(e, "retryable", False),
+                    ))
+                continue
+            self._absorb_bulk(bulk.created, creates, result, created=True)
+            self._absorb_bulk(bulk.updated, update_src, result, created=False, remote_ids=[u.product_id for u in updates])
+        return result
+
+    @staticmethod
+    def _absorb_bulk(items, sources, result: SyncResult, *, created: bool, remote_ids: list[str] | None = None) -> None:
+        by_index = {item.index: item for item in items}
+        for idx, source in enumerate(sources):
+            item = by_index.get(idx)
+            if item is None or item.error:
+                result.failed += 1
+                result.errors.append(SyncError(
+                    product_id=source.product_id,
+                    error=item.error if item else "no result returned for item",
+                    code=item.error_code if item else "",
+                    extra=dict(item.extra) if item else {},
+                ))
+                continue
+            if created:
+                result.created += 1
+            else:
+                result.updated += 1
+            remote_id = item.remote_id or (remote_ids[idx] if remote_ids else "")
+            if remote_id:
+                result.remote_ids[source.product_id] = remote_id
+            if item.extra:
+                result.remote_meta[source.product_id] = dict(item.extra)
 
     # ── Categories ──
 
@@ -164,56 +236,51 @@ class ProductSyncEngine:
             )
         return adapter.get_categories()
 
+    def sync_categories(
+        self,
+        adapter: ShopPort,
+        categories: list[ProductCategory],
+        existing_mappings: dict[str, str] | None = None,
+        *,
+        update_existing: bool = False,
+        remote_categories: dict[str, ProductCategory] | None = None,
+    ) -> CategorySyncResult:
+        """Create missing categories (topological order required) and, when
+        `update_existing` is set, rename/re-parent mapped ones whose remote snapshot
+        (`remote_categories[remote_id]`) differs. Without a snapshot the update is sent
+        unconditionally for mapped categories.
+        """
+        if not isinstance(adapter, CategoryManagementCapability):
+            raise TypeError(
+                f"Adapter {type(adapter).__name__} does not support CategoryManagementCapability"
+            )
+        existing = dict(existing_mappings) if existing_mappings else {}
+        result = CategorySyncResult()
+        for category in categories:
+            remote_parent_id = existing.get(category.parent_id) if category.parent_id else None
+            if category.category_id in existing:
+                if not update_existing:
+                    continue
+                remote_id = existing[category.category_id]
+                snapshot = (remote_categories or {}).get(remote_id)
+                if snapshot is not None and snapshot.name == category.name and (snapshot.parent_id or None) == (remote_parent_id or None):
+                    continue
+                adapter.update_category(ProductCategory(category_id=remote_id, name=category.name, parent_id=remote_parent_id))
+                result.updated.append(category.category_id)
+                continue
+            created = adapter.create_category(name=category.name, parent_id=remote_parent_id)
+            result.created.append(CategoryMapping(local_id=category.category_id, remote_id=created.category_id, name=category.name))
+            existing[category.category_id] = created.category_id
+        return result
+
     def push_categories(
         self,
         adapter: ShopPort,
         categories: list[ProductCategory],
         existing_mappings: dict[str, str] | None = None,
     ) -> list[CategoryMapping]:
-        """Push categories to the provider, returning local→remote mappings.
-
-        Categories MUST be provided in topological order (parents before children).
-
-        Args:
-            adapter: Must implement CategoryManagementCapability with create_category.
-            categories: Ordered list of categories to push.
-            existing_mappings: Dict of {local_category_id: remote_category_id}
-                              for already-synced categories. These are skipped.
-
-        Returns:
-            List of CategoryMapping for newly created categories.
-        """
-        if not isinstance(adapter, CategoryManagementCapability):
-            raise TypeError(
-                f"Adapter {type(adapter).__name__} does not support CategoryManagementCapability"
-            )
-
-        existing = dict(existing_mappings) if existing_mappings else {}
-        new_mappings: list[CategoryMapping] = []
-
-        for category in categories:
-            if category.category_id in existing:
-                continue
-
-            # Resolve parent_id to remote parent_id
-            remote_parent_id = None
-            if category.parent_id:
-                remote_parent_id = existing.get(category.parent_id)
-
-            created = adapter.create_category(
-                name=category.name,
-                parent_id=remote_parent_id,
-            )
-            mapping = CategoryMapping(
-                local_id=category.category_id,
-                remote_id=created.category_id,
-                name=category.name,
-            )
-            new_mappings.append(mapping)
-            # Track for subsequent parent_id resolution
-            existing[category.category_id] = created.category_id
-
-        return new_mappings
+        """Backward-compatible wrapper: create-only, returns the new mappings."""
+        return self.sync_categories(adapter, categories, existing_mappings).created
 
     # ── Helpers ──
 

@@ -14,7 +14,9 @@ class SyncError(BaseDTO):
 
     product_id: str = ""
     error: str = ""
+    code: str = ""
     retryable: bool = False
+    extra: dict = {}
 
 
 class SyncResult(BaseModel):
@@ -25,6 +27,8 @@ class SyncResult(BaseModel):
     skipped: int = 0
     failed: int = 0
     errors: list[SyncError] = []
+    remote_ids: dict[str, str] = {}       # local product_id -> remote id (created AND updated)
+    remote_meta: dict[str, dict] = {}     # local product_id -> {"date_modified_gmt": ...}
 
 
 class CategoryMapping(BaseModel):
@@ -33,3 +37,10 @@ class CategoryMapping(BaseModel):
     local_id: str
     remote_id: str
     name: str = ""
+
+
+class CategorySyncResult(BaseModel):
+    """Result of a category sync: newly created mappings + local ids updated remotely."""
+
+    created: list[CategoryMapping] = []
+    updated: list[str] = []

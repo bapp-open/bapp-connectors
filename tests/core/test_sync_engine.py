@@ -266,3 +266,112 @@ class TestPushCategories:
 
         with pytest.raises(TypeError):
             engine.push_categories(adapter, [])
+
+
+from bapp_connectors.core.capabilities import BulkUpsertCapability
+from bapp_connectors.core.dto import BulkItemResult, BulkUpsertResult
+
+
+class _MockBulkAdapter(_MockFullAdapter, BulkUpsertCapability):
+    max_batch_size = 100
+
+    def __init__(self, *args, fail_create_index=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.batches: list[tuple[list[Product], list[ProductUpdate]]] = []
+        self._fail_create_index = fail_create_index
+
+    def bulk_upsert_products(self, creates, updates):
+        self.batches.append((list(creates), list(updates)))
+        created = []
+        for i, p in enumerate(creates):
+            if self._fail_create_index == i and len(self.batches) == 1:
+                created.append(BulkItemResult(index=i, error="SKU exists", error_code="product_invalid_sku", extra={"resource_id": 77}))
+            else:
+                created.append(BulkItemResult(index=i, remote_id=f"r{p.product_id}", extra={"date_modified_gmt": "2026-08-31T00:00:00"}))
+        updated = [BulkItemResult(index=i, remote_id=u.product_id) for i, u in enumerate(updates)]
+        return BulkUpsertResult(created=created, updated=updated)
+
+    def update_category(self, category):
+        self.updated_categories = getattr(self, "updated_categories", [])
+        self.updated_categories.append(category)
+        return category
+
+
+class TestPushProductsBulk:
+    def _products(self, n):
+        return [Product(product_id=str(i), name=f"P{i}", sku=f"S{i}") for i in range(n)]
+
+    def test_batches_by_batch_size_and_pauses_between(self):
+        adapter = _MockBulkAdapter()
+        sleeps = []
+        result = ProductSyncEngine().push_products(adapter, self._products(5), batch_size=2, pause_seconds=1.5, sleep=sleeps.append)
+        assert [len(c) for c, _ in adapter.batches] == [2, 2, 1]
+        assert sleeps == [1.5, 1.5]  # no pause before the first batch
+        assert result.created == 5 and result.failed == 0
+        assert result.remote_ids["3"] == "r3"
+        assert result.remote_meta["3"]["date_modified_gmt"] == "2026-08-31T00:00:00"
+
+    def test_splits_creates_and_updates_using_match_fn(self):
+        adapter = _MockBulkAdapter()
+        products = self._products(3)
+        result = ProductSyncEngine().push_products(adapter, products, match_fn=lambda p: "remote9" if p.product_id == "1" else None, batch_size=10)
+        creates, updates = adapter.batches[0]
+        assert [p.product_id for p in creates] == ["0", "2"]
+        assert updates[0].product_id == "remote9" and updates[0].name == "P1"
+        assert result.created == 2 and result.updated == 1
+        assert result.remote_ids["1"] == "remote9"
+
+    def test_positional_error_is_reported_for_the_right_product(self):
+        adapter = _MockBulkAdapter(fail_create_index=1)
+        result = ProductSyncEngine().push_products(adapter, self._products(3), batch_size=10)
+        assert result.created == 2 and result.failed == 1
+        err = result.errors[0]
+        assert err.product_id == "1" and err.code == "product_invalid_sku" and err.extra["resource_id"] == 77
+        assert "1" not in result.remote_ids
+
+    def test_batch_exception_fails_every_item_of_that_batch_only(self):
+        class _Boom(_MockBulkAdapter):
+            def bulk_upsert_products(self, creates, updates):
+                if len(self.batches) == 0:
+                    self.batches.append((creates, updates))
+                    raise RuntimeError("502")
+                return super().bulk_upsert_products(creates, updates)
+
+        result = ProductSyncEngine().push_products(_Boom(), self._products(4), batch_size=2)
+        assert result.failed == 2 and result.created == 2
+
+    def test_batch_size_is_capped_by_adapter_max(self):
+        adapter = _MockBulkAdapter()
+        adapter.max_batch_size = 3
+        ProductSyncEngine().push_products(adapter, self._products(7), batch_size=50)
+        assert [len(c) for c, _ in adapter.batches] == [3, 3, 1]
+
+
+class TestSequentialPushRemoteIds:
+    def test_sequential_create_records_remote_id(self):
+        adapter = _MockFullAdapter()
+        result = ProductSyncEngine().push_products(adapter, [Product(product_id="7", name="X")])
+        assert result.remote_ids["7"] == "remote_7"
+
+
+class TestSyncCategories:
+    def test_updates_existing_when_name_or_parent_differs(self):
+        adapter = _MockBulkAdapter()
+        cats = [ProductCategory(category_id="1", name="Scule"), ProductCategory(category_id="2", name="Electrice", parent_id="1")]
+        remote = {"r1": ProductCategory(category_id="r1", name="Scule"), "r2": ProductCategory(category_id="r2", name="Electric", parent_id="r1")}
+        result = ProductSyncEngine().sync_categories(adapter, cats, existing_mappings={"1": "r1", "2": "r2"}, update_existing=True, remote_categories=remote)
+        assert result.created == []
+        assert result.updated == ["2"]
+        sent = adapter.updated_categories[0]
+        assert sent.category_id == "r2" and sent.name == "Electrice" and sent.parent_id == "r1"
+
+    def test_no_update_without_remote_snapshot_when_flag_off(self):
+        adapter = _MockBulkAdapter()
+        cats = [ProductCategory(category_id="1", name="Scule")]
+        result = ProductSyncEngine().sync_categories(adapter, cats, existing_mappings={"1": "r1"})
+        assert result.updated == [] and not getattr(adapter, "updated_categories", [])
+
+    def test_push_categories_still_returns_created_list(self):
+        adapter = _MockFullAdapter()
+        created = ProductSyncEngine().push_categories(adapter, [ProductCategory(category_id="1", name="A")])
+        assert created[0].local_id == "1" and created[0].remote_id == "remote_cat_1"
