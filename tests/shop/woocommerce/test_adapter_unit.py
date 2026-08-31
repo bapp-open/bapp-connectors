@@ -34,3 +34,28 @@ def test_update_category_root_sends_parent_zero(adapter, fake):
     result = adapter.update_category(ProductCategory(category_id="7", name="Scule"))
     assert fake.last_call().kwargs["json"] == {"name": "Scule", "parent": 0}
     assert result.parent_id is None
+
+
+def test_find_product_by_sku_returns_product(adapter, fake):
+    fake.add("GET", "products", [{"id": 55, "sku": "AB-1", "name": "Ciocan", "price": "10", "status": "publish"}])
+    product = adapter.find_product_by_sku("AB-1")
+    assert product is not None and product.product_id == "55"
+    assert fake.last_call().kwargs["params"]["sku"] == "AB-1"
+    assert fake.last_call().kwargs["params"]["per_page"] == 1
+
+
+def test_find_product_by_sku_empty_list_is_none(adapter, fake):
+    fake.add("GET", "products", [])
+    assert adapter.find_product_by_sku("NOPE") is None
+
+
+def test_find_product_by_sku_blank_sku_short_circuits(adapter, fake):
+    assert adapter.find_product_by_sku("") is None
+    assert fake.calls == []
+
+
+def test_woocommerce_declares_lookup_capability():
+    from bapp_connectors.core.capabilities import ProductLookupCapability
+    from bapp_connectors.providers.shop.woocommerce.manifest import manifest
+
+    assert ProductLookupCapability in manifest.capabilities

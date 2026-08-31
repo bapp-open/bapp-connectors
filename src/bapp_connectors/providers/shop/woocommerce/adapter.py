@@ -21,6 +21,7 @@ from bapp_connectors.core.capabilities import (
     OAuthCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
+    ProductLookupCapability,
     RelatedProductCapability,
     VariantManagementCapability,
     WebhookCapability,
@@ -79,6 +80,7 @@ class WooCommerceShopAdapter(
     OAuthCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
+    ProductLookupCapability,
     RelatedProductCapability,
     VariantManagementCapability,
     WebhookCapability,
@@ -271,6 +273,16 @@ class WooCommerceShopAdapter(
 
     def delete_product(self, product_id: str) -> None:
         self.client.delete_product(product_id)
+
+    # ── ProductLookupCapability ──
+
+    def find_product_by_sku(self, sku: str) -> Product | None:
+        if not sku:
+            return None
+        response = self.client.get_products(per_page=1, params={"sku": sku})
+        if not isinstance(response, list) or not response:
+            return None
+        return product_from_woocommerce(response[0], price_from_provider=self._price_from_provider)
 
     # ── ProductFullUpdateCapability ──
 

@@ -9,6 +9,7 @@ from .inbox import InboxCapability
 from .invoice_attach import InvoiceAttachmentCapability
 from .oauth import OAuthCapability, OAuthTokens
 from .product_feed import FeedFormat, FeedUploadCapability, ProductFeedCapability
+from .product_lookup import ProductLookupCapability
 from .product_management import (
     AttributeManagementCapability,
     CategoryManagementCapability,
@@ -43,6 +44,7 @@ __all__ = [
     "OAuthTokens",
     "ProductCreationCapability",
     "ProductFeedCapability",
+    "ProductLookupCapability",
     "ProductFullUpdateCapability",
     "RelatedProductCapability",
     "RichMessagingCapability",
