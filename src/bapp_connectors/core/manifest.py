@@ -22,6 +22,9 @@ class CredentialField:
     default: str = ""
     choices: list[str] | None = None
     help_text: str = ""
+    # "endpoint" marks the credential that identifies the remote host (shop domain,
+    # server URL). UIs use it to label a connection ("WooCommerce · shop.example.com").
+    role: str | None = None
 
     def __post_init__(self):
         if not self.label:

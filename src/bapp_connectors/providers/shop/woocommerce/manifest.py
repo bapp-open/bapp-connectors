@@ -39,7 +39,7 @@ manifest = ProviderManifest(
         required_fields=[
             CredentialField(name="consumer_key", label="Consumer Key", sensitive=True, required=False),
             CredentialField(name="consumer_secret", label="Consumer Secret", sensitive=True, required=False),
-            CredentialField(name="domain", label="Store Domain", sensitive=False, help_text="e.g. https://myshop.com"),
+            CredentialField(name="domain", label="Store Domain", sensitive=False, help_text="e.g. https://myshop.com", role="endpoint"),
             CredentialField(
                 name="verify_ssl",
                 label="Verify SSL",
@@ -51,7 +51,7 @@ manifest = ProviderManifest(
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="domain", label="Store Domain", sensitive=False, help_text="e.g. https://myshop.com"),
+                CredentialField(name="domain", label="Store Domain", sensitive=False, help_text="e.g. https://myshop.com", role="endpoint"),
             ],
             scopes=["read_write"],
             display_name="Connect with WooCommerce",

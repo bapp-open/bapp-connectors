@@ -177,3 +177,13 @@ class TestFamilyDefaults:
             assert meta.get("label"), f"{family!r} entry has no label"
             assert meta.get("icon"), f"{family!r} entry has no icon"
             assert meta.get("color"), f"{family!r} entry has no color"
+
+
+def test_provider_detail_exposes_credential_role():
+    from django_bapp_connectors.services.connection import ConnectionService, ensure_providers_loaded
+
+    ensure_providers_loaded()
+    detail = ConnectionService.get_provider_detail("shop", "woocommerce")
+    fields = {f["name"]: f for f in detail["auth"]["credential_fields"]}
+    assert fields["domain"]["role"] == "endpoint"
+    assert fields["consumer_key"]["role"] is None
