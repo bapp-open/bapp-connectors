@@ -685,3 +685,17 @@ Before submitting a new provider, verify:
 - [ ] `uv run ruff check` passes
 - [ ] `uv run pytest` passes
 - [ ] No Django imports anywhere in the provider code
+
+## Shop provider extras (product sync)
+
+- Mark the credential that names the remote host with `CredentialField(..., role="endpoint")`
+  (e.g. WooCommerce's `domain`). UIs use it to label a connection ("WooCommerce · shop.example.com").
+- If the API can filter products by modification date, set `supports_modified_since = True`
+  on the adapter and honour the `since` argument of `get_products(cursor, since)` — the Django
+  `PullService` uses it for incremental pulls.
+- If the API has a batch endpoint, implement `BulkUpsertCapability.bulk_upsert_products(creates, updates)`.
+  Results MUST be positional (`result.created[i]` belongs to `creates[i]`); put the provider's
+  modified marker in `BulkItemResult.extra["date_modified_gmt"]` and per-item errors in
+  `error` / `error_code` / `extra` so consumers can map failures back to their records.
+- `CategoryManagementCapability.update_category(category)` lets consumers rename/re-parent
+  already-mapped categories instead of duplicating them.

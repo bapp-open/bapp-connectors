@@ -633,3 +633,30 @@ BAPP_CONNECTORS = {
 | `response_status` | `IntegerField` | HTTP status code |
 | `duration_ms` | `IntegerField` | Request duration |
 | `error` | `TextField` | Error message if failed |
+
+## Product sync links (push / pull)
+
+`AbstractSyncLink` stores one row per (connection, resource_type, local_id): the remote id,
+the hash of the local payload last sent (`content_hash`) and the provider's modified marker
+last seen (`remote_hash`). Subclass it next to your Connection model with a `connection` FK
+(`related_name='sync_links'`) and a unique constraint on `(connection, resource_type, local_id)`.
+
+```python
+from django_bapp_connectors.services import PushItem, PushService, PullDecision, PullService
+
+items = [PushItem(local_id=str(p.pk), dto=build_dto(p), content_hash=hash_of(p)) for p in products]
+report = PushService.push(connection, sync_state, "product", items, link_model=SyncLink,
+                          batch_size=20, pause_seconds=2)
+# unchanged hashes cost zero HTTP calls; errors land on the link (status="error", last_error)
+
+def on_item(remote_product, link):
+    ...apply locally...
+    return PullDecision(local_id=str(local.pk), content_hash=hash_of(local))
+
+PullService.pull(connection, sync_state, "product", on_item, link_model=SyncLink)
+# echoes of your own pushes are skipped via remote_hash; return PullDecision(conflict=True)
+# to refuse overwriting a locally modified record.
+```
+
+`SyncState` is the lock: a `running` state younger than `PushService.LOCK_STALE_MINUTES`
+makes both services return `report.locked = True` without touching the provider.
