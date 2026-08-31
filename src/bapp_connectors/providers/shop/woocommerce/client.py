@@ -115,6 +115,9 @@ class WooCommerceApiClient:
     def create_category(self, data: dict, **kwargs) -> dict:
         return self._call("POST", "products/categories", json=data, **kwargs)
 
+    def update_category(self, category_id: int, data: dict, **kwargs) -> dict:
+        return self._call("PUT", f"products/categories/{category_id}", json=data, **kwargs)
+
     # ── Product Attributes ──
 
     def get_attributes(self, **kwargs) -> list[dict]:

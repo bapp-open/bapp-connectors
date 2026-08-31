@@ -55,6 +55,10 @@ class CategoryManagementCapability(ABC):
         """Create a category on the provider. Returns the created category with provider's ID."""
         raise NotImplementedError("This provider does not support category creation.")
 
+    def update_category(self, category: ProductCategory) -> ProductCategory:
+        """Rename / re-parent an existing category. `category.category_id` is the provider id."""
+        raise NotImplementedError("This provider does not support category updates.")
+
 
 class AttributeManagementCapability(ABC):
     """Adapter supports CRUD for product attribute definitions (Color, Size, etc.)."""

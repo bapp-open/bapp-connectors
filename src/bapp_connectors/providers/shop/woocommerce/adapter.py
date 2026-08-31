@@ -300,6 +300,11 @@ class WooCommerceShopAdapter(
         result = self.client.create_category(data)
         return category_from_woocommerce(result)
 
+    def update_category(self, category: ProductCategory) -> ProductCategory:
+        data: dict = {"name": category.name, "parent": int(category.parent_id) if category.parent_id else 0}
+        result = self.client.update_category(int(category.category_id), data)
+        return category_from_woocommerce(result)
+
     # ── AttributeManagementCapability ──
 
     def get_attributes(self) -> list[AttributeDefinition]:
