@@ -99,3 +99,22 @@ def test_bulk_upsert_rejects_more_than_max_batch(adapter):
     creates = [Product(product_id=str(i), name=str(i)) for i in range(101)]
     with pytest.raises(ValueError):
         adapter.bulk_upsert_products(creates=creates, updates=[])
+
+
+def test_get_products_since_sends_modified_after_gmt(adapter, fake):
+    from datetime import UTC, datetime
+
+    fake.add("GET", "products", [])
+    adapter.get_products(cursor="2", since=datetime(2026, 8, 30, 12, 0, 0, tzinfo=UTC))
+    params = fake.last_call().kwargs["params"]
+    assert params["page"] == 2
+    assert params["modified_after"] == "2026-08-30T12:00:00"
+    assert params["dates_are_gmt"] == "true"
+    assert params["orderby"] == "modified" and params["order"] == "asc"
+
+
+def test_get_products_without_since_keeps_default_ordering(adapter, fake):
+    fake.add("GET", "products", [])
+    adapter.get_products()
+    params = fake.last_call().kwargs["params"]
+    assert "modified_after" not in params and params["orderby"] == "date"

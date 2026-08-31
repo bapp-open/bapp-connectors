@@ -10,6 +10,7 @@ import base64
 import hashlib
 import hmac
 import json
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
@@ -271,9 +272,21 @@ class WooCommerceShopAdapter(
             status_mapper=self._status_mapper,
         )
 
-    def get_products(self, cursor: str | None = None) -> PaginatedResult[Product]:
+    supports_modified_since = True
+
+    def get_products(self, cursor: str | None = None, since: datetime | None = None) -> PaginatedResult[Product]:
         page = int(cursor) if cursor else 1
-        response = self.client.get_products(page=page)
+        params: dict = {}
+        if since is not None:
+            if since.tzinfo is not None:
+                since = since.astimezone(UTC)
+            params = {
+                "modified_after": since.strftime("%Y-%m-%dT%H:%M:%S"),
+                "dates_are_gmt": "true",
+                "orderby": "modified",
+                "order": "asc",
+            }
+        response = self.client.get_products(page=page, params=params)
         if not isinstance(response, list):
             response = []
         return products_from_woocommerce(response, page=page, price_from_provider=self._price_from_provider)

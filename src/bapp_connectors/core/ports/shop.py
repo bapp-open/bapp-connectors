@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 
 
 class ShopPort(BasePort):
+    #: True when get_products honours `since` (server-side "modified after" filter).
+    supports_modified_since: bool = False
+
     """
     Common contract for all shop/marketplace adapters.
 
@@ -34,7 +37,7 @@ class ShopPort(BasePort):
         ...
 
     @abstractmethod
-    def get_products(self, cursor: str | None = None) -> PaginatedResult[Product]:
+    def get_products(self, cursor: str | None = None, since: datetime | None = None) -> PaginatedResult[Product]:
         """Fetch products with cursor-based pagination."""
         ...
 
