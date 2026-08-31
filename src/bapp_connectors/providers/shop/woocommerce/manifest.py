@@ -75,6 +75,23 @@ manifest = ProviderManifest(
                 default="0.19",
                 help_text="VAT rate as a decimal (e.g., 0.19 for 19%). Used to convert between net and gross prices.",
             ),
+            SettingsField(
+                name="batch_size", label="Products per batch", field_type=FieldType.INT, default=20,
+                help_text="How many products are sent in one /products/batch call (max 100). Smaller batches are gentler on the WordPress server, especially when images are included.",
+            ),
+            SettingsField(
+                name="pause_seconds", label="Pause between batches (s)", field_type=FieldType.INT, default=2,
+                help_text="Seconds to wait between consecutive batches so the store keeps serving customers.",
+            ),
+            SettingsField(
+                name="publish_status", label="Status for new products", field_type=FieldType.SELECT,
+                choices=["publish", "draft"], default="publish",
+                help_text="Newly created products are published immediately or left as drafts for review.",
+            ),
+            SettingsField(
+                name="sync_images", label="Sync product images", field_type=FieldType.BOOL, default=True,
+                help_text="Send product photos to the store (WordPress downloads each image; disable for a faster first sync).",
+            ),
         ],
     ),
     capabilities=[
