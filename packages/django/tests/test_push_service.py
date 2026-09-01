@@ -136,3 +136,13 @@ def test_uses_connection_adapter_when_not_injected(connection, sync_state):
     with patch("django_bapp_connectors.services.connection.ConnectionService.get_adapter", return_value=FakeBulkShop()) as get_adapter:
         PushService.push(connection, sync_state, "product", [_item("1")], link_model=SyncLink)
     get_adapter.assert_called_once()
+
+
+def test_missing_links_are_created_race_safely_with_get_or_create(connection, sync_state):
+    """Two overlapping runs may both see the link as missing; plain create() crashes the loser
+    with a unique-constraint IntegrityError (seen in prod: bf_synclink_local_uniq)."""
+    shop = FakeBulkShop()
+    with patch.object(SyncLink.objects, "create", side_effect=AssertionError("use get_or_create, not create")):
+        report = PushService.push(connection, sync_state, "product", [_item("1")], link_model=SyncLink, adapter=shop)
+    assert report.created == 1 and report.failed == 0
+    assert SyncLink.objects.get(local_id="1").status == SyncLink.STATUS_LINKED

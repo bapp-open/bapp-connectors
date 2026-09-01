@@ -103,7 +103,11 @@ class PushService:
                     report.skipped_unchanged += 1
                     continue
                 if link is None:
-                    link = link_model.objects.create(connection=connection, resource_type=resource_type, local_id=item.local_id)
+                    # get_or_create: two runs may race for the same missing link (a broker
+                    # redelivery overlapping a manual resume) — the loser must adopt, not crash
+                    link, _ = link_model.objects.get_or_create(
+                        connection=connection, resource_type=resource_type, local_id=item.local_id,
+                    )
                     links[item.local_id] = link
                 to_push.append(item)
 
