@@ -96,3 +96,26 @@ def test_execute_without_retry():
         return 42
 
     assert execute_with_retry(ok, retry_policy=None) == 42
+
+
+
+def test_call_with_retry_false_does_not_replay_a_timeout():
+    from unittest import mock
+
+    from requests.exceptions import ReadTimeout
+
+    from bapp_connectors.core.http.client import ResilientHttpClient
+    from bapp_connectors.core.http.retry import RetryPolicy
+
+    client = ResilientHttpClient(base_url="https://x.test/", retry_policy=RetryPolicy(max_retries=3, base_delay=0))
+    with mock.patch.object(client, "_execute_request", side_effect=ReadTimeout("slow")) as execute:
+        try:
+            client.call("POST", "products/batch", retry=False, json={})
+        except ReadTimeout:
+            pass
+        assert execute.call_count == 1
+        try:
+            client.call("POST", "products/batch", json={})
+        except ReadTimeout:
+            pass
+        assert execute.call_count > 2

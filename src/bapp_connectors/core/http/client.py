@@ -179,6 +179,7 @@ class ResilientHttpClient:
         path: str,
         direct_response: bool = False,
         headers: dict | None = None,
+        retry: bool = True,
         **kwargs,
     ) -> requests.Response | dict | list | str:
         """
@@ -189,9 +190,11 @@ class ResilientHttpClient:
             path: API path (relative to base_url, or absolute URL).
             direct_response: If True, return raw requests.Response.
             headers: Extra headers to merge.
+            retry: Set False for non-idempotent calls (bulk creates): a timeout must not
+                   replay the request, the server may have processed it already.
             **kwargs: Passed to requests (json, data, params, timeout, etc.).
         """
-        if self.retry_policy:
+        if self.retry_policy and retry:
             return execute_with_retry(
                 lambda: self._execute_request(method, path, direct_response, headers, **kwargs),
                 retry_policy=self.retry_policy,

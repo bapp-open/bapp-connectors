@@ -94,7 +94,13 @@ class WooCommerceApiClient:
     def get_product(self, product_id: str, **kwargs) -> dict:
         return self._call("GET", f"products/{product_id}", **kwargs)
 
+    # Creates are not idempotent and, with images, WordPress sideloads every photo inside the
+    # request: long read timeout, never retried (a timeout may still have created the product).
+    CREATE_TIMEOUT = (10, 300)
+
     def create_product(self, data: dict, **kwargs) -> dict:
+        kwargs.setdefault("timeout", self.CREATE_TIMEOUT)
+        kwargs.setdefault("retry", False)
         return self._call("POST", "products", json=data, **kwargs)
 
     def delete_product(self, product_id: str, **kwargs) -> dict:
@@ -104,10 +110,13 @@ class WooCommerceApiClient:
         return self._call("PUT", f"products/{product_id}", json=data, **kwargs)
 
     def batch_update_products(self, updates: list[dict], **kwargs) -> dict:
+        kwargs.setdefault("timeout", self.CREATE_TIMEOUT)
         return self._call("POST", "products/batch", json={"update": updates}, **kwargs)
 
     def batch_products(self, payload: dict, **kwargs) -> dict:
-        """Raw POST products/batch with any of create/update/delete lists."""
+        """Raw POST products/batch with any of create/update/delete lists (long timeout, no retry)."""
+        kwargs.setdefault("timeout", self.CREATE_TIMEOUT)
+        kwargs.setdefault("retry", False)
         return self._call("POST", "products/batch", json=payload, **kwargs)
 
     # ── Categories ──

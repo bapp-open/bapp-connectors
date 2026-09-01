@@ -118,3 +118,21 @@ def test_get_products_without_since_keeps_default_ordering(adapter, fake):
     adapter.get_products()
     params = fake.last_call().kwargs["params"]
     assert "modified_after" not in params and params["orderby"] == "date"
+
+
+def test_bulk_upsert_is_never_retried_and_has_a_long_read_timeout(adapter, fake):
+    from bapp_connectors.core.dto import Product
+
+    fake.add("POST", "products/batch", {"create": [{"id": 1}]})
+    adapter.bulk_upsert_products(creates=[Product(product_id="a", sku="A", name="A")], updates=[])
+    kwargs = fake.last_call().kwargs
+    assert kwargs["retry"] is False
+    assert kwargs["timeout"][1] >= 120
+
+
+def test_create_product_is_never_retried(adapter, fake):
+    from bapp_connectors.core.dto import Product
+
+    fake.add("POST", "products", {"id": 5, "name": "A"})
+    adapter.create_product(Product(product_id="a", sku="A", name="A"))
+    assert fake.last_call().kwargs["retry"] is False
