@@ -163,6 +163,14 @@ try:
                     body = json.dumps(event.payload).encode() if isinstance(event.payload, dict) else b""
                     parsed_dto = adapter.parse_webhook(event.headers or {}, body)
 
+            # Backstop: rows stored before the receive-time typing (or stored via a path
+            # without the adapter) still say "unknown" — persist the parsed type once.
+            if parsed_dto is not None and getattr(event, "event_type", "") == "unknown":
+                parsed_type = parsed_dto.event_type.value if hasattr(parsed_dto.event_type, "value") else str(parsed_dto.event_type)
+                if parsed_type and parsed_type != "unknown":
+                    event.event_type = parsed_type
+                    event.save(update_fields=["event_type"])
+
             event.mark_processed()
 
             # Emit the critical signal with the parsed DTO
