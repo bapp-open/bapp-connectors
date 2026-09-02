@@ -39,6 +39,7 @@ class WebhookService:
         signature_header: str = "",
         secret: str = "",
         connection=None,
+        adapter=None,
     ):
         """
         Process an incoming webhook.
@@ -54,6 +55,23 @@ class WebhookService:
             signature_header=signature_header,
             secret=secret,
         )
+
+        # Adapter normalization (the dispatcher stores UNKNOWN on purpose): overwrite the
+        # generic DTO with the provider's own parse BEFORE the duplicate check, so both the
+        # stored event_type and the idempotency key are the provider's, not the fallback's.
+        if adapter is not None and hasattr(adapter, "parse_webhook"):
+            try:
+                parsed = adapter.parse_webhook(headers, body)
+                if parsed is not None:
+                    parsed_type = parsed.event_type.value if hasattr(parsed.event_type, "value") else str(parsed.event_type)
+                    if parsed_type and parsed_type != "unknown":
+                        webhook_event = webhook_event.model_copy(update={
+                            "event_type": parsed.event_type,
+                            "provider_event_type": getattr(parsed, "provider_event_type", "") or webhook_event.provider_event_type,
+                            "idempotency_key": getattr(parsed, "idempotency_key", "") or webhook_event.idempotency_key,
+                        })
+            except Exception:
+                logger.debug("adapter parse_webhook failed, keeping generic DTO", exc_info=True)
 
         # Check for duplicates
         if self._dispatcher.is_duplicate(webhook_event.idempotency_key):
