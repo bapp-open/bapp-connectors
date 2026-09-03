@@ -111,3 +111,90 @@ def test_html_to_text_strips_tags_and_keeps_block_breaks():
 def test_html_to_text_plain_text_passes_through():
     assert html_to_text("Ciocan cu coada de lemn.") == "Ciocan cu coada de lemn."
     assert html_to_text("") == ""
+
+
+from bapp_connectors.core.dto import OrderValueTier, ShopRules  # noqa: E402
+from bapp_connectors.providers.shop.bapp_store.mappers import (  # noqa: E402
+    bulk_result_from_response,
+    category_from_store,
+    product_from_store,
+    rules_to_body,
+)
+
+
+@pytest.fixture(scope="module")
+def rules_fixture() -> dict:
+    return json.loads((FIXTURES / "rules.json").read_text())
+
+
+def test_rules_to_body_matches_fixture_and_computes_policy_hash(rules_fixture):
+    rules = ShopRules(
+        order_value_tiers=[
+            OrderValueTier(min_total=Decimal("5000.00"), discount_percent=Decimal("3.00")),
+            OrderValueTier(min_total=Decimal("10000.00"), discount_percent=Decimal("5.00")),
+        ],
+        min_order_total=Decimal("1000.00"),
+        currency="RON",
+        extra={"connection_id": 123, "synced_at": "2026-09-02T12:00:00+03:00"},
+    )
+    assert rules_to_body(rules) == rules_fixture["request"]["rules"]
+
+
+def test_rules_to_body_without_min_total_hashes_null():
+    body = rules_to_body(ShopRules(currency="RON"))
+    assert body["min_order_total"] is None
+    assert body["order_value_tiers"] == []
+    assert len(body["policy_hash"]) == 64
+
+
+def test_bulk_result_splits_positional_products(batch):
+    response = dict(batch["response"])
+    response["products"] = [
+        {"index": 0, "id": "345100", "status": "created", "error": "", "code": ""},
+        {"index": 1, "id": "345101", "status": "error", "error": "unknown category 999", "code": "unknown_category"},
+        {"index": 2, "id": "345102", "status": "updated", "error": "", "code": ""},
+    ]
+    result = bulk_result_from_response(response, 2, 1, ["345100", "345101"], ["345102"])
+    assert [i.index for i in result.created] == [0, 1]
+    assert result.created[0].remote_id == "345100" and result.created[0].ok
+    assert result.created[1].error == "unknown category 999"
+    assert result.created[1].error_code == "unknown_category"
+    assert [i.index for i in result.updated] == [0]
+    assert result.updated[0].remote_id == "345102"
+    assert result.failed == 1 and result.succeeded == 2
+
+
+def test_bulk_result_missing_id_falls_back_to_local_id():
+    response = {"products": [{"index": 0, "id": "", "status": "error", "error": "bad", "code": "validation"}]}
+    result = bulk_result_from_response(response, 1, 0, ["345100"], [])
+    assert result.created[0].remote_id == "345100"
+
+
+def test_category_from_store_with_expanded_parent():
+    row = {"id": 7, "external_id": "160", "name": "Burghie", "is_active": True, "parent": {"id": 5, "external_id": "159", "name": "Scule"}}
+    cat = category_from_store(row)
+    assert cat.category_id == "160" and cat.parent_id == "159" and cat.name == "Burghie"
+    assert cat.extra["store_id"] == "7"
+
+
+def test_category_from_store_with_bare_parent_pk_and_root():
+    assert category_from_store({"id": 7, "external_id": "160", "name": "B", "parent": 5}).parent_id == "5"
+    assert category_from_store({"id": 5, "external_id": "159", "name": "S", "parent": None}).parent_id is None
+
+
+def test_product_from_store_converts_gross_to_net():
+    row = {
+        "id": 11, "external_id": "345100", "code": "CIO-500", "code_ean": "5941234567890", "name": "Ciocan 500 g",
+        "description": "Ciocan cu coada de lemn.", "price_amount": "114.9500", "currency": "RON", "stock_qty": "42.0000", "is_active": True,
+    }
+    product = product_from_store(row, Decimal("0.21"))
+    assert product.product_id == "345100" and product.sku == "CIO-500" and product.barcode == "5941234567890"
+    assert product.price == Decimal("95.00")
+    assert product.stock == 42 and product.active is True and product.currency == "RON"
+    assert product.extra == {"store_id": "11", "gross_price": "114.9500"}
+
+
+def test_product_from_store_blank_code_is_none():
+    row = {"id": 1, "external_id": "2", "code": "", "code_ean": "", "name": "N", "price_amount": "0", "stock_qty": "0"}
+    product = product_from_store(row, Decimal("0.21"))
+    assert product.sku is None and product.barcode is None and product.price == Decimal("0.00")

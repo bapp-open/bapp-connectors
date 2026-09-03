@@ -7,11 +7,22 @@ inbound rows come from the store's public content-type viewsets.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from decimal import Decimal
 from html.parser import HTMLParser
 
-from bapp_connectors.core.dto import Product, ProductPhoto, ProductUpdate
-from bapp_connectors.core.pricing import to_gross
+from bapp_connectors.core.dto import (
+    BulkItemResult,
+    BulkUpsertResult,
+    Product,
+    ProductCategory,
+    ProductPhoto,
+    ProductUpdate,
+    ShopRules,
+)
+from bapp_connectors.core.pricing import to_gross, to_net
+from bapp_connectors.providers.shop.bapp_store.models import SyncItemResult, SyncTaskResponse
 
 DEFAULT_VAT_RATE = Decimal("0.21")
 
@@ -127,3 +138,66 @@ def category_record(name: str, parent_id: str | None, local_id: str, is_active: 
     if is_active is not None:
         record["is_active"] = is_active
     return record
+
+
+def rules_to_body(rules: ShopRules) -> dict:
+    """CatalogSyncTask `rules{}` body; the hash covers only the pricing inputs the store re-checks."""
+    core = {
+        "order_value_tiers": [
+            {"min_total": str(t.min_total), "discount_percent": str(t.discount_percent)} for t in rules.order_value_tiers
+        ],
+        "min_order_total": str(rules.min_order_total) if rules.min_order_total is not None else None,
+    }
+    policy_hash = hashlib.sha256(json.dumps(core, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    return {**core, "currency": rules.currency, **rules.extra, "policy_hash": policy_hash}
+
+
+def _bulk_item(item: SyncItemResult, index: int, local_id: str) -> BulkItemResult:
+    return BulkItemResult(index=index, remote_id=item.id or local_id, error=item.error, error_code=item.code)
+
+
+def bulk_result_from_response(response: dict, n_creates: int, n_updates: int, create_ids: list[str], update_ids: list[str]) -> BulkUpsertResult:
+    """Split the task's positional `products[]` back into creates (first n_creates) and updates."""
+    parsed = SyncTaskResponse.model_validate(response)
+    created: list[BulkItemResult] = []
+    updated: list[BulkItemResult] = []
+    for item in parsed.products:
+        if item.index < n_creates:
+            created.append(_bulk_item(item, item.index, create_ids[item.index]))
+        elif item.index < n_creates + n_updates:
+            offset = item.index - n_creates
+            updated.append(_bulk_item(item, offset, update_ids[offset]))
+    return BulkUpsertResult(created=created, updated=updated)
+
+
+def _parent_ref(parent) -> str | None:
+    if isinstance(parent, dict):
+        return str(parent.get("external_id") or parent.get("id") or "") or None
+    return str(parent) if parent else None
+
+
+def category_from_store(row: dict) -> ProductCategory:
+    """Store category row -> DTO keyed by the BAPP id the store holds in `external_id`."""
+    return ProductCategory(
+        category_id=str(row["external_id"]),
+        name=row.get("name", ""),
+        parent_id=_parent_ref(row.get("parent")),
+        extra={"store_id": str(row["id"]), "is_active": bool(row.get("is_active", True))},
+    )
+
+
+def product_from_store(row: dict, vat_rate: Decimal) -> Product:
+    """Store product row -> DTO with the framework's net price."""
+    gross = Decimal(str(row.get("price_amount") or "0"))
+    return Product(
+        product_id=str(row["external_id"]),
+        sku=row.get("code") or None,
+        barcode=row.get("code_ean") or None,
+        name=row.get("name", ""),
+        description=row.get("description") or "",
+        price=to_net(gross, vat_rate),
+        currency=row.get("currency") or "RON",
+        stock=int(Decimal(str(row.get("stock_qty") or "0"))),
+        active=bool(row.get("is_active", True)),
+        extra={"store_id": str(row["id"]), "gross_price": str(gross)},
+    )
