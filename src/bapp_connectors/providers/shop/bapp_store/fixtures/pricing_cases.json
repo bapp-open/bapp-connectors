@@ -1,0 +1,500 @@
+{
+ "description": "Cross-repo pricing parity cases: gross_list, ladder, from_price, order value, value percent, line totals. Amounts are gross RON strings, ROUND_HALF_UP to 2dp. Rules: product rows win outright; else category rows over the product category and its ancestors, best percent per threshold; non-discountable products get no ladder, count toward the order value and receive no value percent (from_price null). Value percent is applied per line on unit_q x qty.",
+ "cases": [
+  {
+   "name": "worked_example",
+   "price_modifier": "-5%",
+   "products": {
+    "P": {
+     "net": "100.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "scule"
+    },
+    "Q": {
+     "net": "70.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "feronerie"
+    }
+   },
+   "categories": {
+    "scule": null,
+    "feronerie": null,
+    "burghie": "scule",
+    "diverse": null
+   },
+   "rules": {
+    "product": {
+     "P": [
+      [
+       "10",
+       "5"
+      ],
+      [
+       "50",
+       "8"
+      ]
+     ]
+    },
+    "category": {
+     "scule": [
+      [
+       "20",
+       "6"
+      ]
+     ]
+    },
+    "order": [
+     [
+      "5000.00",
+      "3"
+     ],
+     [
+      "10000.00",
+      "5"
+     ]
+    ]
+   },
+   "min_order_total": "1000.00",
+   "lines": [
+    [
+     "P",
+     "60"
+    ],
+    [
+     "Q",
+     "50"
+    ]
+   ],
+   "expected": {
+    "products": {
+     "P": {
+      "gross_list": "114.95",
+      "ladder": [
+       [
+        "10",
+        "109.20"
+       ],
+       [
+        "50",
+        "105.75"
+       ]
+      ],
+      "from_price": "100.46"
+     },
+     "Q": {
+      "gross_list": "80.47",
+      "ladder": [],
+      "from_price": "76.45"
+     }
+    },
+    "order_value": "10368.50",
+    "value_pct": "5.00",
+    "lines": [
+     [
+      "P",
+      "105.75",
+      "6027.75"
+     ],
+     [
+      "Q",
+      "80.47",
+      "3822.33"
+     ]
+    ],
+    "goods_total": "9850.08",
+    "volume_discount_total": "518.42",
+    "meets_minimum": true,
+    "missing_amount": "0.00"
+   }
+  },
+  {
+   "name": "below_minimum",
+   "price_modifier": "-5%",
+   "products": {
+    "P": {
+     "net": "100.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "scule"
+    },
+    "Q": {
+     "net": "70.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "feronerie"
+    }
+   },
+   "categories": {
+    "scule": null,
+    "feronerie": null,
+    "burghie": "scule",
+    "diverse": null
+   },
+   "rules": {
+    "product": {
+     "P": [
+      [
+       "10",
+       "5"
+      ],
+      [
+       "50",
+       "8"
+      ]
+     ]
+    },
+    "category": {
+     "scule": [
+      [
+       "20",
+       "6"
+      ]
+     ]
+    },
+    "order": [
+     [
+      "5000.00",
+      "3"
+     ],
+     [
+      "10000.00",
+      "5"
+     ]
+    ]
+   },
+   "min_order_total": "1000.00",
+   "lines": [
+    [
+     "P",
+     "3"
+    ],
+    [
+     "Q",
+     "5"
+    ]
+   ],
+   "expected": {
+    "products": {
+     "P": {
+      "gross_list": "114.95",
+      "ladder": [
+       [
+        "10",
+        "109.20"
+       ],
+       [
+        "50",
+        "105.75"
+       ]
+      ],
+      "from_price": "100.46"
+     },
+     "Q": {
+      "gross_list": "80.47",
+      "ladder": [],
+      "from_price": "76.45"
+     }
+    },
+    "order_value": "747.20",
+    "value_pct": "0.00",
+    "lines": [
+     [
+      "P",
+      "114.95",
+      "344.85"
+     ],
+     [
+      "Q",
+      "80.47",
+      "402.35"
+     ]
+    ],
+    "goods_total": "747.20",
+    "volume_discount_total": "0.00",
+    "meets_minimum": false,
+    "missing_amount": "252.80"
+   }
+  },
+  {
+   "name": "category_ancestor_rule",
+   "price_modifier": "-5%",
+   "products": {
+    "U": {
+     "net": "10.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "burghie"
+    }
+   },
+   "categories": {
+    "scule": null,
+    "feronerie": null,
+    "burghie": "scule",
+    "diverse": null
+   },
+   "rules": {
+    "product": {
+     "P": [
+      [
+       "10",
+       "5"
+      ],
+      [
+       "50",
+       "8"
+      ]
+     ]
+    },
+    "category": {
+     "scule": [
+      [
+       "20",
+       "6"
+      ]
+     ]
+    },
+    "order": [
+     [
+      "5000.00",
+      "3"
+     ],
+     [
+      "10000.00",
+      "5"
+     ]
+    ]
+   },
+   "min_order_total": "0.00",
+   "lines": [
+    [
+     "U",
+     "25"
+    ]
+   ],
+   "expected": {
+    "products": {
+     "U": {
+      "gross_list": "11.50",
+      "ladder": [
+       [
+        "20",
+        "10.81"
+       ]
+      ],
+      "from_price": "10.27"
+     }
+    },
+    "order_value": "270.25",
+    "value_pct": "0.00",
+    "lines": [
+     [
+      "U",
+      "10.81",
+      "270.25"
+     ]
+    ],
+    "goods_total": "270.25",
+    "volume_discount_total": "0.00",
+    "meets_minimum": true,
+    "missing_amount": "0.00"
+   }
+  },
+  {
+   "name": "non_discountable_no_ladder",
+   "price_modifier": "-5%",
+   "products": {
+    "T": {
+     "net": "50.0000",
+     "tax": "21",
+     "discountable": false,
+     "category": "scule"
+    }
+   },
+   "categories": {
+    "scule": null,
+    "feronerie": null,
+    "burghie": "scule",
+    "diverse": null
+   },
+   "rules": {
+    "product": {
+     "P": [
+      [
+       "10",
+       "5"
+      ],
+      [
+       "50",
+       "8"
+      ]
+     ]
+    },
+    "category": {
+     "scule": [
+      [
+       "20",
+       "6"
+      ]
+     ]
+    },
+    "order": [
+     [
+      "5000.00",
+      "3"
+     ],
+     [
+      "10000.00",
+      "5"
+     ]
+    ]
+   },
+   "min_order_total": "0.00",
+   "lines": [
+    [
+     "T",
+     "100"
+    ]
+   ],
+   "expected": {
+    "products": {
+     "T": {
+      "gross_list": "57.48",
+      "ladder": [],
+      "from_price": null
+     }
+    },
+    "order_value": "5748.00",
+    "value_pct": "3.00",
+    "lines": [
+     [
+      "T",
+      "57.48",
+      "5748.00"
+     ]
+    ],
+    "goods_total": "5748.00",
+    "volume_discount_total": "0.00",
+    "meets_minimum": true,
+    "missing_amount": "0.00"
+   }
+  },
+  {
+   "name": "half_up_tier_no_vat",
+   "price_modifier": "",
+   "products": {
+    "S": {
+     "net": "20.3000",
+     "tax": "0",
+     "discountable": true,
+     "category": "diverse"
+    }
+   },
+   "categories": {
+    "scule": null,
+    "feronerie": null,
+    "burghie": "scule",
+    "diverse": null
+   },
+   "rules": {
+    "product": {
+     "S": [
+      [
+       "5",
+       "5"
+      ]
+     ]
+    },
+    "category": {},
+    "order": []
+   },
+   "min_order_total": "0.00",
+   "lines": [
+    [
+     "S",
+     "5"
+    ]
+   ],
+   "expected": {
+    "products": {
+     "S": {
+      "gross_list": "20.30",
+      "ladder": [
+       [
+        "5",
+        "19.29"
+       ]
+      ],
+      "from_price": "19.29"
+     }
+    },
+    "order_value": "96.45",
+    "value_pct": "0.00",
+    "lines": [
+     [
+      "S",
+      "19.29",
+      "96.45"
+     ]
+    ],
+    "goods_total": "96.45",
+    "volume_discount_total": "0.00",
+    "meets_minimum": true,
+    "missing_amount": "0.00"
+   }
+  },
+  {
+   "name": "no_rules_at_all",
+   "price_modifier": "",
+   "products": {
+    "Q": {
+     "net": "70.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "feronerie"
+    }
+   },
+   "categories": {
+    "scule": null,
+    "feronerie": null,
+    "burghie": "scule",
+    "diverse": null
+   },
+   "rules": {
+    "product": {},
+    "category": {},
+    "order": []
+   },
+   "min_order_total": "0.00",
+   "lines": [
+    [
+     "Q",
+     "1"
+    ]
+   ],
+   "expected": {
+    "products": {
+     "Q": {
+      "gross_list": "84.70",
+      "ladder": [],
+      "from_price": null
+     }
+    },
+    "order_value": "84.70",
+    "value_pct": "0.00",
+    "lines": [
+     [
+      "Q",
+      "84.70",
+      "84.70"
+     ]
+    ],
+    "goods_total": "84.70",
+    "volume_discount_total": "0.00",
+    "meets_minimum": true,
+    "missing_amount": "0.00"
+   }
+  }
+ ]
+}

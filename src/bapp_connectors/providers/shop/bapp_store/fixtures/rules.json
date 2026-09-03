@@ -1,0 +1,28 @@
+{
+ "policy_hash_recipe": "sha256 of json.dumps({'order_value_tiers': [...], 'min_order_total': '...'}, sort_keys=True, separators=(',', ':'))",
+ "request": {
+  "rules": {
+   "order_value_tiers": [
+    {
+     "min_total": "5000.00",
+     "discount_percent": "3.00"
+    },
+    {
+     "min_total": "10000.00",
+     "discount_percent": "5.00"
+    }
+   ],
+   "min_order_total": "1000.00",
+   "currency": "RON",
+   "connection_id": 123,
+   "policy_hash": "d781e2f107f3407972917f4a8e84964540086a7f5ad91620de9f4f8536d885b1",
+   "synced_at": "2026-09-02T12:00:00+03:00"
+  }
+ },
+ "response": {
+  "categories": [],
+  "products": [],
+  "rules_applied": true,
+  "webhook_applied": false
+ }
+}

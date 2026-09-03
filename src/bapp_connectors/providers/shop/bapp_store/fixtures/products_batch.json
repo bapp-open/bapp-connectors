@@ -1,0 +1,165 @@
+{
+ "request": {
+  "categories": [
+   {
+    "id": "159",
+    "parent_id": null,
+    "name": "Scule",
+    "is_active": true
+   },
+   {
+    "id": "160",
+    "parent_id": "159",
+    "name": "Burghie",
+    "is_active": true
+   }
+  ],
+  "products": [
+   {
+    "id": "345100",
+    "name": "Ciocan 500 g",
+    "code": "CIO-500",
+    "code_ean": "5941234567890",
+    "unit": "buc",
+    "description": "Ciocan cu coada de lemn.",
+    "price": {
+     "amount": "114.95",
+     "currency": "RON"
+    },
+    "stock": "42",
+    "is_active": true,
+    "category_ids": [
+     "159"
+    ],
+    "primary_category": "159",
+    "price_tiers": [
+     {
+      "min_quantity": "10",
+      "price_amount": "109.20"
+     },
+     {
+      "min_quantity": "50",
+      "price_amount": "105.75"
+     }
+    ],
+    "extra": {
+     "bapp": {
+      "gross_price": "114.95",
+      "vat_rate": "21",
+      "unit": "buc",
+      "discountable": true
+     }
+    },
+    "photos": [
+     {
+      "url": "https://cdn.example.com/p/345100-0.jpg",
+      "order": 0
+     }
+    ]
+   },
+   {
+    "id": "345101",
+    "name": "Balama 60 mm",
+    "code": "BAL-60",
+    "code_ean": "",
+    "unit": "buc",
+    "description": "",
+    "price": {
+     "amount": "80.47",
+     "currency": "RON"
+    },
+    "stock": "0",
+    "is_active": true,
+    "category_ids": [
+     "159"
+    ],
+    "primary_category": "159",
+    "price_tiers": [],
+    "extra": {
+     "bapp": {
+      "gross_price": "80.47",
+      "vat_rate": "21",
+      "unit": "buc",
+      "discountable": true
+     }
+    },
+    "photos": [
+     {
+      "url": "https://cdn.example.com/p/345101-0.jpg",
+      "order": 0
+     }
+    ]
+   },
+   {
+    "id": "345102",
+    "name": "Set burghie 10 buc",
+    "code": "BUR-10",
+    "code_ean": "",
+    "unit": "buc",
+    "description": "",
+    "price": {
+     "amount": "60.50",
+     "currency": "RON"
+    },
+    "stock": "5",
+    "is_active": true,
+    "category_ids": [
+     "160"
+    ],
+    "primary_category": "160",
+    "price_tiers": [],
+    "extra": {
+     "bapp": {
+      "gross_price": "60.50",
+      "vat_rate": "21",
+      "unit": "buc",
+      "discountable": false
+     }
+    }
+   }
+  ]
+ },
+ "response": {
+  "categories": [
+   {
+    "index": 0,
+    "id": "159",
+    "status": "created",
+    "error": "",
+    "code": ""
+   },
+   {
+    "index": 1,
+    "id": "160",
+    "status": "created",
+    "error": "",
+    "code": ""
+   }
+  ],
+  "products": [
+   {
+    "index": 0,
+    "id": "345100",
+    "status": "created",
+    "error": "",
+    "code": ""
+   },
+   {
+    "index": 1,
+    "id": "345101",
+    "status": "created",
+    "error": "",
+    "code": ""
+   },
+   {
+    "index": 2,
+    "id": "345102",
+    "status": "created",
+    "error": "",
+    "code": ""
+   }
+  ],
+  "rules_applied": false,
+  "webhook_applied": false
+ }
+}
