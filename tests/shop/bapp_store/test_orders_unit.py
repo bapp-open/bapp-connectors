@@ -1,10 +1,11 @@
 """Order mapper tests for the bapp_store provider. Pure functions, no network."""
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
 from bapp_connectors.core.dto import OrderStatus, PaymentStatus, PaymentType
+from bapp_connectors.providers.shop.bapp_store.adapter import BappStoreShopAdapter
 from bapp_connectors.providers.shop.bapp_store.mappers import order_from_store, orders_page_from_store
 
 FIXTURES = Path("src/bapp_connectors/providers/shop/bapp_store/fixtures")
@@ -130,3 +131,53 @@ def test_orders_page_from_store_maps_pagination():
     more = orders_page_from_store({**_export(), "cursor": "ORD-000123", "has_more": True}, VAT)
     assert more.cursor == "ORD-000123"
     assert more.has_more is True
+
+
+class _FakeClient:
+    def __init__(self, export: dict):
+        self.export = export
+        self.calls: list[tuple] = []
+
+    def export_orders(self, since=None, cursor=None, limit=50):
+        self.calls.append(("export_orders", since, cursor, limit))
+        return self.export
+
+    def export_order(self, number):
+        self.calls.append(("export_order", number))
+        return self.export["items"][0]
+
+
+def _adapter(export: dict) -> tuple[BappStoreShopAdapter, _FakeClient]:
+    adapter = BappStoreShopAdapter({"store_url": "https://demo.sites.bapp.ro", "token": "t"}, config={"vat_rate": "0.21"})
+    fake = _FakeClient(export)
+    adapter.client = fake
+    return adapter, fake
+
+
+def test_get_orders_passes_since_and_cursor_and_maps_page():
+    adapter, fake = _adapter(_export())
+    page = adapter.get_orders(since=datetime(2026, 9, 1, 12, 0, tzinfo=UTC), cursor="ORD-000100")
+    assert fake.calls == [("export_orders", "2026-09-01T12:00:00+00:00", "ORD-000100", 50)]
+    assert [o.order_id for o in page.items] == ["ORD-000123"]
+    assert page.items[0].items[0].unit_price == Decimal("95.00")
+    assert page.has_more is False
+
+
+def test_get_orders_without_filters_sends_none():
+    adapter, fake = _adapter(_export())
+    adapter.get_orders()
+    assert fake.calls == [("export_orders", None, None, 50)]
+
+
+def test_get_orders_treats_naive_since_as_utc():
+    adapter, fake = _adapter(_export())
+    adapter.get_orders(since=datetime(2026, 9, 1, 12, 0))
+    assert fake.calls[0][1] == "2026-09-01T12:00:00+00:00"
+
+
+def test_get_order_maps_single_export():
+    adapter, fake = _adapter(_export())
+    order = adapter.get_order("ORD-000123")
+    assert fake.calls == [("export_order", "ORD-000123")]
+    assert order.order_id == "ORD-000123"
+    assert order.total == Decimal("8140.56")

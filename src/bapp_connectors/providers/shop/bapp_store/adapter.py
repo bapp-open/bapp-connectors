@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from datetime import UTC
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -195,8 +196,12 @@ class BappStoreShopAdapter(
     # -- Orders --
 
     def get_orders(self, since: datetime | None = None, cursor: str | None = None) -> PaginatedResult[Order]:
-        data = self.client.export_orders(since=since.isoformat() if since else None, cursor=cursor)
-        return orders_page_from_store(data, self._vat_rate)
+        since_iso = None
+        if since is not None:
+            if since.tzinfo is None:
+                since = since.replace(tzinfo=UTC)
+            since_iso = since.isoformat()
+        return orders_page_from_store(self.client.export_orders(since=since_iso, cursor=cursor), self._vat_rate)
 
     def get_order(self, order_id: str) -> Order:
         return order_from_store(self.client.export_order(order_id), self._vat_rate)
