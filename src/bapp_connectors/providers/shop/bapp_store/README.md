@@ -50,7 +50,7 @@ The sync task response is positional: `products[i]` answers `products[i]` of the
 
 ## Not supported
 
-`update_order_status`, `update_product_stock`, `update_product_price` raise `UnsupportedFeatureError`: the engine uses full updates and bulk upsert instead, and status echo to the store is a later version.
+`delete_product`, `update_order_status`, `update_product_stock`, `update_product_price` raise `UnsupportedFeatureError`: the store never prunes products, so deletes deactivate instead; the engine uses full updates and bulk upsert for stock and price; and status echo to the store is a later version.
 
 ## Fixtures
 
