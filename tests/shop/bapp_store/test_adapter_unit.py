@@ -241,7 +241,7 @@ def test_verify_webhook_hex_hmac_over_body(adapter):
     assert adapter.verify_webhook({}, body, secret="s3cret") is False
     assert adapter.verify_webhook({"X-BappStore-Signature": good}, body, secret="") is False
     # hmac.compare_digest raises TypeError on non-ASCII str operands; must fail closed, not raise.
-    assert adapter.verify_webhook({"X-BappStore-Signature": "café"}, body, secret="s3cret") is False
+    assert adapter.verify_webhook({"X-BappStore-Signature": "caf\u00e9"}, body, secret="s3cret") is False
 
 
 def test_parse_webhook_maps_event_and_order_id(adapter):
