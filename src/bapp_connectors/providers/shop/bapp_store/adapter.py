@@ -5,6 +5,9 @@ CatalogSyncTask and reads orders back through the export tasks.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -28,6 +31,7 @@ from bapp_connectors.core.dto import (
     ProductUpdate,
     ShopRules,
     WebhookEvent,
+    WebhookEventType,
 )
 from bapp_connectors.core.errors import ConnectorError, PermanentProviderError, UnsupportedFeatureError
 from bapp_connectors.core.ports import ShopPort
@@ -35,15 +39,26 @@ from bapp_connectors.providers.shop.bapp_store.client import BappStoreClient
 from bapp_connectors.providers.shop.bapp_store.manifest import manifest
 from bapp_connectors.providers.shop.bapp_store.mappers import (
     bulk_result_from_response,
+    category_from_store,
+    category_record,
     order_from_store,
     orders_page_from_store,
     product_from_store,
     product_to_record,
+    rules_to_body,
     update_to_record,
 )
+from bapp_connectors.providers.shop.bapp_store.models import SyncTaskResponse
 
 if TYPE_CHECKING:
     from datetime import datetime
+
+SIGNATURE_HEADER = "X-BappStore-Signature"
+
+_WEBHOOK_EVENTS = {
+    "order.created": WebhookEventType.ORDER_CREATED,
+    "order.updated": WebhookEventType.ORDER_UPDATED,
+}
 
 
 class BappStoreShopAdapter(
@@ -142,13 +157,40 @@ class BappStoreShopAdapter(
     def update_product_price(self, product_id: str, price: Decimal, currency: str) -> None:
         raise UnsupportedFeatureError("bapp_store updates prices through bulk_upsert_products")
 
-    # -- Categories and volume pricing --
+    # -- Categories --
 
     def get_categories(self) -> list[ProductCategory]:
-        raise NotImplementedError
+        categories = [category_from_store(row) for row in self.client.list_categories()]
+        by_store_id = {c.extra["store_id"]: c.category_id for c in categories}
+        return [c.model_copy(update={"parent_id": by_store_id.get(c.parent_id, c.parent_id)}) for c in categories]
+
+    def create_category(self, name: str, parent_id: str | None = None, local_id: str | None = None) -> ProductCategory:
+        if not local_id:
+            raise ValueError("bapp_store categories are keyed by the BAPP category id; local_id is required")
+        response = self.client.sync_task({"categories": [category_record(name, parent_id, local_id)]})
+        self._raise_category(response, local_id)
+        return ProductCategory(category_id=local_id, name=name, parent_id=parent_id)
+
+    def update_category(self, category: ProductCategory) -> ProductCategory:
+        # Name and parent only (spec 2.2): a store-side activation toggle is not BAPP's to overwrite on a rename.
+        response = self.client.sync_task({"categories": [category_record(category.name, category.parent_id, category.category_id, is_active=None)]})
+        self._raise_category(response, category.category_id)
+        return category
+
+    @staticmethod
+    def _raise_category(response: dict, local_id: str) -> None:
+        items = SyncTaskResponse.model_validate(response).categories
+        if not items:
+            raise PermanentProviderError(f"no result returned for category {local_id}")
+        if items[0].error:
+            raise PermanentProviderError(items[0].error, code=items[0].code)
+
+    # -- Volume pricing --
 
     def push_shop_rules(self, rules: ShopRules) -> None:
-        raise NotImplementedError
+        response = self.client.sync_task({"rules": rules_to_body(rules)})
+        if not SyncTaskResponse.model_validate(response).rules_applied:
+            raise PermanentProviderError("store did not apply the pricing rules")
 
     # -- Orders --
 
@@ -165,7 +207,22 @@ class BappStoreShopAdapter(
     # -- Webhooks --
 
     def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
-        raise NotImplementedError
+        signature = next((v for k, v in headers.items() if k.lower() == SIGNATURE_HEADER.lower()), "")
+        if not signature or not secret:
+            return False
+        computed = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(signature.lower(), computed)
 
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
-        raise NotImplementedError
+        data = json.loads(body)
+        event = str(data.get("event", ""))
+        order_id = str(data.get("id", ""))
+        key = f"{event}:{order_id}"
+        return WebhookEvent(
+            event_id=key,
+            event_type=_WEBHOOK_EVENTS.get(event, WebhookEventType.UNKNOWN),
+            provider="bapp_store",
+            provider_event_type=event,
+            payload={"id": order_id},
+            idempotency_key=key,
+        )
