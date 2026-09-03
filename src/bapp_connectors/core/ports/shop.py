@@ -17,14 +17,17 @@ if TYPE_CHECKING:
 
 
 class ShopPort(BasePort):
-    #: True when get_products honours `since` (server-side "modified after" filter).
-    supports_modified_since: bool = False
-
     """
     Common contract for all shop/marketplace adapters.
 
     Covers: orders, products, stock/price sync.
     """
+
+    #: True when get_products honours `since` (server-side "modified after" filter).
+    supports_modified_since: bool = False
+
+    #: True when the provider downloads product images itself on upload; False when it stores URLs only.
+    sideloads_images: bool = True
 
     @abstractmethod
     def get_orders(self, since: datetime | None = None, cursor: str | None = None) -> PaginatedResult[Order]:
