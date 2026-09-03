@@ -294,6 +294,9 @@ def _parse_iso(value: str | None) -> datetime | None:
 
 
 def order_from_store(data: dict, vat_rate: Decimal) -> Order:
+    """Map one store order. Order.items carry LIST prices, not what was charged; the volume-discounted
+    total is on Order.total, and the actual per-unit price charged is item.extra["unit_tier"] (gross,
+    unconverted). See the README's Orders section."""
     number = str(data["number"])
     currency = data.get("currency", "RON")
     raw_status = data.get("status", "")

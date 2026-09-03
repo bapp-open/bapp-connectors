@@ -44,9 +44,15 @@ A create carries `is_active`; an update carries `id`, `parent_id` and `name` onl
 
 The sync task response is positional: `products[i]` answers `products[i]` of the request with `status` `created`, `updated` or `error` and an error `code` (`validation`, `unknown_category`, `invalid_price`, `external_id_conflict`). The codes travel opaquely: the mappers copy `code` into `BulkItemResult.error_code` and the adapter into `PermanentProviderError.code` without branching on any value, so all four behave alike. The task upserts and never prunes.
 
+## Orders
+
+`Order.items[i].unit_price` is the catalogue LIST price (net, converted from the store's gross), not what the customer was actually charged. `Order.total` is the volume-discounted total (also net, converted from the store's gross `total`). The two do not reconcile by summing the lines: for the shipped fixture the line sum is 9025.00 net against an order total of 8140.56 net, about 11 percent apart, because the store applies order-value-tier discounts that are not reflected per line.
+
+The per-unit price actually charged is `Order.items[i].extra["unit_tier"]` -- a gross string, left unconverted because it is informational only. This is intentional: the spec has the panel re-derive line pricing from its own rules rather than trust the store's per-line figure, and the fixture arithmetic reconciles exactly against `unit_tier` and `extra["volume_discount_total"]`. A consumer that needs an accurate per-order revenue figure should use `Order.total`, not a sum of `Order.items`.
+
 ## Errors
 
-401/403 -> `AuthenticationError`; other 4xx (400 malformed envelope, 413 over 100 products or 8 MB) -> `PermanentProviderError`; 5xx and timeouts -> retryable `ProviderError`. The adapter guards the 100-record half of the 413 rule client-side (`bulk_upsert_products` raises `ValueError`); the 8 MB envelope cap is not measured here, so a photo-heavy batch under 100 records can still come back 413 as a `PermanentProviderError`. Callers that send long photo lists should slice smaller than 100. `sync_task` is never retried by the HTTP layer because the store may have applied the batch before a timeout.
+401/403 -> `AuthenticationError`; 429 -> retryable `RateLimitError` (matches the core HTTP client's own 429 handling, since `sync_task` bypasses it); other 4xx (400 malformed envelope, 413 over 100 products or 8 MB) -> `PermanentProviderError`; 5xx and timeouts -> retryable `ProviderError`. The adapter guards the 100-record half of the 413 rule client-side (`bulk_upsert_products` raises `ValueError`); the 8 MB envelope cap is not measured here, so a photo-heavy batch under 100 records can still come back 413 as a `PermanentProviderError`. Callers that send long photo lists should slice smaller than 100. `sync_task` is never retried by the HTTP layer because the store may have applied the batch before a timeout.
 
 ## Not supported
 
