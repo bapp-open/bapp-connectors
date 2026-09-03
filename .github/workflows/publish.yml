@@ -32,6 +32,10 @@ jobs:
           python-version: "3.12"
       - run: pip install build
       - run: python -m build packages/django
+      # The django package is versioned independently of the core one, so most core
+      # tags leave it untouched and this job would fail re-uploading a release PyPI
+      # already has.
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: packages/django/dist/
+          skip-existing: true
