@@ -1,13 +1,13 @@
 """Fixture parity: the JSON files under the package are the cross-repo contract."""
 import json
 from decimal import ROUND_HALF_UP, Decimal
-from pathlib import Path
+from importlib.resources import files
 
 import pytest
 
 from bapp_connectors.core.pricing import to_gross
 
-FIXTURES = Path("src/bapp_connectors/providers/shop/bapp_store/fixtures")
+FIXTURES = files("bapp_connectors.providers.shop.bapp_store") / "fixtures"
 
 
 def _load(name: str) -> dict:

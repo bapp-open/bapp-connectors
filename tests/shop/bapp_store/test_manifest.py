@@ -4,9 +4,9 @@ from bapp_connectors.core.capabilities import (
     ProductCreationCapability,
     ProductFullUpdateCapability,
     ProductLookupCapability,
+    VolumePricingCapability,
     WebhookCapability,
 )
-from bapp_connectors.core.capabilities.volume_pricing import VolumePricingCapability
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.core.types import AuthStrategy, ProviderFamily
 from bapp_connectors.providers.shop.bapp_store.manifest import manifest

@@ -2,13 +2,13 @@
 import json
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
-from pathlib import Path
+from importlib.resources import files
 
 from bapp_connectors.core.dto import OrderStatus, PaymentStatus, PaymentType
 from bapp_connectors.providers.shop.bapp_store.adapter import BappStoreShopAdapter
 from bapp_connectors.providers.shop.bapp_store.mappers import order_from_store, orders_page_from_store
 
-FIXTURES = Path("src/bapp_connectors/providers/shop/bapp_store/fixtures")
+FIXTURES = files("bapp_connectors.providers.shop.bapp_store") / "fixtures"
 VAT = Decimal("0.21")
 
 

@@ -8,9 +8,9 @@ from bapp_connectors.core.capabilities import (
     ProductCreationCapability,
     ProductFullUpdateCapability,
     ProductLookupCapability,
+    VolumePricingCapability,
     WebhookCapability,
 )
-from bapp_connectors.core.capabilities.volume_pricing import VolumePricingCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
