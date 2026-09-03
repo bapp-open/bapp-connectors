@@ -1,6 +1,6 @@
 import pytest
 
-from bapp_connectors.core.errors import AuthenticationError, PermanentProviderError, ProviderError
+from bapp_connectors.core.errors import AuthenticationError, PermanentProviderError, ProviderError, RateLimitError
 from bapp_connectors.providers.shop.bapp_store.errors import map_error, raise_for_status
 from tests.shop.bapp_store.fake_response import FakeResponse
 
@@ -12,6 +12,14 @@ def test_auth_statuses_map_to_authentication_error(status):
     assert err.retryable is False
     assert err.status_code == status
     assert "bad token" in str(err)
+
+
+def test_429_maps_to_rate_limit_error():
+    # sync_task bypasses the core HTTP client's own 429 handling, so map_error must retry it too.
+    err = map_error(429, "slow down")
+    assert isinstance(err, RateLimitError)
+    assert err.retryable is True
+    assert err.status_code == 429
 
 
 @pytest.mark.parametrize("status", [400, 404, 413])

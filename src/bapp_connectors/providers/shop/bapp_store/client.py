@@ -8,7 +8,7 @@ from typing import Any
 
 import requests
 
-from bapp_connectors.core.errors import ConnectorError, ProviderError
+from bapp_connectors.core.errors import AuthenticationError, ProviderError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.http.auth import NoAuth
 from bapp_connectors.providers.shop.bapp_store.errors import raise_for_status
@@ -42,7 +42,7 @@ class BappStoreClient:
     def test_auth(self) -> bool:
         try:
             self._call("GET", CATEGORY_PATH, params={"page_size": 1})
-        except ConnectorError:
+        except AuthenticationError:
             return False
         return True
 

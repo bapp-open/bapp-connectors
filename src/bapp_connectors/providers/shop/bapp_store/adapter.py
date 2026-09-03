@@ -18,9 +18,9 @@ from bapp_connectors.core.capabilities import (
     ProductCreationCapability,
     ProductFullUpdateCapability,
     ProductLookupCapability,
+    VolumePricingCapability,
     WebhookCapability,
 )
-from bapp_connectors.core.capabilities.volume_pricing import VolumePricingCapability
 from bapp_connectors.core.dto import (
     BulkUpsertResult,
     ConnectionTestResult,
@@ -216,7 +216,8 @@ class BappStoreShopAdapter(
         if not signature or not secret:
             return False
         computed = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
-        return hmac.compare_digest(signature.lower(), computed)
+        # compare_digest raises TypeError on non-ASCII str operands, and the header is attacker-controlled.
+        return hmac.compare_digest(signature.lower().encode("utf-8"), computed.encode("utf-8"))
 
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
         data = json.loads(body)

@@ -17,7 +17,7 @@ from bapp_connectors.core.dto import (
     ShopRules,
     WebhookEventType,
 )
-from bapp_connectors.core.errors import PermanentProviderError, UnsupportedFeatureError
+from bapp_connectors.core.errors import PermanentProviderError, ProviderError, UnsupportedFeatureError
 from bapp_connectors.providers.shop.bapp_store.adapter import BappStoreShopAdapter
 from tests.fake_http import FakeHttpClient
 from tests.shop.bapp_store.fake_response import FakeResponse
@@ -72,6 +72,17 @@ def test_test_connection_success(adapter, fake):
     fake.add("GET", "content-type/store.storecategory/", {"count": 0, "results": []})
     result = adapter.test_connection()
     assert result.success is True
+
+
+def test_test_connection_reports_non_auth_failures_as_themselves(adapter, fake):
+    def server_error(method, path, kwargs):
+        raise ProviderError("Company Store server error 503: maintenance", retryable=True, status_code=503)
+
+    fake.add("GET", "content-type/store.storecategory/", server_error)
+    result = adapter.test_connection()
+    assert result.success is False
+    assert result.message != "Authentication failed"
+    assert "503" in result.message
 
 
 def test_bulk_upsert_sends_one_task_and_splits_positional_results(adapter, fake, batch):
@@ -229,6 +240,8 @@ def test_verify_webhook_hex_hmac_over_body(adapter):
     assert adapter.verify_webhook({"X-BappStore-Signature": good}, body, secret="other") is False
     assert adapter.verify_webhook({}, body, secret="s3cret") is False
     assert adapter.verify_webhook({"X-BappStore-Signature": good}, body, secret="") is False
+    # hmac.compare_digest raises TypeError on non-ASCII str operands; must fail closed, not raise.
+    assert adapter.verify_webhook({"X-BappStore-Signature": "café"}, body, secret="s3cret") is False
 
 
 def test_parse_webhook_maps_event_and_order_id(adapter):

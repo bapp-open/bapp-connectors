@@ -77,6 +77,16 @@ def test_test_auth(client, http):
     assert client.test_auth() is False
 
 
+def test_test_auth_only_swallows_authentication_failures(client, http):
+    # A 503 or a timeout is not "bad credentials"; test_auth must let it surface, not report False.
+    def server_error(method, path, kwargs):
+        raise ProviderError("Company Store server error 503: maintenance", retryable=True, status_code=503)
+
+    http.add("GET", CATEGORY_PATH, server_error)
+    with pytest.raises(ProviderError):
+        client.test_auth()
+
+
 def test_sync_task_posts_payload_without_retry(client, http):
     http.add("POST", SYNC_TASK_PATH, FakeResponse(200, {"products": [], "categories": [], "rules_applied": False, "webhook_applied": False}))
     result = client.sync_task({"products": [{"id": "1"}]})
@@ -87,6 +97,31 @@ def test_sync_task_posts_payload_without_retry(client, http):
     # FakeHttpClient.call takes direct_response as a named parameter, so it is not in the recorded kwargs.
     assert call.kwargs["retry"] is False
     assert call.kwargs["timeout"] == BappStoreClient.SYNC_TIMEOUT
+
+
+class _DirectResponseProbe:
+    """
+    Records the actual value passed for direct_response, unlike FakeHttpClient which consumes it as a
+    named parameter and never surfaces it in the recorded kwargs -- so a plain FakeHttpClient-based
+    assertion cannot catch direct_response=True being dropped from sync_task.
+    """
+
+    def __init__(self):
+        self.direct_response = None
+        self.base_url = STORE + "api/"
+
+    def call(self, method, path, direct_response=False, headers=None, **kwargs):
+        self.direct_response = direct_response
+        return FakeResponse(200, {"products": [], "categories": [], "rules_applied": True, "webhook_applied": False})
+
+
+def test_sync_task_requests_the_raw_response():
+    # The real client hands raise_for_status a dict (not a Response) without direct_response=True,
+    # which fails on .ok -- a regression FakeHttpClient's own dropped-kwarg quirk cannot catch.
+    probe = _DirectResponseProbe()
+    client = BappStoreClient(STORE, "s3cret", http_client=probe)
+    client.sync_task({"products": []})
+    assert probe.direct_response is True
 
 
 def test_sync_task_maps_error_status(client, http):
