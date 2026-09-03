@@ -3847,22 +3847,24 @@ git commit -m "docs(bapp_store): provider README"
 - Consumes: the registered manifest `bapp_store` / `Company Store (BAPP)` (Tasks 6 and 16) and `src/bapp_connectors/providers/shop/bapp_store/adapter.py` (Task 13); `scripts/update_readme.py` discovers a provider only when `adapter.py` exists (`scripts/update_readme.py:39-40`).
 - Produces: README rows for the new provider. No code.
 
-- [ ] **Step 1: Run the generator**
+- [ ] **Step 1: Run the generator with every optional extra installed**
 
+```bash
+uv run --extra dev --extra sftp --extra s3 --extra mobilpay python scripts/update_readme.py
 ```
-uv run python scripts/update_readme.py
-```
 
-Expected: the script prints the providers it found and reports README.md updated; `bapp_store` appears under the `shop` family.
+Expected: the script prints the providers it found and reports README.md updated; `bapp_store` appears under the `shop` family, and `MobilPay`, `SFTP` and `S3 Storage` are still listed.
 
-- [ ] **Step 2: Verify the diff touches only the generated blocks**
+MobilPay, SFTP and S3 register only when `pyOpenSSL`, `paramiko` and `boto3` are importable (CLAUDE.md, "Conditional registration"). Running the generator without those extras silently drops them from the table and lowers the totals. This is not hypothetical: a plain `uv run python scripts/update_readme.py` on 2026-09-03 removed MobilPay and turned the payment count from 8 into 7. The pre-commit hook runs the same script, so a commit made in an environment without the extras reintroduces the regression even after you fix the file by hand; use `git commit --no-verify` if the hook keeps stripping providers, and say so in the commit body.
+
+- [ ] **Step 2: Verify the diff only adds**
 
 ```bash
 git diff --stat README.md
 git diff README.md | grep "^[+-]" | grep -v "^+++\|^---"
 ```
 
-Expected: added lines contain `bapp_store` and `Company Store (BAPP)` in the providers table and `bapp_store/` (with `fixtures/`) in the structure tree; no removed lines other than a provider count in the table header, if the header carries one.
+Expected: added lines contain `bapp_store` and `Company Store (BAPP)` in the providers table and `bapp_store/` (with `fixtures/`) in the structure tree; the shop count goes from 10 to 11 and the total from 60 to 61. If any provider name disappears, an extra was missing: restore the file with `git checkout -- README.md` and rerun Step 1 with the full extras list.
 
 - [ ] **Step 3: Commit**
 
