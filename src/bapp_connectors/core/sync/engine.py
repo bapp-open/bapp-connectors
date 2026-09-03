@@ -268,7 +268,10 @@ class ProductSyncEngine:
                 adapter.update_category(ProductCategory(category_id=remote_id, name=category.name, parent_id=remote_parent_id))
                 result.updated.append(category.category_id)
                 continue
-            created = adapter.create_category(name=category.name, parent_id=remote_parent_id)
+            if adapter.accepts_local_category_id:
+                created = adapter.create_category(name=category.name, parent_id=remote_parent_id, local_id=category.category_id)
+            else:
+                created = adapter.create_category(name=category.name, parent_id=remote_parent_id)
             result.created.append(CategoryMapping(local_id=category.category_id, remote_id=created.category_id, name=category.name))
             existing[category.category_id] = created.category_id
         return result

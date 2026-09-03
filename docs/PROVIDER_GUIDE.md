@@ -556,6 +556,7 @@ The registry will **reject registration** if you declare a capability but don't 
 |---|---|
 | `BulkUpdateCapability` | `bulk_update_products(updates) -> BulkResult` |
 | `BulkImportCapability` | `bulk_import_products(products) -> BulkResult` |
+| `VolumePricingCapability` | `push_shop_rules(rules: ShopRules) -> None` |
 | `WebhookCapability` | `verify_webhook(headers, body, secret) -> bool`, `parse_webhook(headers, body) -> WebhookEvent` |
 | `OAuthCapability` | `get_authorize_url(redirect_uri, state) -> str`, `exchange_code_for_token(code, ...) -> OAuthTokens`, `refresh_token(refresh_token) -> OAuthTokens` |
 | `InvoiceAttachmentCapability` | `attach_invoice(order_id, invoice_url) -> bool` |
@@ -699,3 +700,14 @@ Before submitting a new provider, verify:
   `error` / `error_code` / `extra` so consumers can map failures back to their records.
 - `CategoryManagementCapability.update_category(category)` lets consumers rename/re-parent
   already-mapped categories instead of duplicating them.
+- Set `CategoryManagementCapability.accepts_local_category_id = True` when the provider can store
+  the caller's category id; `ProductSyncEngine.sync_categories` then calls
+  `create_category(name, parent_id, local_id=<local category_id>)` so a re-run finds the category
+  by that id instead of by name. Adapters that leave it False keep the two-argument signature.
+- Set `ShopPort.sideloads_images = False` when the provider stores image URLs only and fetches
+  them itself; consumers may then relax image batch caps. The default (True) means the adapter
+  uploads image bytes on every product create or update.
+- `VolumePricingCapability.push_shop_rules(rules: ShopRules)` pushes shop-wide order-value
+  discount tiers and a minimum order total. Product DTOs for such an adapter carry
+  `extra["price_tiers"]` (materialised gross unit prices per quantity step) and `extra["bapp"]`
+  (`gross_price`, `vat_rate`, `unit`, `discountable`).

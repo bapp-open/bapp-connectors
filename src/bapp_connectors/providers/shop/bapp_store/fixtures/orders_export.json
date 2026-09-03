@@ -1,0 +1,64 @@
+{
+ "items": [
+  {
+   "number": "ORD-000123",
+   "created_at": "2026-09-02T14:05:00+03:00",
+   "updated_at": "2026-09-02T14:05:00+03:00",
+   "status": "pending",
+   "payment_status": "unpaid",
+   "payment_type": "bank_transfer",
+   "currency": "RON",
+   "billing": {
+    "company_name": "ACME SRL",
+    "vat_id": "RO12345678",
+    "reg_com": "J12/345/2020",
+    "name": "Ana Pop",
+    "email": "ana@acme.example",
+    "phone": "0712345678",
+    "address": "Strada Firmei 9",
+    "city": "Cluj-Napoca",
+    "county": "Cluj",
+    "postal_code": "400001"
+   },
+   "delivery_address": "Strada Firmei 9, Cluj-Napoca, Cluj, 400001",
+   "notes": "Livrare dupa ora 10",
+   "items": [
+    {
+     "product_id": "345100",
+     "sku": "CIO-500",
+     "name": "Ciocan 500 g",
+     "quantity": "60",
+     "unit_price": "114.95",
+     "currency": "RON",
+     "extra": {
+      "unit_tier": "105.75",
+      "line_total": "6027.75"
+     }
+    },
+    {
+     "product_id": "345101",
+     "sku": "BAL-60",
+     "name": "Balama 60 mm",
+     "quantity": "50",
+     "unit_price": "80.47",
+     "currency": "RON",
+     "extra": {
+      "unit_tier": "80.47",
+      "line_total": "3822.33"
+     }
+    }
+   ],
+   "total": "9850.08",
+   "goods_total": "9850.08",
+   "shipping_total": "0.00",
+   "extra": {
+    "policy_hash": "d781e2f107f3407972917f4a8e84964540086a7f5ad91620de9f4f8536d885b1",
+    "volume_discount_total": "518.42",
+    "value_pct": "5.00",
+    "order_url": "https://zogjaemtbppsfb0-st.sites.bapp.ro/account/orders/ORD-000123"
+   }
+  }
+ ],
+ "cursor": null,
+ "has_more": false
+}

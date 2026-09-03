@@ -77,6 +77,7 @@ from .product import (
 )
 from .saved_payment import CardBrand, SavedPaymentMethod
 from .shipment import AWBLabel, Parcel, Shipment, ShipmentStatus, TrackingEvent
+from .shop_rules import OrderValueTier, ShopRules
 from .social import (
     PublishResult,
     PublishStatus,
@@ -151,6 +152,7 @@ __all__ = [
     "Order",
     "OrderItem",
     "OrderStatus",
+    "OrderValueTier",
     "OutboundMessage",
     "PaginatedResult",
     "Parcel",
@@ -172,6 +174,7 @@ __all__ = [
     "SavedPaymentMethod",
     "Shipment",
     "ShipmentStatus",
+    "ShopRules",
     "SocialAccount",
     "SocialAccountStats",
     "SocialMediaType",
