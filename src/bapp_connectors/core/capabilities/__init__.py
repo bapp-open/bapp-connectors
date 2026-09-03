@@ -25,6 +25,7 @@ from .social_publish import SocialPublishCapability
 from .streaming import StreamingCapability
 from .subscriptions import SubscriptionCapability
 from .transcription import TranscriptionCapability
+from .volume_pricing import VolumePricingCapability
 from .webhooks import WebhookCapability
 
 __all__ = [
@@ -56,5 +57,6 @@ __all__ = [
     "SubscriptionCapability",
     "TranscriptionCapability",
     "VariantManagementCapability",
+    "VolumePricingCapability",
     "WebhookCapability",
 ]
