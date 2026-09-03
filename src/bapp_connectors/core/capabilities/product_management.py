@@ -46,6 +46,9 @@ class ProductFullUpdateCapability(ABC):
 class CategoryManagementCapability(ABC):
     """Adapter supports reading and optionally creating categories."""
 
+    #: True when create_category accepts `local_id` so the provider stores the caller's category id.
+    accepts_local_category_id: bool = False
+
     @abstractmethod
     def get_categories(self) -> list[ProductCategory]:
         """Fetch all categories from the provider as a flat list with parent_id."""
