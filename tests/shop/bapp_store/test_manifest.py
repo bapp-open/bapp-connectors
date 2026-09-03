@@ -64,3 +64,12 @@ def test_webhooks_and_limits():
     assert manifest.webhooks.events == ["order.created", "order.updated"]
     assert manifest.rate_limit.requests_per_second == 10
     assert manifest.retry.max_retries == 3
+
+
+def test_package_import_registers_the_adapter():
+    import bapp_connectors.providers.shop.bapp_store  # noqa: F401
+    from bapp_connectors.core.registry import registry
+    from bapp_connectors.providers.shop.bapp_store.adapter import BappStoreShopAdapter
+
+    assert registry.get_adapter_class("shop", "bapp_store") is BappStoreShopAdapter
+    assert registry.get_manifest("shop", "bapp_store") is manifest
