@@ -9,16 +9,26 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 from decimal import Decimal
 from html.parser import HTMLParser
 
 from bapp_connectors.core.dto import (
+    Address,
     BulkItemResult,
     BulkUpsertResult,
+    Contact,
+    Order,
+    OrderItem,
+    OrderStatus,
+    PaginatedResult,
+    PaymentStatus,
+    PaymentType,
     Product,
     ProductCategory,
     ProductPhoto,
     ProductUpdate,
+    ProviderMeta,
     ShopRules,
 )
 from bapp_connectors.core.pricing import to_gross, to_net
@@ -200,4 +210,126 @@ def product_from_store(row: dict, vat_rate: Decimal) -> Product:
         stock=int(Decimal(str(row.get("stock_qty") or "0"))),
         active=bool(row.get("is_active", True)),
         extra={"store_id": str(row["id"]), "gross_price": str(gross)},
+    )
+
+
+# -- Order mappers --
+
+STORE_ORDER_STATUS_MAP: dict[str, OrderStatus] = {
+    **{s.value: s for s in OrderStatus},
+    "confirmed": OrderStatus.ACCEPTED,
+    "completed": OrderStatus.DELIVERED,
+    "canceled": OrderStatus.CANCELLED,
+}
+
+STORE_PAYMENT_STATUS_MAP: dict[str, PaymentStatus] = {s.value: s for s in PaymentStatus}
+
+STORE_PAYMENT_TYPE_MAP: dict[str, PaymentType] = {
+    **{t.value: t for t in PaymentType},
+    "card": PaymentType.ONLINE_CARD,
+    "cod": PaymentType.CASH_ON_DELIVERY,
+    "transfer": PaymentType.BANK_TRANSFER,
+}
+
+_ORDER_TOP_LEVEL_KEYS = frozenset(
+    {
+        "number",
+        "created_at",
+        "updated_at",
+        "status",
+        "payment_status",
+        "payment_type",
+        "currency",
+        "billing",
+        "delivery_address",
+        "items",
+        "total",
+        "extra",
+    }
+)
+
+_LINE_KEYS = frozenset({"product_id", "sku", "name", "quantity", "unit_price", "currency", "extra"})
+
+
+def _billing_from_store(data: dict | None) -> Contact | None:
+    if not data:
+        return None
+    address = Address(
+        street=data.get("address", ""),
+        city=data.get("city", ""),
+        region=data.get("county", ""),
+        postal_code=data.get("postal_code", ""),
+        country="RO",
+    )
+    return Contact(
+        name=data.get("name", ""),
+        company_name=data.get("company_name", ""),
+        vat_id=data.get("vat_id", ""),
+        email=data.get("email", ""),
+        phone=data.get("phone", ""),
+        address=address,
+        extra={"reg_com": data.get("reg_com", "")},
+    )
+
+
+def _line_from_store(line: dict, currency: str, vat_rate: Decimal) -> OrderItem:
+    gross = str(line["unit_price"])
+    extra = {k: v for k, v in line.items() if k not in _LINE_KEYS}
+    extra.update(line.get("extra") or {})
+    extra["gross_unit_price"] = gross
+    return OrderItem(
+        product_id=str(line.get("product_id", "")),
+        sku=line.get("sku", ""),
+        name=line.get("name", ""),
+        quantity=Decimal(str(line.get("quantity", "1"))),
+        unit_price=to_net(Decimal(gross), vat_rate),
+        currency=line.get("currency") or currency,
+        tax_rate=vat_rate,
+        extra=extra,
+    )
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    return datetime.fromisoformat(value) if value else None
+
+
+def order_from_store(data: dict, vat_rate: Decimal) -> Order:
+    number = str(data["number"])
+    currency = data.get("currency", "RON")
+    raw_status = data.get("status", "")
+    raw_payment_status = data.get("payment_status", "")
+    raw_payment_type = data.get("payment_type", "")
+    gross_total = str(data.get("total", "0"))
+
+    extra = {k: v for k, v in data.items() if k not in _ORDER_TOP_LEVEL_KEYS}
+    extra.update(data.get("extra") or {})
+    extra["gross_total"] = gross_total
+    extra["raw_payment_status"] = raw_payment_status
+    extra["raw_payment_type"] = raw_payment_type
+
+    return Order(
+        order_id=number,
+        external_id=number,
+        status=STORE_ORDER_STATUS_MAP.get(raw_status, OrderStatus.PENDING),
+        raw_status=raw_status,
+        payment_status=STORE_PAYMENT_STATUS_MAP.get(raw_payment_status, PaymentStatus.UNPAID),
+        payment_type=STORE_PAYMENT_TYPE_MAP.get(raw_payment_type, PaymentType.OTHER) if raw_payment_type else None,
+        currency=currency,
+        items=[_line_from_store(line, currency, vat_rate) for line in data.get("items", [])],
+        billing=_billing_from_store(data.get("billing")),
+        delivery_address=data.get("delivery_address", ""),
+        total=to_net(Decimal(gross_total), vat_rate),
+        created_at=_parse_iso(data.get("created_at")),
+        updated_at=_parse_iso(data.get("updated_at")),
+        external_url=(data.get("extra") or {}).get("order_url", ""),
+        provider_meta=ProviderMeta(provider="bapp_store", raw_id=number, raw_payload=data, fetched_at=datetime.now(UTC)),
+        extra=extra,
+    )
+
+
+def orders_page_from_store(data: dict, vat_rate: Decimal) -> PaginatedResult[Order]:
+    return PaginatedResult(
+        items=[order_from_store(row, vat_rate) for row in data.get("items", [])],
+        cursor=data.get("cursor"),
+        has_more=bool(data.get("has_more", False)),
     )
