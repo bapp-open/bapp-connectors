@@ -22,3 +22,4 @@ class SyncTaskResponse(BaseModel):
     products: list[SyncItemResult] = Field(default_factory=list)
     rules_applied: bool = False
     webhook_applied: bool = False
+    customers_applied: bool = False
