@@ -30,6 +30,8 @@ def test_fixture_files_exist_and_parse():
         "non_discountable_no_ladder",
         "half_up_tier_no_vat",
         "no_rules_at_all",
+        "rolling_worked_example",
+        "rolling_category_accumulation",
     ]
 
 
@@ -63,6 +65,27 @@ def test_parity_selection_covers_every_21_percent_product():
         "below_minimum-Q",
         "category_ancestor_rule-U",
         "non_discountable_no_ladder-T",
+        "rolling_worked_example-P",
+        "rolling_worked_example-Q",
         "worked_example-P",
         "worked_example-Q",
     ]
+
+
+def test_rolling_keys_are_absent_from_the_pre_rolling_cases():
+    cases = {c["name"]: c for c in _CASES}
+    for name in ("worked_example", "below_minimum", "category_ancestor_rule",
+                 "non_discountable_no_ladder", "half_up_tier_no_vat", "no_rules_at_all"):
+        assert "rolling_rules" not in cases[name], name
+        assert "customer" not in cases[name], name
+
+
+def test_the_rolling_cases_are_shaped_as_the_description_promises():
+    cases = {c["name"]: c for c in _CASES}
+    for name in ("rolling_worked_example", "rolling_category_accumulation"):
+        case = cases[name]
+        assert set(case["rolling_rules"]) == {"product", "category", "order"}, name
+        assert set(case["customer"]) == {"rolling_value", "rolling_quantities"}, name
+        assert "max_rolling_order_percent" in case["expected"], name
+        for code, exp in case["expected"]["products"].items():
+            assert "max_rolling_percent" in exp, (name, code)

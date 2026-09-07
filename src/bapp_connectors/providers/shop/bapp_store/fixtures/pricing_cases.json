@@ -1,5 +1,5 @@
 {
- "description": "Cross-repo pricing parity cases: gross_list, ladder, from_price, order value, value percent, line totals. Amounts are gross RON strings, ROUND_HALF_UP to 2dp. Rules: product rows win outright; else category rows over the product category and its ancestors, best percent per threshold; non-discountable products get no ladder, count toward the order value and receive no value percent (from_price null). Value percent is applied per line on unit_q x qty.",
+ "description": "Cross-repo pricing parity cases: gross_list, ladder, from_price, order value, value percent, line totals. Amounts are gross RON strings, ROUND_HALF_UP to 2dp. Rules: product rows win outright; else category rows over the product category and its ancestors, best percent per threshold; non-discountable products get no ladder, count toward the order value and receive no value percent (from_price null). Value percent is applied per line on unit_q x qty. Rolling cases add `rolling_rules` (same shape as `rules`, measured against the customer's last 12 months) and `customer` (`rolling_value` in gross RON, `rolling_quantities` per product code). Absent means empty. The two axes compound: 1 - (1-p1)(1-p2), rounded to 2dp once. The quantity axis composes into the unit price; the value axis composes into the per-line percent. A rolling category tier is compared against the quantity accumulated across that category and its descendants, evaluated per chain level against that level's own ladder, best percent winning -- unlike an order-basis category tier, which is compared against the line quantity. `max_rolling_percent` is the highest percent in a product's resolved rolling ladder. `from_price` composes the best tier price with the top order percent, the top rolling order percent and the top rolling quantity percent.",
  "cases": [
   {
    "name": "worked_example",
@@ -491,6 +491,227 @@
      ]
     ],
     "goods_total": "84.70",
+    "volume_discount_total": "0.00",
+    "meets_minimum": true,
+    "missing_amount": "0.00"
+   }
+  },
+  {
+   "name": "rolling_worked_example",
+   "price_modifier": "-5%",
+   "products": {
+    "P": {
+     "net": "100.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "scule"
+    },
+    "Q": {
+     "net": "70.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "feronerie"
+    }
+   },
+   "categories": {
+    "scule": null,
+    "feronerie": null
+   },
+   "rules": {
+    "product": {
+     "P": [
+      [
+       "10",
+       "5"
+      ],
+      [
+       "50",
+       "8"
+      ]
+     ]
+    },
+    "category": {},
+    "order": [
+     [
+      "5000",
+      "3"
+     ],
+     [
+      "10000",
+      "5"
+     ]
+    ]
+   },
+   "rolling_rules": {
+    "product": {
+     "P": [
+      [
+       "200",
+       "4"
+      ]
+     ]
+    },
+    "category": {},
+    "order": [
+     [
+      "100000",
+      "3"
+     ],
+     [
+      "250000",
+      "6"
+     ]
+    ]
+   },
+   "customer": {
+    "rolling_value": "128400.00",
+    "rolling_quantities": {
+     "P": "340"
+    }
+   },
+   "min_order_total": "1000.00",
+   "lines": [
+    [
+     "P",
+     "60"
+    ],
+    [
+     "Q",
+     "50"
+    ]
+   ],
+   "expected": {
+    "products": {
+     "P": {
+      "gross_list": "114.95",
+      "ladder": [
+       [
+        "10",
+        "109.20"
+       ],
+       [
+        "50",
+        "105.75"
+       ]
+      ],
+      "max_rolling_percent": "4.00",
+      "from_price": "90.66"
+     },
+     "Q": {
+      "gross_list": "80.47",
+      "ladder": [],
+      "max_rolling_percent": "0.00",
+      "from_price": "71.86"
+     }
+    },
+    "max_rolling_order_percent": "6.00",
+    "order_value": "10114.70",
+    "value_pct": "7.85",
+    "lines": [
+     [
+      "P",
+      "101.52",
+      "5613.04"
+     ],
+     [
+      "Q",
+      "80.47",
+      "3707.66"
+     ]
+    ],
+    "goods_total": "9320.70",
+    "volume_discount_total": "794.00",
+    "meets_minimum": true,
+    "missing_amount": "0.00"
+   }
+  },
+  {
+   "name": "rolling_category_accumulation",
+   "price_modifier": "",
+   "products": {
+    "A": {
+     "net": "100.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "scule"
+    },
+    "B": {
+     "net": "50.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "burghie"
+    }
+   },
+   "categories": {
+    "scule": null,
+    "burghie": "scule"
+   },
+   "rules": {
+    "product": {},
+    "category": {},
+    "order": []
+   },
+   "rolling_rules": {
+    "product": {},
+    "category": {
+     "scule": [
+      [
+       "500",
+       "5"
+      ]
+     ]
+    },
+    "order": []
+   },
+   "customer": {
+    "rolling_value": "0.00",
+    "rolling_quantities": {
+     "A": "300",
+     "B": "250"
+    }
+   },
+   "min_order_total": "0.00",
+   "lines": [
+    [
+     "A",
+     "1"
+    ],
+    [
+     "B",
+     "1"
+    ]
+   ],
+   "expected": {
+    "products": {
+     "A": {
+      "gross_list": "121.00",
+      "ladder": [],
+      "max_rolling_percent": "5.00",
+      "from_price": "114.95"
+     },
+     "B": {
+      "gross_list": "60.50",
+      "ladder": [],
+      "max_rolling_percent": "5.00",
+      "from_price": "57.48"
+     }
+    },
+    "max_rolling_order_percent": "0.00",
+    "order_value": "172.43",
+    "value_pct": "0.00",
+    "lines": [
+     [
+      "A",
+      "114.95",
+      "114.95"
+     ],
+     [
+      "B",
+      "57.48",
+      "57.48"
+     ]
+    ],
+    "goods_total": "172.43",
     "volume_discount_total": "0.00",
     "meets_minimum": true,
     "missing_amount": "0.00"
