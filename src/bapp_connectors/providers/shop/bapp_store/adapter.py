@@ -24,6 +24,7 @@ from bapp_connectors.core.capabilities import (
 from bapp_connectors.core.dto import (
     BulkUpsertResult,
     ConnectionTestResult,
+    CustomerPricing,
     Order,
     OrderStatus,
     PaginatedResult,
@@ -42,6 +43,7 @@ from bapp_connectors.providers.shop.bapp_store.mappers import (
     bulk_result_from_response,
     category_from_store,
     category_record,
+    customers_to_body,
     order_from_store,
     orders_page_from_store,
     product_from_store,
@@ -192,6 +194,11 @@ class BappStoreShopAdapter(
         response = self.client.sync_task({"rules": rules_to_body(rules)})
         if not SyncTaskResponse.model_validate(response).rules_applied:
             raise PermanentProviderError("store did not apply the pricing rules")
+
+    def push_customer_pricing(self, records: list[CustomerPricing], *, full: bool = True) -> None:
+        response = self.client.sync_task(customers_to_body(records, full))
+        if not SyncTaskResponse.model_validate(response).customers_applied:
+            raise PermanentProviderError("store did not apply the customer pricing")
 
     # -- Orders --
 

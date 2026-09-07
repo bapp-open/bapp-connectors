@@ -71,6 +71,9 @@ class TestVolumePricingCapability:
             def push_shop_rules(self, rules: ShopRules) -> None:
                 self.pushed.append(rules)
 
+            def push_customer_pricing(self, records, *, full: bool = True) -> None:
+                raise NotImplementedError
+
         adapter = _Adapter()
         rules = ShopRules(currency="RON", min_order_total=Decimal("1000"))
         adapter.push_shop_rules(rules)

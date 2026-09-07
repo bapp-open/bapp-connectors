@@ -18,6 +18,7 @@ from bapp_connectors.core.dto import (
     BulkItemResult,
     BulkUpsertResult,
     Contact,
+    CustomerPricing,
     Order,
     OrderItem,
     OrderStatus,
@@ -163,6 +164,25 @@ def rules_to_body(rules: ShopRules) -> dict:
     }
     policy_hash = hashlib.sha256(json.dumps(core, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     return {**core, "currency": rules.currency, **rules.extra, "policy_hash": policy_hash}
+
+
+def _pct(value: Decimal) -> str:
+    return str(Decimal(value).quantize(Decimal("0.01")))
+
+
+def customers_to_body(records: list[CustomerPricing], full: bool) -> dict:
+    """CatalogSyncTask `customers[]` body. Quantized, because the store hashes what it receives."""
+    return {
+        "customers": [
+            {
+                "customer_key": r.customer_key,
+                "order_value_percent": _pct(r.order_value_percent),
+                "product_percents": [{"sku": p.sku, "discount_percent": _pct(p.discount_percent)} for p in r.product_percents],
+            }
+            for r in records
+        ],
+        "customers_full": full,
+    }
 
 
 def _bulk_item(item: SyncItemResult, index: int, local_id: str) -> BulkItemResult:

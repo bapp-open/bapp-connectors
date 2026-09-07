@@ -218,6 +218,7 @@ def test_push_shop_rules_body_matches_fixture(adapter, fake, rules_fixture):
             OrderValueTier(min_total=Decimal("10000.00"), discount_percent=Decimal("5.00")),
         ],
         min_order_total=Decimal("1000.00"),
+        max_rolling_order_percent=Decimal("6.00"),
         currency="RON",
         extra={"connection_id": 123, "synced_at": "2026-09-02T12:00:00+03:00"},
     )

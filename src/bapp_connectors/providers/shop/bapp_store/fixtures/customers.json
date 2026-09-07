@@ -1,0 +1,24 @@
+{
+ "request": {
+  "customers": [
+   {
+    "customer_key": "12345678",
+    "order_value_percent": "3.00",
+    "product_percents": [
+     {
+      "sku": "P-100",
+      "discount_percent": "4.00"
+     }
+    ]
+   }
+  ],
+  "customers_full": true
+ },
+ "response": {
+  "categories": [],
+  "products": [],
+  "rules_applied": false,
+  "webhook_applied": false,
+  "customers_applied": true
+ }
+}
