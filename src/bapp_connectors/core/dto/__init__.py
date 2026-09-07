@@ -77,7 +77,7 @@ from .product import (
 )
 from .saved_payment import CardBrand, SavedPaymentMethod
 from .shipment import AWBLabel, Parcel, Shipment, ShipmentStatus, TrackingEvent
-from .shop_rules import OrderValueTier, ShopRules
+from .shop_rules import CustomerPricing, CustomerProductPercent, OrderValueTier, ShopRules
 from .social import (
     PublishResult,
     PublishStatus,
@@ -119,6 +119,8 @@ __all__ = [
     "CheckoutSession",
     "ConnectionTestResult",
     "Contact",
+    "CustomerPricing",
+    "CustomerProductPercent",
     "DeliveryReport",
     "DeliveryStatus",
     "EmailAddress",
