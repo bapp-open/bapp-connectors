@@ -134,6 +134,7 @@ def test_rules_to_body_matches_fixture_and_computes_policy_hash(rules_fixture):
             OrderValueTier(min_total=Decimal("10000.00"), discount_percent=Decimal("5.00")),
         ],
         min_order_total=Decimal("1000.00"),
+        max_rolling_order_percent=Decimal("6.00"),
         currency="RON",
         extra={"connection_id": 123, "synced_at": "2026-09-02T12:00:00+03:00"},
     )
@@ -198,3 +199,30 @@ def test_product_from_store_blank_code_is_none():
     row = {"id": 1, "external_id": "2", "code": "", "code_ean": "", "name": "N", "price_amount": "0", "stock_qty": "0"}
     product = product_from_store(row, Decimal("0.21"))
     assert product.sku is None and product.barcode is None and product.price == Decimal("0.00")
+
+
+from decimal import Decimal
+
+from bapp_connectors.core.dto import OrderValueTier, ShopRules
+from bapp_connectors.providers.shop.bapp_store.mappers import rules_to_body
+
+
+def _rules(**kwargs):
+    base = dict(
+        order_value_tiers=[OrderValueTier(min_total=Decimal("5000.00"), discount_percent=Decimal("3.00"))],
+        min_order_total=Decimal("1000.00"),
+        currency="RON",
+    )
+    return ShopRules(**{**base, **kwargs})
+
+
+def test_the_rolling_ceiling_reaches_the_body_and_the_hash():
+    body = rules_to_body(_rules(max_rolling_order_percent=Decimal("6.00")))
+    assert body["max_rolling_order_percent"] == "6.00"
+    assert body["policy_hash"] != rules_to_body(_rules())["policy_hash"]
+
+
+def test_two_rules_that_differ_only_in_the_ceiling_hash_differently():
+    a = rules_to_body(_rules(max_rolling_order_percent=Decimal("3.00")))["policy_hash"]
+    b = rules_to_body(_rules(max_rolling_order_percent=Decimal("6.00")))["policy_hash"]
+    assert a != b

@@ -157,6 +157,9 @@ def rules_to_body(rules: ShopRules) -> dict:
             {"min_total": str(t.min_total), "discount_percent": str(t.discount_percent)} for t in rules.order_value_tiers
         ],
         "min_order_total": str(rules.min_order_total) if rules.min_order_total is not None else None,
+        # inside the hash on purpose: it derives from rolling-basis tiers, which never show up in
+        # order_value_tiers, so outside the hash it would never sync at all
+        "max_rolling_order_percent": str(rules.max_rolling_order_percent),
     }
     policy_hash = hashlib.sha256(json.dumps(core, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     return {**core, "currency": rules.currency, **rules.extra, "policy_hash": policy_hash}
