@@ -47,7 +47,8 @@
       "gross_price": "114.95",
       "vat_rate": "21",
       "unit": "buc",
-      "discountable": true
+      "discountable": true,
+      "max_rolling_percent": "4.00"
      }
     },
     "photos": [
@@ -80,7 +81,8 @@
       "gross_price": "80.47",
       "vat_rate": "21",
       "unit": "buc",
-      "discountable": true
+      "discountable": true,
+      "max_rolling_percent": "0.00"
      }
     },
     "photos": [
@@ -113,7 +115,8 @@
       "gross_price": "60.50",
       "vat_rate": "21",
       "unit": "buc",
-      "discountable": false
+      "discountable": false,
+      "max_rolling_percent": "0.00"
      }
     }
    }

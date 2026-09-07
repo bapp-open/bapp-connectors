@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from html.parser import HTMLParser
 
 from bapp_connectors.core.dto import (
@@ -160,14 +160,14 @@ def rules_to_body(rules: ShopRules) -> dict:
         "min_order_total": str(rules.min_order_total) if rules.min_order_total is not None else None,
         # inside the hash on purpose: it derives from rolling-basis tiers, which never show up in
         # order_value_tiers, so outside the hash it would never sync at all
-        "max_rolling_order_percent": str(rules.max_rolling_order_percent),
+        "max_rolling_order_percent": _pct(rules.max_rolling_order_percent),
     }
     policy_hash = hashlib.sha256(json.dumps(core, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     return {**core, "currency": rules.currency, **rules.extra, "policy_hash": policy_hash}
 
 
 def _pct(value: Decimal) -> str:
-    return str(Decimal(value).quantize(Decimal("0.01")))
+    return str(Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def customers_to_body(records: list[CustomerPricing], full: bool) -> dict:

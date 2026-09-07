@@ -17,8 +17,7 @@ def test_customer_pricing_carries_percentages_and_nothing_else():
     )
     assert record.product_percents[0].sku == "P-100"
     keys = set(record.model_dump())
-    assert {"customer_key", "order_value_percent", "product_percents", "computed_at", "extra"} <= keys
-    assert not keys & {"name", "company_name", "address", "email", "phone", "trading_history"}
+    assert keys <= {"customer_key", "order_value_percent", "product_percents", "computed_at", "extra", "provider_meta"}
 
 
 def test_customer_pricing_defaults_to_a_zero_level_with_no_products():

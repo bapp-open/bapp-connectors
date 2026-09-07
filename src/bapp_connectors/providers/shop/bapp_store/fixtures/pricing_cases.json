@@ -1,5 +1,5 @@
 {
- "description": "Cross-repo pricing parity cases: gross_list, ladder, from_price, order value, value percent, line totals. Amounts are gross RON strings, ROUND_HALF_UP to 2dp. Rules: product rows win outright; else category rows over the product category and its ancestors, best percent per threshold; non-discountable products get no ladder, count toward the order value and receive no value percent (from_price null). Value percent is applied per line on unit_q x qty. Rolling cases add `rolling_rules` (same shape as `rules`, measured against the customer's last 12 months) and `customer` (`rolling_value` in gross RON, `rolling_quantities` per product code). Absent means empty. The two axes compound: 1 - (1-p1)(1-p2), rounded to 2dp once. The quantity axis composes into the unit price; the value axis composes into the per-line percent. A rolling category tier is compared against the quantity accumulated across that category and its descendants, evaluated per chain level against that level's own ladder, best percent winning -- unlike an order-basis category tier, which is compared against the line quantity. `max_rolling_percent` is the highest percent in a product's resolved rolling ladder. `from_price` composes the best tier price with the top order percent, the top rolling order percent and the top rolling quantity percent.",
+ "description": "Cross-repo pricing parity cases: gross_list, ladder, from_price, order value, value percent, line totals. Amounts are gross RON strings, ROUND_HALF_UP to 2dp. Rules: product rows win outright; else category rows over the product category and its ancestors, best percent per threshold; non-discountable products get no ladder, count toward the order value and receive no value percent (from_price null). Value percent is applied per line on unit_q x qty. Rolling cases add `rolling_rules` (same shape as `rules`, measured against the customer's last 12 months) and `customer` (`rolling_value` in gross RON, `rolling_quantities` per product code). Absent means empty. The two axes compound: 1 - (1-p1)(1-p2), rounded to 2dp once. The quantity axis composes into the unit price; the value axis composes into the per-line percent. A rolling category tier is compared against the quantity accumulated across that category and its descendants, evaluated per chain level against that level's own ladder, best percent winning -- unlike an order-basis category tier, which is compared against the line quantity. `max_rolling_percent` is the highest percent in a product's resolved rolling ladder. `from_price` composes the best tier price with the top order percent, the top rolling order percent and the top rolling quantity percent. A non-discountable product earns no rolling quantity percent and no rolling order-value percent, exactly as it earns none on the order axis, while its line still counts toward the order value.",
  "cases": [
   {
    "name": "worked_example",
@@ -713,6 +713,108 @@
     ],
     "goods_total": "172.43",
     "volume_discount_total": "0.00",
+    "meets_minimum": true,
+    "missing_amount": "0.00"
+   }
+  },
+  {
+   "name": "rolling_non_discountable",
+   "price_modifier": "",
+   "products": {
+    "N": {
+     "net": "100.0000",
+     "tax": "21",
+     "discountable": false,
+     "category": "scule"
+    },
+    "D": {
+     "net": "100.0000",
+     "tax": "21",
+     "discountable": true,
+     "category": "scule"
+    }
+   },
+   "categories": {
+    "scule": null
+   },
+   "rules": {
+    "product": {},
+    "category": {},
+    "order": []
+   },
+   "rolling_rules": {
+    "product": {
+     "N": [
+      [
+       "10",
+       "5"
+      ]
+     ],
+     "D": [
+      [
+       "10",
+       "5"
+      ]
+     ]
+    },
+    "category": {},
+    "order": [
+     [
+      "100",
+      "3"
+     ]
+    ]
+   },
+   "customer": {
+    "rolling_value": "500.00",
+    "rolling_quantities": {
+     "N": "50",
+     "D": "50"
+    }
+   },
+   "min_order_total": "0.00",
+   "lines": [
+    [
+     "N",
+     "1"
+    ],
+    [
+     "D",
+     "1"
+    ]
+   ],
+   "expected": {
+    "products": {
+     "N": {
+      "gross_list": "121.00",
+      "ladder": [],
+      "max_rolling_percent": "0.00",
+      "from_price": null
+     },
+     "D": {
+      "gross_list": "121.00",
+      "ladder": [],
+      "max_rolling_percent": "5.00",
+      "from_price": "111.50"
+     }
+    },
+    "max_rolling_order_percent": "3.00",
+    "order_value": "235.95",
+    "value_pct": "3.00",
+    "lines": [
+     [
+      "N",
+      "121.00",
+      "121.00"
+     ],
+     [
+      "D",
+      "114.95",
+      "111.50"
+     ]
+    ],
+    "goods_total": "232.50",
+    "volume_discount_total": "3.45",
     "meets_minimum": true,
     "missing_amount": "0.00"
    }

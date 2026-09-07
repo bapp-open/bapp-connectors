@@ -32,6 +32,7 @@ def test_fixture_files_exist_and_parse():
         "no_rules_at_all",
         "rolling_worked_example",
         "rolling_category_accumulation",
+        "rolling_non_discountable",
     ]
 
 

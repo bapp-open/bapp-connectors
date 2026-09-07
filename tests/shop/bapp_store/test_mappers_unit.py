@@ -7,11 +7,15 @@ from importlib.resources import files
 
 import pytest
 
-from bapp_connectors.core.dto import Product, ProductPhoto, ProductUpdate
+from bapp_connectors.core.dto import OrderValueTier, Product, ProductPhoto, ProductUpdate, ShopRules
 from bapp_connectors.providers.shop.bapp_store.mappers import (
+    bulk_result_from_response,
+    category_from_store,
     category_record,
     html_to_text,
+    product_from_store,
     product_to_record,
+    rules_to_body,
     update_to_record,
 )
 
@@ -113,15 +117,6 @@ def test_html_to_text_plain_text_passes_through():
     assert html_to_text("") == ""
 
 
-from bapp_connectors.core.dto import OrderValueTier, ShopRules  # noqa: E402
-from bapp_connectors.providers.shop.bapp_store.mappers import (  # noqa: E402
-    bulk_result_from_response,
-    category_from_store,
-    product_from_store,
-    rules_to_body,
-)
-
-
 @pytest.fixture(scope="module")
 def rules_fixture() -> dict:
     return json.loads((FIXTURES / "rules.json").read_text())
@@ -201,18 +196,12 @@ def test_product_from_store_blank_code_is_none():
     assert product.sku is None and product.barcode is None and product.price == Decimal("0.00")
 
 
-from decimal import Decimal
-
-from bapp_connectors.core.dto import OrderValueTier, ShopRules
-from bapp_connectors.providers.shop.bapp_store.mappers import rules_to_body
-
-
 def _rules(**kwargs):
-    base = dict(
-        order_value_tiers=[OrderValueTier(min_total=Decimal("5000.00"), discount_percent=Decimal("3.00"))],
-        min_order_total=Decimal("1000.00"),
-        currency="RON",
-    )
+    base = {
+        "order_value_tiers": [OrderValueTier(min_total=Decimal("5000.00"), discount_percent=Decimal("3.00"))],
+        "min_order_total": Decimal("1000.00"),
+        "currency": "RON",
+    }
     return ShopRules(**{**base, **kwargs})
 
 

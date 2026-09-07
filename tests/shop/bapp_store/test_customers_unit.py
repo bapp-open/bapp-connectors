@@ -43,6 +43,14 @@ def test_an_empty_full_push_is_a_valid_instruction_to_clear_the_store():
     assert customers_to_body([], full=True) == {"customers": [], "customers_full": True}
 
 
+def test_percentages_round_half_up_not_half_even():
+    # Decimal("4.125").quantize(Decimal("0.01")) is "4.12" under the default ROUND_HALF_EVEN
+    # context; every fixture in this package declares ROUND_HALF_UP, which gives "4.13".
+    record = CustomerPricing(customer_key="12345678", order_value_percent=Decimal("4.125"))
+    body = customers_to_body([record], full=True)
+    assert body["customers"][0]["order_value_percent"] == "4.13"
+
+
 def test_the_shipped_fixture_matches_what_the_mapper_produces():
     path = pathlib.Path(__file__).parents[3] / "src/bapp_connectors/providers/shop/bapp_store/fixtures/customers.json"
     doc = json.loads(path.read_text())
