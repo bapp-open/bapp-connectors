@@ -26,7 +26,7 @@ Catalog push, volume pricing rules and order pull for a BAPP Company Store tenan
 | `publish_status` | select | `publish` | `publish` or `draft` for new products. |
 | `sync_images` | bool | `true` | Send photo URLs (the store keeps URLs, no sideloading). |
 
-Only `vat_rate` is consumed by this adapter. `prices_include_vat`, `batch_size`, `pause_seconds`, `publish_status` and `sync_images` are read by the caller (the BAPP panel sync service) when it builds the Product DTOs and slices batches; the adapter sends whatever it is given, up to the hard 100-record ceiling.
+Only `vat_rate` is consumed by this adapter. `prices_include_vat`, `batch_size`, `pause_seconds`, `publish_status` and `sync_images` are read by the caller (the BAPP panel sync service) when it builds the Product DTOs and slices batches; the adapter sends whatever it is given, up to the hard 100-record ceiling. `max_rolling_order_percent` rides in the `rules{}` body and is part of `policy_hash`.
 
 ## Endpoints used
 
@@ -39,6 +39,7 @@ Only `vat_rate` is consumed by this adapter. `prices_include_vat`, `batch_size`,
 | `export_orders` | `GET tasks/store.OrdersExportTask?since=&cursor=&limit=` |
 | `export_order` | `GET tasks/store.OrderExportTask?number=` |
 | `set_webhook` | `sync_task({"webhook": {"url", "secret"}})` |
+| `push_customer_pricing` | `sync_task({"customers": [...], "customers_full": true})` |
 
 A create carries `is_active`; an update carries `id`, `parent_id` and `name` only (spec 2.2), so a store-side activation toggle survives a rename. Reads of the two content-type viewsets are page-number paged: `page` and `page_size`, `page_size` capped at 100.
 
@@ -49,6 +50,18 @@ The sync task response is positional: `products[i]` answers `products[i]` of the
 `Order.items[i].unit_price` is the catalogue LIST price (net, converted from the store's gross), not what the customer was actually charged. `Order.total` is the volume-discounted total (also net, converted from the store's gross `total`). The two do not reconcile by summing the lines: for the shipped fixture the line sum is 9025.00 net against an order total of 8140.56 net, about 11 percent apart, because the store applies order-value-tier discounts that are not reflected per line.
 
 The per-unit price actually charged is `Order.items[i].extra["unit_tier"]` -- a gross string, left unconverted because it is informational only. This is intentional: the spec has the panel re-derive line pricing from its own rules rather than trust the store's per-line figure, and the fixture arithmetic reconciles exactly against `unit_tier` and `extra["volume_discount_total"]`. A consumer that needs an accurate per-order revenue figure should use `Order.total`, not a sum of `Order.items`.
+
+## Customer pricing
+
+`push_customer_pricing(records, full=True)` replaces the store's per-customer volume levels.
+A record is a normalised fiscal key plus resolved percentages -- an order-value percent and a
+sparse SKU-to-percent map -- and carries no name, address or trading history. `full=True` means
+the list is complete and the store drops every customer absent from it; that is how a customer
+whose rolling window moved past their last large invoice loses their level.
+
+The store must answer `customers_applied: true` or the adapter raises `PermanentProviderError`.
+A store on an older build answers without the key, which reads as False, so an unsupported store
+fails loudly instead of silently dropping the push.
 
 ## Errors
 
