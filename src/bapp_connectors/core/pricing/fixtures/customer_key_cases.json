@@ -1,0 +1,14 @@
+{
+ "description": "Customer key normalisation. Both aio-backend and company-store must derive the same key from a fiscal code typed by two different people. Rule, in order: strip whitespace, uppercase, drop every character that is not A-Z or 0-9, then drop a leading two-letter prefix when what remains after it is all digits.",
+ "cases": [
+  {"raw": "12345678", "key": "12345678"},
+  {"raw": "RO12345678", "key": "12345678"},
+  {"raw": "ro12345678", "key": "12345678"},
+  {"raw": " RO-12.345.678 ", "key": "12345678"},
+  {"raw": "HU12345678", "key": "12345678"},
+  {"raw": "RO123AB456", "key": "RO123AB456"},
+  {"raw": "J40/1234/2020", "key": "J4012342020"},
+  {"raw": "", "key": ""},
+  {"raw": "   ", "key": ""}
+ ]
+}
