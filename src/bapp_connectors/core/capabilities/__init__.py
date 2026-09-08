@@ -20,6 +20,7 @@ from .product_management import (
 )
 from .rich_messaging import RichMessagingCapability
 from .saved_payment import SavedPaymentCapability
+from .settings_detection import SettingsDetectionCapability
 from .shipping import ShippingCapability
 from .social_publish import SocialPublishCapability
 from .streaming import StreamingCapability
@@ -51,6 +52,7 @@ __all__ = [
     "RelatedProductCapability",
     "RichMessagingCapability",
     "SavedPaymentCapability",
+    "SettingsDetectionCapability",
     "ShippingCapability",
     "SocialPublishCapability",
     "StreamingCapability",

@@ -136,3 +136,51 @@ def test_create_product_is_never_retried(adapter, fake):
     fake.add("POST", "products", {"id": 5, "name": "A"})
     adapter.create_product(Product(product_id="a", sku="A", name="A"))
     assert fake.last_call().kwargs["retry"] is False
+
+
+# ── Settings detection (prices_include_vat / vat_rate from the store itself) ──
+
+
+def test_detect_settings_reads_tax_options_and_standard_rate(adapter, fake):
+    fake.add("GET", "settings/tax", [
+        {"id": "woocommerce_prices_include_tax", "value": "yes"},
+        {"id": "woocommerce_calc_taxes", "value": "yes"},
+    ])
+    fake.add("GET", "taxes", [
+        {"id": 1, "rate": "19.0000", "class": "standard", "country": "RO"},
+        {"id": 2, "rate": "9.0000", "class": "reduced-rate", "country": "RO"},
+    ])
+    detected = adapter.detect_settings()
+    assert detected == {"prices_include_vat": True, "vat_rate": "0.19"}
+
+
+def test_detect_settings_prices_entered_without_tax(adapter, fake):
+    fake.add("GET", "settings/tax", [
+        {"id": "woocommerce_prices_include_tax", "value": "no"},
+        {"id": "woocommerce_calc_taxes", "value": "yes"},
+    ])
+    fake.add("GET", "taxes", [])
+    assert adapter.detect_settings() == {"prices_include_vat": False}
+
+
+def test_detect_settings_taxes_disabled_means_final_prices(adapter, fake):
+    # cu taxele oprite, pretul introdus e pretul final -> il tratam ca brut,
+    # indiferent ce scrie in optiunea prices_include_tax
+    fake.add("GET", "settings/tax", [
+        {"id": "woocommerce_prices_include_tax", "value": "no"},
+        {"id": "woocommerce_calc_taxes", "value": "no"},
+    ])
+    fake.add("GET", "taxes", [])
+    assert adapter.detect_settings() == {"prices_include_vat": True}
+
+
+def test_detect_settings_unreadable_endpoints_returns_empty(adapter, fake):
+    # FakeHttpClient arunca la orice ruta nemapata: detectia nu are voie sa explodeze
+    assert adapter.detect_settings() == {}
+
+
+def test_woocommerce_declares_settings_detection_capability():
+    from bapp_connectors.core.capabilities import SettingsDetectionCapability
+    from bapp_connectors.providers.shop.woocommerce.manifest import manifest
+
+    assert SettingsDetectionCapability in manifest.capabilities

@@ -25,6 +25,7 @@ from bapp_connectors.core.capabilities import (
     ProductFullUpdateCapability,
     ProductLookupCapability,
     RelatedProductCapability,
+    SettingsDetectionCapability,
     VariantManagementCapability,
     WebhookCapability,
 )
@@ -107,6 +108,7 @@ class WooCommerceShopAdapter(
     ProductFullUpdateCapability,
     ProductLookupCapability,
     RelatedProductCapability,
+    SettingsDetectionCapability,
     VariantManagementCapability,
     WebhookCapability,
 ):
@@ -184,6 +186,37 @@ class WooCommerceShopAdapter(
         if self._prices_include_vat:
             return to_net(provider_price, self._vat_rate)
         return provider_price
+
+    # ── Settings detection ──
+
+    def detect_settings(self) -> dict:
+        """Read the store's own tax configuration (WooCommerce > Settings > Tax).
+
+        - woocommerce_prices_include_tax ("Prices entered with tax") is exactly our
+          prices_include_vat; with woocommerce_calc_taxes=no the entered price is the
+          final price, so it counts as VAT-inclusive regardless of that option.
+        - the standard tax class rate proposes vat_rate (a fraction, e.g. "0.19").
+        Unreadable endpoints are skipped — only confident keys are returned.
+        """
+        detected: dict = {}
+        try:
+            rows = self.client.get_settings_group("tax")
+            options = {r.get("id"): r.get("value") for r in rows if isinstance(r, dict)}
+            if options.get("woocommerce_calc_taxes") == "no":
+                detected["prices_include_vat"] = True
+            elif options.get("woocommerce_prices_include_tax") in ("yes", "no"):
+                detected["prices_include_vat"] = options["woocommerce_prices_include_tax"] == "yes"
+        except Exception:
+            pass
+        try:
+            rates = [r for r in self.client.get_taxes() if isinstance(r, dict) and (r.get("class") or "standard") == "standard"]
+            if rates:
+                percent = Decimal(str(rates[0].get("rate", "")))
+                if Decimal("0") < percent < Decimal("100"):
+                    detected["vat_rate"] = str((percent / 100).normalize())
+        except Exception:
+            pass
+        return detected
 
     # ── BasePort ──
 

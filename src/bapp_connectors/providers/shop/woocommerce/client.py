@@ -174,6 +174,14 @@ class WooCommerceApiClient:
     def delete_variation(self, product_id: int, variation_id: int, **kwargs) -> dict:
         return self._call("DELETE", f"products/{product_id}/variations/{variation_id}", params={"force": "true"}, **kwargs)
 
+    # ── Store settings / taxes ──
+
+    def get_settings_group(self, group_id: str) -> list[dict]:
+        return self._call("GET", f"settings/{group_id}")
+
+    def get_taxes(self, **kwargs) -> list[dict]:
+        return self._call("GET", "taxes", params={"per_page": 100, **kwargs})
+
     # ── Webhooks ──
 
     def get_webhooks(self, **kwargs) -> list[dict]:
