@@ -43,6 +43,21 @@ manifest = ProviderManifest(
                 default=7,
                 help_text="Sameday service ID. Default: 7 (24h).",
             ),
+            SettingsField(
+                name="cod_source",
+                label="Source for COD figures",
+                field_type=FieldType.SELECT,
+                choices=["email", "api", "both"],
+                default="email",
+                help_text=(
+                    "Where the cash-on-delivery amounts are read from. "
+                    "'email': the 'Ramburs de transferat' XLSX Sameday mails out, the only "
+                    "source carrying the payout date, but it depends on the mail arriving. "
+                    "'api': delivered COD parcels read from this account, independent of the "
+                    "inbox, but booked at the delivery date rather than the payout date. "
+                    "'both': run the two together; they cannot double an income."
+                ),
+            ),
         ],
     ),
     capabilities=[
