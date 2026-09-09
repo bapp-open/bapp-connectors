@@ -1,5 +1,5 @@
 {
- "description": "Cross-repo pricing parity cases: gross_list, ladder, from_price, order value, value percent, line totals. Amounts are gross RON strings, ROUND_HALF_UP to 2dp. Rules: product rows win outright; else category rows over the product category and its ancestors, best percent per threshold; non-discountable products get no ladder, count toward the order value and receive no value percent (from_price null). Value percent is applied per line on unit_q x qty. Rolling cases add `rolling_rules` (same shape as `rules`, measured against the customer's last 12 months) and `customer` (`rolling_value` in gross RON, `rolling_quantities` per product code). Absent means empty. The two axes compound: 1 - (1-p1)(1-p2), rounded to 2dp once. The quantity axis composes into the unit price; the value axis composes into the per-line percent. A rolling category tier is compared against the quantity accumulated across that category and its descendants, evaluated per chain level against that level's own ladder, best percent winning -- unlike an order-basis category tier, which is compared against the line quantity. `max_rolling_percent` is the highest percent in a product's resolved rolling ladder. `from_price` composes the best tier price with the top order percent, the top rolling order percent and the top rolling quantity percent. A non-discountable product earns no rolling quantity percent and no rolling order-value percent, exactly as it earns none on the order axis, while its line still counts toward the order value.",
+ "description": "Cross-repo pricing parity cases: gross_list, ladder, from_price, order value, value percent, line totals. Amounts are gross RON strings, ROUND_HALF_UP to 2dp. Rules: product rows win outright; else category rows over the product category and its ancestors, best percent per threshold; non-discountable products get no ladder, count toward the order value and receive no value percent (from_price null). Value percent is applied per line on unit_q x qty. Rolling cases add `rolling_rules` (same shape as `rules`, measured against the customer's last 12 months) and `customer` (`rolling_value` in gross RON, `rolling_quantities` per product code). Absent means empty. The two axes compound: 1 - (1-p1)(1-p2), rounded to 2dp once. The quantity axis composes into the unit price; the value axis composes into the per-line percent. A rolling category tier is compared against the quantity accumulated across that category and its descendants, evaluated per chain level against that level's own ladder, best percent winning -- unlike an order-basis category tier, which is compared against the line quantity. `max_rolling_percent` is the highest percent in a product's resolved rolling ladder. `from_price` is the PUBLIC price: the cheapest quantity-tier price composed with the top order-value percent, and nothing from the rolling axis -- a guest must see a price they can obtain today by buying a quantity, not one that also assumes a year of trading history. It is null when nothing on the order axis can lower the list price, even if a rolling tier could. A non-discountable product earns no rolling quantity percent and no rolling order-value percent, exactly as it earns none on the order axis, while its line still counts toward the order value.",
  "cases": [
   {
    "name": "worked_example",
@@ -595,13 +595,13 @@
        ]
       ],
       "max_rolling_percent": "4.00",
-      "from_price": "90.66"
+      "from_price": "100.46"
      },
      "Q": {
       "gross_list": "80.47",
       "ladder": [],
       "max_rolling_percent": "0.00",
-      "from_price": "71.86"
+      "from_price": "76.45"
      }
     },
     "max_rolling_order_percent": "6.00",
@@ -687,13 +687,13 @@
       "gross_list": "121.00",
       "ladder": [],
       "max_rolling_percent": "5.00",
-      "from_price": "114.95"
+      "from_price": null
      },
      "B": {
       "gross_list": "60.50",
       "ladder": [],
       "max_rolling_percent": "5.00",
-      "from_price": "57.48"
+      "from_price": null
      }
     },
     "max_rolling_order_percent": "0.00",
@@ -795,7 +795,7 @@
       "gross_list": "121.00",
       "ladder": [],
       "max_rolling_percent": "5.00",
-      "from_price": "111.50"
+      "from_price": null
      }
     },
     "max_rolling_order_percent": "3.00",

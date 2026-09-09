@@ -75,6 +75,8 @@ fails loudly instead of silently dropping the push.
 
 `fixtures/` holds the cross-repo contract samples (`products_batch.json`, `rules.json`, `orders_export.json`, `pricing_cases.json`, `customers.json`) and is their canonical home. The same files live in the company-store and aio-backend test trees; change them here, copy them over, and compare copies with `json.loads` rather than with a digest.
 
+In `pricing_cases.json`, `expected.products[code].from_price` excludes the rolling axis: it is the cheapest quantity-tier price composed with the top order-value percent only, because a guest must see a price obtainable today by buying a quantity, not one that also assumes a year of trading history.
+
 `customers.json` is the `push_customer_pricing` request/response pair: one resolved customer record and the `customers_applied` confirmation.
 
 `customer_key_cases.json` documents the fiscal-key normalisation both repositories must agree on; it lives in the core package, at `src/bapp_connectors/core/pricing/fixtures/customer_key_cases.json`, since key normalisation is not specific to this provider.
