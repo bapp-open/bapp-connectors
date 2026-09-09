@@ -5,7 +5,7 @@ from __future__ import annotations
 from bapp_connectors.providers.shop.okazii.mappers import order_from_okazii
 
 
-def _order_payload(**billing_overrides) -> dict:
+def _order_payload(delivery_address=None, **billing_overrides) -> dict:
     """Minimal realistic export_orders payload for one order."""
     return {
         "id": 12345678,
@@ -35,7 +35,7 @@ def _order_payload(**billing_overrides) -> dict:
             "cui": "RO123456",
             **billing_overrides,
         },
-        "deliveryAddress": None,
+        "deliveryAddress": delivery_address,
         "deliveryPrice": {"amount": "0", "currency": "RON"},
     }
 
@@ -53,3 +53,29 @@ def test_order_from_okazii_strips_billing_company_and_cui():
     assert order.billing is not None
     assert order.billing.company_name == "Firma SRL"
     assert order.billing.vat_id == "RO123456"
+
+
+def test_order_from_okazii_handles_null_delivery_address_fields():
+    """Okazii sends JSON null for individual delivery-address fields (street, city,
+    county, zipcode) on real orders. Address requires strings, so a bare
+    `.get(key, "")` still yields None and the whole import crashes with a
+    pydantic ValidationError — which silently stopped the Okazii income import."""
+    order = order_from_okazii(_order_payload(delivery_address={
+        "street": None, "city": None, "county": None, "zipcode": None, "country": None,
+    }))
+    assert order.shipping_address is not None
+    assert order.shipping_address.street == ""
+    assert order.shipping_address.city == ""
+    assert order.shipping_address.region == ""
+    assert order.shipping_address.postal_code == ""
+    assert order.shipping_address.country == "RO"
+
+
+def test_order_from_okazii_keeps_delivery_address_values():
+    order = order_from_okazii(_order_payload(delivery_address={
+        "street": "Str. Livrare 5", "city": "Cluj", "county": "Cluj", "zipcode": "400001",
+    }))
+    assert order.shipping_address is not None
+    assert order.shipping_address.street == "Str. Livrare 5"
+    assert order.shipping_address.city == "Cluj"
+    assert order.shipping_address.country == "RO"

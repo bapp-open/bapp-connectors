@@ -78,12 +78,14 @@ OKAZII_PAYMENT_TYPE_MAP: dict[str, PaymentType] = {
 def _map_delivery_address(addr: dict | None) -> Address | None:
     if not addr:
         return None
+    # Okazii trimite JSON null pentru campurile lipsa, nu le omite: `.get(key, "")`
+    # intoarce None, iar Address cere string => ValidationError care opreste tot importul.
     return Address(
-        street=addr.get("street", ""),
-        city=addr.get("city", ""),
-        region=addr.get("county", ""),
-        postal_code=addr.get("zipcode", ""),
-        country=addr.get("country", "RO"),
+        street=addr.get("street") or "",
+        city=addr.get("city") or "",
+        region=addr.get("county") or "",
+        postal_code=addr.get("zipcode") or "",
+        country=addr.get("country") or "RO",
     )
 
 
