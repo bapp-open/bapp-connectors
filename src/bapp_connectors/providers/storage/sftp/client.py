@@ -11,9 +11,12 @@ from __future__ import annotations
 import contextlib
 import logging
 import posixpath
+import socket
 import stat
 from io import BytesIO, StringIO
 from typing import Any
+
+from bapp_connectors.providers.storage.errors import FileTooLargeError
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +53,15 @@ class SFTPClient:
         timeout: int = 10,
         verify_host_key: bool = False,
     ):
+        """
+        ``timeout`` bounds the TCP connect, the SSH banner and the authentication.
+
+        ``verify_host_key`` is accepted for API compatibility and **not honoured** —
+        every connection trusts the key the server presents. Honouring it needs a
+        ``known_hosts`` the caller can point at, which no caller has yet; until one
+        does, the flag stays out of the manifest so it is not offered as a setting
+        that does nothing.
+        """
         _require_paramiko()
         self.host = host
         self.port = port
@@ -76,19 +88,55 @@ class SFTPClient:
         raise ValueError("Could not parse SSH private key. Supported types: RSA, Ed25519, ECDSA.")
 
     def _connect_transport(self) -> paramiko.Transport:
-        """Create an authenticated SSH transport."""
-        transport = paramiko.Transport((self.host, self.port))
-        transport.connect(
-            username=self.username,
-            password=self.password or None,
-            pkey=self._get_pkey(),
-        )
+        """Create an authenticated SSH transport, every phase bounded by ``self.timeout``.
+
+        The socket is opened here rather than left to paramiko. Handed a
+        ``(host, port)`` tuple, ``paramiko.Transport`` builds a bare socket and calls
+        ``sock.connect()`` with no timeout at all, so a host that swallows packets
+        holds the caller for as long as the operating system's TCP timeout — minutes,
+        on a default Linux. Giving ``Transport`` a socket that is already connected is
+        the supported way to bound that.
+
+        The connect is all that socket buys us: paramiko replaces the timeout with its
+        own 0.1s poll interval the moment it takes the socket over, so the banner and
+        authentication phases need bounds of their own.
+        """
+        # Parsed before the socket is opened: a malformed key is the caller's mistake,
+        # and there is no reason to reach the server to find that out.
+        pkey = self._get_pkey()
+
+        sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
+        try:
+            transport = paramiko.Transport(sock)
+        except Exception:
+            sock.close()
+            raise
+
+        transport.banner_timeout = self.timeout
+        transport.auth_timeout = self.timeout
+        try:
+            transport.connect(
+                username=self.username,
+                password=self.password or None,
+                pkey=pkey,
+            )
+        except Exception:
+            transport.close()
+            raise
         return transport
 
     def _open_sftp(self) -> tuple[paramiko.Transport, paramiko.SFTPClient]:
         """Open an SFTP session. Returns (transport, sftp) — caller must close both."""
         transport = self._connect_transport()
-        sftp = paramiko.SFTPClient.from_transport(transport)
+        try:
+            sftp = paramiko.SFTPClient.from_transport(transport)
+        except Exception:
+            transport.close()
+            raise
+        if sftp is None:
+            # from_transport returns None when the server refuses the sftp subsystem.
+            transport.close()
+            raise paramiko.SSHException(f"Could not open an SFTP session on {self.host}.")
         return transport, sftp
 
     @contextlib.contextmanager
@@ -146,14 +194,17 @@ class SFTPClient:
             sftp.close()
             transport.close()
 
-    def download(self, remote_path: str) -> bytes:
-        """Download a file and return its contents as bytes."""
+    def download(self, remote_path: str, max_bytes: int | None = None) -> bytes:
+        """Download a file and return its contents as bytes.
+
+        The whole file is held in memory. Pass ``max_bytes`` to put a ceiling on that:
+        the size is read from a ``stat`` first, so a file that is already too big costs
+        one round trip instead of a transfer, and the ceiling is enforced again on the
+        bytes as they arrive. Either way the refusal is a `FileTooLargeError`.
+        """
         transport, sftp = self._open_sftp()
         try:
-            target = self._with_base(remote_path)
-            buf = BytesIO()
-            sftp.getfo(target, buf)
-            return buf.getvalue()
+            return _download(sftp, self._with_base(remote_path), max_bytes)
         finally:
             sftp.close()
             transport.close()
@@ -236,11 +287,23 @@ class _SFTPSession:
         with self._sftp.open(full_path, "wb") as f:
             f.write(file_data)
 
-    def download(self, remote_path: str) -> bytes:
+    def download(self, remote_path: str, max_bytes: int | None = None) -> bytes:
         target = self._client._with_base(remote_path)
-        buf = BytesIO()
-        self._sftp.getfo(target, buf)
-        return buf.getvalue()
+        return _download(self._sftp, target, max_bytes)
+
+    def stat(self, remote_path: str) -> dict[str, Any]:
+        """Same shape as ``SFTPClient.stat`` — size, mtime, is_directory.
+
+        On the session so that a size check and the download it guards can share one
+        SSH handshake instead of paying for two.
+        """
+        target = self._client._with_base(remote_path)
+        attrs = self._sftp.stat(target)
+        return {
+            "size": attrs.st_size or 0,
+            "modified_at": attrs.st_mtime or 0,
+            "is_directory": stat.S_ISDIR(attrs.st_mode) if attrs.st_mode else False,
+        }
 
     def delete(self, remote_path: str) -> None:
         target = self._client._with_base(remote_path)
@@ -253,6 +316,50 @@ class _SFTPSession:
             return True
         except FileNotFoundError:
             return False
+
+
+class _CappedWriter:
+    """A sink for ``getfo`` that refuses to hold more than ``max_bytes``.
+
+    Catches the two cases a ``stat`` beforehand cannot: a file that grows between the
+    stat and the read, and a server that misreports the size.
+    """
+
+    def __init__(self, max_bytes: int):
+        self._max_bytes = max_bytes
+        self._buffer = BytesIO()
+        self.total = 0
+
+    def write(self, data: bytes) -> int:
+        self.total += len(data)
+        if self.total > self._max_bytes:
+            raise FileTooLargeError(
+                f"Download stopped: over the {self._max_bytes} byte ceiling.",
+                max_bytes=self._max_bytes,
+            )
+        return self._buffer.write(data)
+
+    def getvalue(self) -> bytes:
+        return self._buffer.getvalue()
+
+
+def _download(sftp: paramiko.SFTPClient, target: str, max_bytes: int | None) -> bytes:
+    """Read ``target`` into memory, refusing anything over ``max_bytes``."""
+    if max_bytes is None:
+        buf = BytesIO()
+        sftp.getfo(target, buf)
+        return buf.getvalue()
+
+    size = sftp.stat(target).st_size or 0
+    if size > max_bytes:
+        raise FileTooLargeError(
+            f"File is {size} bytes, over the {max_bytes} byte ceiling.",
+            max_bytes=max_bytes,
+            size=size,
+        )
+    sink = _CappedWriter(max_bytes)
+    sftp.getfo(target, sink)
+    return sink.getvalue()
 
 
 def _ensure_directory(sftp: paramiko.SFTPClient, path: str) -> None:

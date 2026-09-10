@@ -61,13 +61,6 @@ manifest = ProviderManifest(
                 help_text="Default remote directory for file operations.",
             ),
             SettingsField(
-                name="verify_host_key",
-                label="Verify Host Key",
-                field_type=FieldType.BOOL,
-                default=False,
-                help_text="Reject connections to unknown hosts. Disable for first-time setup.",
-            ),
-            SettingsField(
                 name="timeout",
                 label="Timeout (seconds)",
                 field_type=FieldType.INT,

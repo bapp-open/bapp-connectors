@@ -13,7 +13,31 @@ from io import BytesIO
 from pathlib import PurePosixPath
 from typing import Any
 
+from bapp_connectors.providers.storage.errors import FileTooLargeError
+
 logger = logging.getLogger(__name__)
+
+# ftplib's own default is 8192; a larger block means fewer callbacks on a big export
+# and a coarser granularity for the byte ceiling, which only has to be approximately
+# where it says it is.
+DOWNLOAD_BLOCKSIZE = 64 * 1024
+
+
+def _capped_sink(bio: BytesIO, max_bytes: int):
+    """A ``retrbinary`` callback that raises once more than ``max_bytes`` has arrived."""
+    total = 0
+
+    def collect(chunk: bytes) -> None:
+        nonlocal total
+        total += len(chunk)
+        if total > max_bytes:
+            raise FileTooLargeError(
+                f"Download stopped: over the {max_bytes} byte ceiling.",
+                max_bytes=max_bytes,
+            )
+        bio.write(chunk)
+
+    return collect
 
 
 class FTPClient:
@@ -79,6 +103,27 @@ class FTPClient:
 
         return connection
 
+    @contextlib.contextmanager
+    def _session(self):
+        """An authenticated connection, closed politely on success and abruptly on error.
+
+        ``quit()`` sends QUIT and then waits for the server to answer it. On the error
+        path there may be nobody left to answer — a server that timed out, a data
+        connection that broke — and that wait burns the whole timeout a second time
+        before the real exception surfaces. So a failed operation drops the socket
+        instead of saying goodbye.
+        """
+        connection = self._connect()
+        try:
+            yield connection
+        except BaseException:
+            with contextlib.suppress(Exception):
+                connection.close()
+            raise
+        else:
+            with contextlib.suppress(Exception):
+                connection.quit()
+
     def _ensure_directory(self, connection: FTP, path: str) -> None:
         """Ensure that the directory path exists, creating it if needed."""
         if not path or path == "/":
@@ -101,9 +146,8 @@ class FTPClient:
     def test_auth(self) -> bool:
         """Test FTP authentication by connecting and sending NOOP."""
         try:
-            connection = self._connect()
-            connection.voidcmd("NOOP")
-            connection.quit()
+            with self._session() as connection:
+                connection.voidcmd("NOOP")
             return True
         except Exception:
             return False
@@ -124,17 +168,21 @@ class FTPClient:
             with contextlib.suppress(Exception):
                 connection.quit()
 
-    def download_file(self, remote_path: str) -> bytes:
-        """Download a file from the FTP server."""
-        connection = self._connect()
-        try:
+    def download_file(self, remote_path: str, max_bytes: int | None = None) -> bytes:
+        """Download a file from the FTP server.
+
+        The whole file is held in memory. Pass ``max_bytes`` to put a ceiling on that
+        and the transfer is abandoned with a `FileTooLargeError` as soon as the bytes
+        that have arrived pass it — the check has to happen during the transfer,
+        because FTP offers no size before it that is worth the round trips
+        (``list_files`` issues a ``CWD`` per entry just to tell files from directories).
+        """
+        with self._session() as connection:
             target_path = self._with_base(remote_path)
             bio = BytesIO()
-            connection.retrbinary(f"RETR {target_path}", bio.write)
+            sink = bio.write if max_bytes is None else _capped_sink(bio, max_bytes)
+            connection.retrbinary(f"RETR {target_path}", sink, blocksize=DOWNLOAD_BLOCKSIZE)
             return bio.getvalue()
-        finally:
-            with contextlib.suppress(Exception):
-                connection.quit()
 
     def delete_file(self, remote_path: str) -> None:
         """Delete a file from the FTP server."""

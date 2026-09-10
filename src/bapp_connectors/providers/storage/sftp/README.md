@@ -36,8 +36,7 @@ Either `password` or `private_key` must be provided. The adapter's
 |-------|-------|------|---------|-------------|
 | `port` | Port | int | `22` | SSH port |
 | `default_folder` | Default Folder | str | `/` | Default remote directory for file operations |
-| `verify_host_key` | Verify Host Key | bool | `False` | Reject connections to unknown hosts |
-| `timeout` | Timeout (seconds) | int | `10` | Connection timeout |
+| `timeout` | Timeout (seconds) | int | `10` | Bounds the TCP connect, the SSH banner and the authentication |
 
 ## Capabilities
 
@@ -91,9 +90,7 @@ Pass the PEM-encoded private key string in the `private_key` credential field.
 - **Recursive mkdir:** `_ensure_directory()` creates all intermediate
   directories by walking the path segments and calling `sftp.mkdir()` for
   each missing one.
-- **Host key verification:** Disabled by default (`verify_host_key=False`).
-  Enable in production for security. When disabled, paramiko accepts any
-  host key.
+- **Host key verification:** Not performed. The client trusts the key the server presents; the `verify_host_key` constructor argument is accepted for API compatibility and ignored. Honouring it needs a `known_hosts` the caller can point at, which no caller has asked for yet.
 - **Credential validation:** Unlike most providers that delegate to
   `manifest.auth.validate_credentials()`, the SFTP adapter has custom
   validation that ensures at least one of `password` or `private_key` is set.
