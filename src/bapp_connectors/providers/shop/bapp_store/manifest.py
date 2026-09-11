@@ -30,11 +30,10 @@ manifest = ProviderManifest(
     allow_multiple=True,
     display_name="Company Store (BAPP)",
     description="BAPP Company Store storefront: catalog push with volume pricing, order pull, order webhooks.",
-    base_url="https://placeholder.local/api/",  # replaced by the store_url credential in the client
+    base_url="https://store.bapp.ro/api/",  # fixed host: the bearer token identifies the tenant, not the domain
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="store_url", label="Store URL", sensitive=False, help_text="Internal store host, e.g. https://acme-st.sites.bapp.ro", role="endpoint"),
             CredentialField(name="token", label="Sync Token", sensitive=True, help_text="Store API token scoped to the sync app"),
         ],
     ),

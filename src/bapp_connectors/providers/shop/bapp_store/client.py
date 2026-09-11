@@ -20,13 +20,18 @@ ORDERS_EXPORT_PATH = "tasks/store.OrdersExportTask"
 ORDER_EXPORT_PATH = "tasks/store.OrderExportTask"
 PAGE_LIMIT = 100
 
+# The bearer middleware overwrites the domain-derived tenant with the token's own,
+# so every store is reachable through this one fixed host and a per-store URL is not needed.
+STORE_BASE_URL = "https://store.bapp.ro"
+
 
 class BappStoreClient:
     # One batch is one store transaction: long read timeout, never replayed by the retry wrapper.
     SYNC_TIMEOUT = (10, 300)
 
-    def __init__(self, store_url: str, token: str, http_client=None):
-        self.base_url = store_url.rstrip("/") + "/api/"
+    def __init__(self, token: str, http_client=None, store_url=None):
+        # store_url is accepted and ignored: an existing connection's stored credentials still carry one.
+        self.base_url = STORE_BASE_URL.rstrip("/") + "/api/"
         # Explicit headers on every call: the registry-built client carries NoAuth for CUSTOM.
         self._headers = {"Authorization": f"Token {token}", "X-App-Slug": "sync"}
         self.http = http_client or ResilientHttpClient(base_url=self.base_url, auth=NoAuth(), provider_name="bapp_store")

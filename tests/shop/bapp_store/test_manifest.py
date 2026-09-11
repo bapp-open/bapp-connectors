@@ -23,10 +23,13 @@ def test_identity():
 def test_credentials():
     assert manifest.auth.strategy == AuthStrategy.CUSTOM
     fields = {f.name: f for f in manifest.auth.required_fields}
-    assert fields["store_url"].role == "endpoint" and fields["store_url"].sensitive is False
     assert fields["token"].sensitive is True
-    assert manifest.auth.validate_credentials({}) == ["store_url", "token"]
-    assert manifest.auth.validate_credentials({"store_url": "https://x-st.sites.bapp.ro", "token": "t"}) == []
+    assert manifest.auth.validate_credentials({}) == ["token"]
+    assert manifest.auth.validate_credentials({"token": "t"}) == []
+
+
+def test_the_manifest_asks_only_for_a_token():
+    assert [f.name for f in manifest.auth.required_fields] == ["token"]
 
 
 def test_settings_have_store_defaults():

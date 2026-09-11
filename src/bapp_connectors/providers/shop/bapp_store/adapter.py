@@ -83,10 +83,9 @@ class BappStoreShopAdapter(
     def __init__(self, credentials: dict, http_client=None, config: dict | None = None, **kwargs):
         self.credentials = credentials
         config = config or {}
-        self.store_url = credentials.get("store_url", "")
         self.token = credentials.get("token", "")
         self._vat_rate = Decimal(str(config.get("vat_rate", "0.21")))
-        self.client = BappStoreClient(self.store_url, self.token, http_client=http_client)
+        self.client = BappStoreClient(self.token, http_client=http_client)
 
     # -- BasePort --
 

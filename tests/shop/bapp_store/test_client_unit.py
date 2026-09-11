@@ -30,13 +30,14 @@ from bapp_connectors.providers.shop.bapp_store.client import (  # noqa: E402
     ORDER_EXPORT_PATH,
     ORDERS_EXPORT_PATH,
     PRODUCT_PATH,
+    STORE_BASE_URL,
     SYNC_TASK_PATH,
     BappStoreClient,
 )
 from tests.fake_http import FakeHttpClient  # noqa: E402
 from tests.shop.bapp_store.fake_response import FakeResponse  # noqa: E402
 
-STORE = "https://acme-st.sites.bapp.ro/"
+STORE = STORE_BASE_URL + "/api/"
 HEADERS = {"Authorization": "Token s3cret", "X-App-Slug": "sync"}
 
 
@@ -47,11 +48,11 @@ def http():
 
 @pytest.fixture
 def client(http):
-    return BappStoreClient(STORE, "s3cret", http_client=http)
+    return BappStoreClient("s3cret", http_client=http)
 
 
 def test_base_url_and_headers(client, http):
-    assert client.base_url == "https://acme-st.sites.bapp.ro/api/"
+    assert client.base_url == STORE_BASE_URL + "/api/"
     assert http.base_url == client.base_url
     http.add("GET", CATEGORY_PATH, {"count": 0, "next": None, "previous": None, "results": []})
     client.test_auth()
@@ -59,9 +60,14 @@ def test_base_url_and_headers(client, http):
 
 
 def test_builds_its_own_http_client_when_none_given():
-    client = BappStoreClient("https://acme-st.sites.bapp.ro", "s3cret")
-    assert client.http.base_url == "https://acme-st.sites.bapp.ro/api/"
+    client = BappStoreClient("s3cret")
+    assert client.http.base_url == STORE_BASE_URL + "/api/"
     assert client.http.provider_name == "bapp_store"
+
+
+def test_the_client_ignores_any_stored_store_url():
+    client = BappStoreClient("t", store_url="https://ignored-st.sites.bapp.ro")
+    assert client.base_url == STORE_BASE_URL + "/api/"
 
 
 def test_test_auth(client, http):
@@ -119,7 +125,7 @@ def test_sync_task_requests_the_raw_response():
     # The real client hands raise_for_status a dict (not a Response) without direct_response=True,
     # which fails on .ok -- a regression FakeHttpClient's own dropped-kwarg quirk cannot catch.
     probe = _DirectResponseProbe()
-    client = BappStoreClient(STORE, "s3cret", http_client=probe)
+    client = BappStoreClient("s3cret", http_client=probe)
     client.sync_task({"products": []})
     assert probe.direct_response is True
 

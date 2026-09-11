@@ -3,7 +3,7 @@
 Catalog push, volume pricing rules and order pull for a BAPP Company Store tenant.
 
 - **API:** the store's `/api/` (bapp_framework content-type reads and DirectTask endpoints)
-- **Base URL:** `<store_url>/api/`
+- **Base URL:** fixed at `https://store.bapp.ro/api/` -- the bearer token identifies the tenant, not the host
 - **Auth:** `Authorization: Token <token>` plus `X-App-Slug: sync` on every call
 - **Webhooks:** Supported (HMAC-SHA256 hex over the raw body in `X-BappStore-Signature`), events `order.created`, `order.updated`
 - **Rate limit:** 10 req/s, burst 10
@@ -12,7 +12,6 @@ Catalog push, volume pricing rules and order pull for a BAPP Company Store tenan
 
 | Field | Label | Required | Sensitive | Role |
 |-------|-------|----------|-----------|------|
-| `store_url` | Store URL | Yes | No | endpoint (internal `*-st.sites.bapp.ro` host) |
 | `token` | Sync Token | Yes | Yes | store API token scoped to the `sync` app |
 
 ## Settings
