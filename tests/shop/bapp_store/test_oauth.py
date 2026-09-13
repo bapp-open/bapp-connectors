@@ -34,6 +34,19 @@ def test_the_return_url_is_the_callback_with_a_success_marker():
     assert "success=1" in query["return_url"][0]
 
 
+def test_the_success_marker_survives_a_callback_that_already_has_a_query():
+    from urllib.parse import parse_qs, urlparse
+
+    callback = "https://panel.bapp.ro/api/webhooks/oauth/callback/381/bapp_store/?x=1"
+    query = parse_qs(urlparse(_adapter().get_authorize_url(callback, "abc")).query)
+    returned = query["return_url"][0]
+    # two question marks would swallow the marker and the framework would not
+    # recognise the browser coming back
+    assert returned.count("?") == 1
+    assert "success=1" in returned
+    assert "x=1" in returned
+
+
 def test_the_exchange_hands_back_what_the_store_posted_without_calling_anything():
     posted = json.dumps({"token": "tok-1", "tenant_id": "40", "store_name": "Al meu"})
     tokens = _adapter().exchange_code_for_token(posted, "https://panel.bapp.ro/cb/", "abc")

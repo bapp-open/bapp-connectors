@@ -11,6 +11,7 @@ import json
 from datetime import UTC
 from decimal import Decimal
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
 from bapp_connectors.core.capabilities import (
     BulkUpsertCapability,
@@ -246,15 +247,15 @@ class BappStoreShopAdapter(
 
     def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
         """The store's approval page. The framework owns redirect_uri and state; we only carry them."""
-        from urllib.parse import urlencode
-
+        # the framework passes a bare path today, but this must not depend on that staying true
+        separator = "&" if "?" in redirect_uri else "?"
         return f"{CONNECT_URL}?" + urlencode({
             "app_name": "BAPP",
             "scope": "read_write",
             "state": state,
             # the framework reads a GET with no code as the browser returning after
             # the POST already delivered the credentials, and sends the operator on
-            "return_url": f"{redirect_uri}?success=1",
+            "return_url": f"{redirect_uri}{separator}success=1",
             "callback_url": redirect_uri,
         })
 
