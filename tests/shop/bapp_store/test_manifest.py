@@ -24,12 +24,17 @@ def test_credentials():
     assert manifest.auth.strategy == AuthStrategy.CUSTOM
     fields = {f.name: f for f in manifest.auth.required_fields}
     assert fields["token"].sensitive is True
-    assert manifest.auth.validate_credentials({}) == ["token"]
+    # the token arrives from the approval flow, not the add-connection form
+    assert fields["token"].required is False
+    assert manifest.auth.validate_credentials({}) == []
     assert manifest.auth.validate_credentials({"token": "t"}) == []
 
 
 def test_the_manifest_asks_only_for_a_token():
-    assert [f.name for f in manifest.auth.required_fields] == ["token"]
+    fields = manifest.auth.required_fields
+    assert [f.name for f in fields] == ["token"]
+    # the panel dialog never renders this field, so the credential itself must be optional
+    assert fields[0].required is False
 
 
 def test_the_provider_declares_oauth_so_the_dialog_asks_only_for_a_name():
@@ -87,3 +92,11 @@ def test_package_import_registers_the_adapter():
 
     assert registry.get_adapter_class("shop", "bapp_store") is BappStoreShopAdapter
     assert registry.get_manifest("shop", "bapp_store") is manifest
+
+
+def test_the_adapter_builds_with_no_credentials_so_the_panel_can_ask_for_the_authorize_url():
+    import bapp_connectors.providers.shop.bapp_store  # noqa: F401
+    from bapp_connectors.core.registry import registry
+
+    adapter = registry.create_adapter(family="shop", provider="bapp_store", credentials={}, config={})
+    assert adapter.get_authorize_url("https://panel.bapp.ro/api/webhooks/oauth/callback/381/bapp_store/", "abc")

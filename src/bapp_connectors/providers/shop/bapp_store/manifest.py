@@ -35,11 +35,14 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="token", label="Sync Token", sensitive=True, help_text="Store API token scoped to the sync app"),
+            # arrives from the approval flow, never typed, so the adapter must build without it
+            CredentialField(name="token", label="Sync Token", sensitive=True, required=False, help_text="Store API token scoped to the sync app"),
         ],
         # empty on purpose: the add dialog shows only a provider's OAuth credential
         # fields, so declaring none is what makes it ask for the display name alone.
         # The token arrives from the approval flow, not from a form.
+        # note: the dialog's non-OAuth fallback path also renders nothing here only
+        # because "token" is sensitive=True; flipping that would resurface the field.
         oauth=OAuthConfig(display_name="Company Store (BAPP)"),
     ),
     settings=SettingsConfig(

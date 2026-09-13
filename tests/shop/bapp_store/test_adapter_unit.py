@@ -65,7 +65,8 @@ def test_class_attributes():
 
 def test_validate_credentials(adapter):
     assert adapter.validate_credentials() is True
-    assert BappStoreShopAdapter(credentials={"store_url": "https://x"}).validate_credentials() is False
+    # token is not required: it arrives from the approval flow, not a credential form
+    assert BappStoreShopAdapter(credentials={}).validate_credentials() is True
 
 
 def test_test_connection_success(adapter, fake):
