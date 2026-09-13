@@ -21,6 +21,7 @@ from bapp_connectors.core.capabilities import (
     VolumePricingCapability,
     WebhookCapability,
 )
+from bapp_connectors.core.capabilities.oauth import OAuthCapability, OAuthTokens
 from bapp_connectors.core.dto import (
     BulkUpsertResult,
     ConnectionTestResult,
@@ -57,6 +58,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 SIGNATURE_HEADER = "X-BappStore-Signature"
+CONNECT_URL = "https://store.bapp.ro/account/connect/c/connect.authorize"
 
 _WEBHOOK_EVENTS = {
     "order.created": WebhookEventType.ORDER_CREATED,
@@ -73,6 +75,7 @@ class BappStoreShopAdapter(
     CategoryManagementCapability,
     VolumePricingCapability,
     WebhookCapability,
+    OAuthCapability,
 ):
     manifest = manifest
     max_batch_size = 100
@@ -238,3 +241,33 @@ class BappStoreShopAdapter(
             payload={"id": order_id},
             idempotency_key=key,
         )
+
+    # -- OAuth --
+
+    def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
+        """The store's approval page. The framework owns redirect_uri and state; we only carry them."""
+        from urllib.parse import urlencode
+
+        return f"{CONNECT_URL}?" + urlencode({
+            "app_name": "BAPP",
+            "scope": "read_write",
+            "state": state,
+            # the framework reads a GET with no code as the browser returning after
+            # the POST already delivered the credentials, and sends the operator on
+            "return_url": f"{redirect_uri}?success=1",
+            "callback_url": redirect_uri,
+        })
+
+    def exchange_code_for_token(self, code: str, redirect_uri: str, state: str = "") -> OAuthTokens:
+        """Nothing to exchange: the store already posted the credential, and the
+        framework packed that body into `code`. Hand it back for merging."""
+        try:
+            payload = json.loads(code) if code else {}
+        except (ValueError, TypeError):
+            payload = {}
+        credentials = payload if isinstance(payload, dict) else {}
+        return OAuthTokens(access_token="", extra={"credentials": credentials})
+
+    def refresh_token(self, refresh_token: str) -> OAuthTokens:
+        """A store sync token does not expire and cannot be refreshed; re-authorise instead."""
+        raise NotImplementedError("Re-run the connect flow to issue a new token.")
