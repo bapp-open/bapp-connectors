@@ -14,6 +14,7 @@ from bapp_connectors.core.capabilities import (
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
+    OAuthConfig,
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
@@ -36,6 +37,10 @@ manifest = ProviderManifest(
         required_fields=[
             CredentialField(name="token", label="Sync Token", sensitive=True, help_text="Store API token scoped to the sync app"),
         ],
+        # empty on purpose: the add dialog shows only a provider's OAuth credential
+        # fields, so declaring none is what makes it ask for the display name alone.
+        # The token arrives from the approval flow, not from a form.
+        oauth=OAuthConfig(display_name="Company Store (BAPP)"),
     ),
     settings=SettingsConfig(
         fields=[

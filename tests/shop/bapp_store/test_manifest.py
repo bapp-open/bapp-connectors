@@ -32,6 +32,17 @@ def test_the_manifest_asks_only_for_a_token():
     assert [f.name for f in manifest.auth.required_fields] == ["token"]
 
 
+def test_the_provider_declares_oauth_so_the_dialog_asks_only_for_a_name():
+    assert manifest.auth.oauth is not None
+    # an empty list is the point: the add dialog shows only the OAuth credential
+    # fields for an OAuth provider, so none means it asks for the name alone
+    assert manifest.auth.oauth.credential_fields == []
+
+
+def test_the_token_is_still_a_credential_even_though_nobody_types_it():
+    assert [f.name for f in manifest.auth.required_fields] == ["token"]
+
+
 def test_settings_have_store_defaults():
     defaults = manifest.settings.apply_defaults({})
     assert defaults["prices_include_vat"] is True
