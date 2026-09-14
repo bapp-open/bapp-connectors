@@ -1,5 +1,6 @@
 """pfSense provider manifest — XML-RPC (`pfsense.exec_php`) over HTTPS with basic auth."""
 
+from bapp_connectors.core.capabilities import DnsAllowlistCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -52,7 +53,7 @@ manifest = ProviderManifest(
             ),
         ],
     ),
-    capabilities=[NetworkPort],
+    capabilities=[NetworkPort, DnsAllowlistCapability],
     rate_limit=RateLimitConfig(requests_per_second=2, burst=4),
     retry=RetryConfig(
         max_retries=0,  # failover between endpoints replaces per-request retries

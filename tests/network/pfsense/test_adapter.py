@@ -119,3 +119,133 @@ def test_registry_builds_adapter_with_config_defaults():
     assert adapter.client.endpoints == ["https://fw.example:8885"]
     assert adapter.client.verify_ssl is False and adapter.client.timeout == 20
     assert adapter.client.http._session.verify is False
+
+
+# -- DnsAllowlistCapability ------------------------------------------------------------
+
+import base64  # noqa: E402
+import re  # noqa: E402
+
+from bapp_connectors.core.capabilities import DnsAllowlistCapability  # noqa: E402
+from bapp_connectors.core.dto import DnsAllowlist  # noqa: E402
+from bapp_connectors.providers.network.pfsense.unbound import parse_view, render_view  # noqa: E402
+
+LEGACY_OPTIONS = (
+    "server:\n"
+    "access-control-view: 172.16.196.0/22 elevi\n"
+    "view:\n"
+    'name: "elevi"\n'
+    "view-first: yes\n"
+    'local-zone: "." always_nxdomain\n'
+    'local-zone: "google.com." transparent\n'
+    'local-zone: "whatsapp.com." transparent\n'
+)
+
+
+class UnboundState:
+    """Fake pfSense config state for the unbound section, shared between canned responses."""
+
+    def __init__(self, custom_options: str):
+        self.custom_options = custom_options
+        self.writes: list[dict] = []
+        self.hot_apply: list[str] = []
+
+    def get(self):
+        return {
+            "custom_options": base64.b64encode(self.custom_options.encode()).decode() if self.custom_options else "",
+            "section": {"enable": "", "custom_options": "..."},
+        }
+
+    def set(self, body: str):
+        m = re.search(r"base64_decode\('([^']+)'\)", body)
+        self.custom_options = base64.b64decode(m.group(1)).decode()
+        self.writes.append({"body": body})
+        return True
+
+    def apply(self, body: str):
+        m = re.search(r"base64_decode\('([^']+)'\)", body)
+        self.hot_apply.append(base64.b64decode(m.group(1)).decode())
+        return {"ok": True, "output": ""}
+
+
+def make_dns_adapter(state: UnboundState):
+    router = Router().when("bapp:segments", INTERFACES)
+    router.responses["bapp:get_unbound"] = state.get
+    fake = FakeHttpClient()
+
+    def dispatch(method, path, kwargs):
+        body = kwargs["data"].decode()
+        if "bapp:set_unbound" in body:
+            return xmlrpc_string(json.dumps(state.set(body)))
+        if "bapp:hot_apply" in body:
+            return xmlrpc_string(json.dumps(state.apply(body)))
+        return router(method, path, kwargs)
+
+    fake.add("POST", "xmlrpc.php", dispatch)
+    adapter = PfSenseNetworkAdapter(
+        credentials={"username": "admin", "password": "secret"},
+        http_client=fake,
+        config={"endpoints": ENDPOINT},
+    )
+    return adapter, state
+
+
+def test_adapter_declares_capability():
+    assert isinstance(make_adapter(Router()), DnsAllowlistCapability)
+    assert DnsAllowlistCapability in PfSenseNetworkAdapter.manifest.capabilities
+
+
+def test_get_dns_allowlist_reads_legacy_block():
+    adapter, _ = make_dns_adapter(UnboundState(LEGACY_OPTIONS))
+    result = adapter.get_dns_allowlist("opt3", {"view": "elevi"})
+    assert isinstance(result, DnsAllowlist)
+    assert result.present is True
+    assert result.domains == ["google.com", "whatsapp.com"]
+    assert result.segment_ref == "opt3"
+    assert result.raw.startswith("view:")
+
+
+def test_get_dns_allowlist_absent_view():
+    adapter, _ = make_dns_adapter(UnboundState("server:\nlog-queries: no\n"))
+    result = adapter.get_dns_allowlist("opt3", {"view": "elevi"})
+    assert result.present is False and result.domains == [] and result.raw == ""
+
+
+def test_get_dns_allowlist_requires_view():
+    adapter, _ = make_dns_adapter(UnboundState(""))
+    with pytest.raises(ConfigurationError):
+        adapter.get_dns_allowlist("opt3", {})
+
+
+def test_set_dns_allowlist_adopts_legacy_and_hot_applies_diff():
+    adapter, state = make_dns_adapter(UnboundState("server:\nlog-queries: no\n" + LEGACY_OPTIONS))
+    result = adapter.set_dns_allowlist("opt3", {"view": "elevi"}, ["google.com", "youtube.com"])
+
+    # persisted text: untouched prefix, block adopted with markers, CIDR taken from the segment
+    assert state.custom_options.startswith("server:\nlog-queries: no\nserver:\n")
+    parsed = parse_view(state.custom_options, "elevi")
+    assert parsed.managed is True and parsed.cidr == "172.16.196.0/22"
+    assert parsed.domains == ["google.com", "youtube.com"]
+    assert state.custom_options.count("access-control-view:") == 1
+
+    # write_config + unbound reconfigure happened once
+    assert len(state.writes) == 1
+    assert "write_config(" in state.writes[0]["body"] and "services_unbound_configure(" in state.writes[0]["body"]
+
+    # hot apply: youtube added, whatsapp removed
+    assert len(state.hot_apply) == 1
+    assert "view_local_zone elevi youtube.com. transparent" in state.hot_apply[0]
+    assert "view_local_zone_remove elevi whatsapp.com." in state.hot_apply[0]
+    assert "google.com" not in state.hot_apply[0]
+
+    # returned value is the re-read list, with the backup attached
+    assert result.domains == ["google.com", "youtube.com"] and result.present is True
+    assert json.loads(result.backup)["enable"] == ""
+
+
+def test_set_dns_allowlist_explicit_cidr_and_empty_list():
+    adapter, state = make_dns_adapter(UnboundState(""))
+    result = adapter.set_dns_allowlist("opt3", {"view": "elevi", "cidr": "172.16.199.0/24"}, [])
+    assert state.custom_options == render_view("elevi", "172.16.199.0/24", [])
+    assert result.domains == [] and result.present is True
+    assert state.hot_apply == []  # nothing to add or remove
