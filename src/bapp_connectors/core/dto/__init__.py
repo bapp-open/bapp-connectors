@@ -61,7 +61,7 @@ from .message import (
     MessageLocation,
     OutboundMessage,
 )
-from .network import DnsAllowlist, NetworkClient, NetworkDeviceInfo, NetworkSegment
+from .network import DetectedDnsAllowlist, DnsAllowlist, NetworkClient, NetworkDeviceInfo, NetworkSegment
 from .order import Order, OrderItem, OrderStatus, PaymentStatus, PaymentType
 from .partner import Address, Contact
 from .payment import BillingDetails, CheckoutSession, PaymentMethodType, PaymentResult, Refund
@@ -124,6 +124,7 @@ __all__ = [
     "CustomerProductPercent",
     "DeliveryReport",
     "DeliveryStatus",
+    "DetectedDnsAllowlist",
     "DnsAllowlist",
     "EmailAddress",
     "EmailAttachmentContent",

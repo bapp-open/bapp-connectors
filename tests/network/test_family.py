@@ -38,3 +38,4 @@ def test_port_and_capability_are_abstract():
     abstract = NetworkPort.__abstractmethods__
     assert {"get_device_info", "list_segments", "list_clients", "validate_credentials", "test_connection"} <= abstract
     assert {"get_dns_allowlist", "set_dns_allowlist"} == set(DnsAllowlistCapability.__abstractmethods__)
+    assert DnsAllowlistCapability.detect_dns_allowlists(object()) == []

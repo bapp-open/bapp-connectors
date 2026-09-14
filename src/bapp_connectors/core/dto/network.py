@@ -52,3 +52,12 @@ class DnsAllowlist(BaseDTO):
     present: bool = True
     raw: str = ""
     backup: str = ""
+
+
+class DetectedDnsAllowlist(BaseDTO):
+    """An allowlist found on the device, mapped to a segment, with its provider config."""
+
+    segment_ref: str
+    config: dict = {}
+    domains: list[str] = []
+    raw: str = ""

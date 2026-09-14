@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bapp_connectors.core.dto import DnsAllowlist
+    from bapp_connectors.core.dto import DetectedDnsAllowlist, DnsAllowlist
 
 
 class DnsAllowlistCapability(ABC):
@@ -26,3 +26,8 @@ class DnsAllowlistCapability(ABC):
     def set_dns_allowlist(self, segment_ref: str, config: dict, domains: list[str]) -> DnsAllowlist:
         """Replace the allowlist with `domains`, persist it, apply it, and return the re-read list."""
         ...
+
+    def detect_dns_allowlists(self) -> list[DetectedDnsAllowlist]:
+        """Allowlists already configured on the device, one per segment, with the `config`
+        that `get_dns_allowlist`/`set_dns_allowlist` expect for it. Optional: default none."""
+        return []
