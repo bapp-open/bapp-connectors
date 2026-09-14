@@ -6,7 +6,7 @@ This file provides context for Claude Code when working in this repository.
 
 Ports-and-adapters integration framework. Zero Django dependencies in the core package.
 
-### Provider Families (10)
+### Provider Families (11)
 
 | Family | Port | Providers |
 |--------|------|-----------|
@@ -20,6 +20,7 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 | feed | `FeedPort` | Google Merchant, Facebook Commerce, Compari.ro |
 | social | `SocialPort` | TikTok, YouTube Shorts, Facebook Page, Instagram, Threads, LinkedIn Page, Pinterest |
 | ads | `AdsPort` | Facebook Ads, TikTok Ads, Google Ads, Microsoft Ads, LinkedIn Ads, Pinterest Ads |
+| network | `NetworkPort` | pfSense |
 
 ### Provider File Structure (7 files each)
 
@@ -47,7 +48,7 @@ providers/{family}/{provider}/
 
 ### Optional Capabilities
 
-EmbeddingCapability, TranscriptionCapability, StreamingCapability, ImageGenerationCapability, BulkUpdateCapability, BulkImportCapability, WebhookCapability, OAuthCapability, InvoiceAttachmentCapability, ProductFeedCapability, FeedUploadCapability, CreativeUploadCapability (ads: media upload + creative creation), SocialPublishCapability (social: post publishing with async status polling)
+EmbeddingCapability, TranscriptionCapability, StreamingCapability, ImageGenerationCapability, BulkUpdateCapability, BulkImportCapability, WebhookCapability, OAuthCapability, InvoiceAttachmentCapability, ProductFeedCapability, FeedUploadCapability, CreativeUploadCapability (ads: media upload + creative creation), SocialPublishCapability (social: post publishing with async status polling), DnsAllowlistCapability (network: per-segment DNS allowlist, e.g. an Unbound view on pfSense)
 
 ## Testing
 

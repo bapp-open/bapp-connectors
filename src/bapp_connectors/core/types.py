@@ -20,6 +20,7 @@ class ProviderFamily(StrEnum):
     FEED = "feed"
     SOCIAL = "social"
     ADS = "ads"
+    NETWORK = "network"
 
 
 class BackoffStrategy(StrEnum):

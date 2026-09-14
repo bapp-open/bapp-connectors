@@ -7,6 +7,7 @@ from .email import EmailPort
 from .feed import FeedPort
 from .llm import LLMPort
 from .messaging import MessagingPort
+from .network import NetworkPort
 from .payment import PaymentPort
 from .shop import ShopPort
 from .social import SocialPort
@@ -21,6 +22,7 @@ __all__ = [
     "FileInfo",
     "LLMPort",
     "MessagingPort",
+    "NetworkPort",
     "PaymentPort",
     "ShopPort",
     "SocialPort",

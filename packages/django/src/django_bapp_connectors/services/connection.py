@@ -36,6 +36,7 @@ FAMILY_DEFAULTS: dict[str, dict] = {
     ProviderFamily.FEED:      {"label": _("Product Feeds"),        "icon": "fad fa-rss",              "color": "#ef4444"},
     ProviderFamily.SOCIAL:    {"label": _("Social Media"),         "icon": "fad fa-share-nodes",      "color": "#d946ef"},
     ProviderFamily.ADS:       {"label": _("Advertising"),          "icon": "fad fa-bullhorn",         "color": "#f97316"},
+    ProviderFamily.NETWORK:   {"label": _("Network"),              "icon": "fad fa-network-wired",    "color": "#0ea5e9"},
 }
 
 
