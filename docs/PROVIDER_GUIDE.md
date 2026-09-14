@@ -558,6 +558,7 @@ The registry will **reject registration** if you declare a capability but don't 
 | `BulkImportCapability` | `bulk_import_products(products) -> BulkResult` |
 | `VolumePricingCapability` | `push_shop_rules(rules: ShopRules) -> None` |
 | `WebhookCapability` | `verify_webhook(headers, body, secret) -> bool`, `parse_webhook(headers, body) -> WebhookEvent` |
+| `DnsAllowlistCapability` | `get_dns_allowlist(segment_ref, config) -> DnsAllowlist`, `set_dns_allowlist(segment_ref, config, domains) -> DnsAllowlist` (network family) |
 | `OAuthCapability` | `get_authorize_url(redirect_uri, state) -> str`, `exchange_code_for_token(code, ...) -> OAuthTokens`, `refresh_token(refresh_token) -> OAuthTokens` |
 | `InvoiceAttachmentCapability` | `attach_invoice(order_id, invoice_url) -> bool` |
 | `ProductFeedCapability` | `generate_feed(products, format) -> str \| bytes` |

@@ -249,3 +249,20 @@ def test_set_dns_allowlist_explicit_cidr_and_empty_list():
     assert state.custom_options == render_view("elevi", "172.16.199.0/24", [])
     assert result.domains == [] and result.present is True
     assert state.hot_apply == []  # nothing to add or remove
+
+
+# -- Family contract -------------------------------------------------------------------
+
+from tests.network.contract import NetworkContractTests  # noqa: E402
+
+
+class TestPfSenseContract(NetworkContractTests):
+    @pytest.fixture
+    def adapter(self):
+        router = (
+            Router()
+            .when("bapp:device_info", DEVICE)
+            .when("bapp:segments", INTERFACES)
+            .when("bapp:clients", {"leases": LEASES, "arp": ARP})
+        )
+        return make_adapter(router)
