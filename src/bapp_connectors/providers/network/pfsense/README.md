@@ -4,7 +4,7 @@ Talks to pfSense / pfSense Plus through the built-in XML-RPC endpoint (`/xmlrpc.
 method `pfsense.exec_php`) using an admin account over HTTP basic auth.
 
 - Credentials: `username`, `password` (equivalent to root on the firewall — treat accordingly).
-- Settings: `endpoints` (one base URL per line, tried in order; one per WAN when multi-homed),
+- Settings: `endpoints` (base URLs separated by commas or newlines, tried in order; one per WAN when multi-homed),
   `verify_ssl` (default off, self-signed certificate), `timeout`.
 - Capabilities: `NetworkPort` (device info, segments, connected clients) and
   `DnsAllowlistCapability` (per-view Unbound allowlist kept between `# bapp:begin <view>` /

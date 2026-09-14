@@ -35,8 +35,8 @@ manifest = ProviderManifest(
                 label="Endpoints",
                 field_type=FieldType.TEXTAREA,
                 required=True,
-                help_text="One base URL per line, tried in order (e.g. https://5.2.251.35:8885). "
-                "Use one line per WAN when the firewall has several providers.",
+                help_text="Base URLs separated by commas (or one per line), tried in order, "
+                "e.g. https://5.2.251.35:8885, https://86.121.185.49:8885 — one per WAN when multi-homed.",
             ),
             SettingsField(
                 name="verify_ssl",
