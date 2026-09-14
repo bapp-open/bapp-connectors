@@ -2,6 +2,7 @@
 
 from .bulk_operations import BulkImportCapability, BulkUpdateCapability, BulkUpsertCapability
 from .creative_upload import CreativeUploadCapability
+from .dns_allowlist import DnsAllowlistCapability
 from .embedding import EmbeddingCapability
 from .financial import FinancialCapability
 from .image_generation import ImageGenerationCapability
@@ -36,6 +37,7 @@ __all__ = [
     "BulkUpsertCapability",
     "CategoryManagementCapability",
     "CreativeUploadCapability",
+    "DnsAllowlistCapability",
     "EmbeddingCapability",
     "FeedFormat",
     "FeedUploadCapability",
