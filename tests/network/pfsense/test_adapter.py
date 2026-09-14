@@ -246,6 +246,20 @@ def test_set_dns_allowlist_adopts_legacy_and_hot_applies_diff():
     assert json.loads(result.backup)["enable"] == ""
 
 
+def test_detect_dns_allowlists_maps_views_to_segments():
+    from bapp_connectors.core.dto import DetectedDnsAllowlist
+
+    text = "server:\naccess-control-view: 10.99.0.0/24 orphan\n" + LEGACY_OPTIONS + "view:\nname: \"orphan\"\n"
+    adapter, _ = make_dns_adapter(UnboundState(text))
+    found = adapter.detect_dns_allowlists()
+    assert len(found) == 1
+    assert isinstance(found[0], DetectedDnsAllowlist)
+    assert found[0].segment_ref == "opt3"
+    assert found[0].config == {"view": "elevi", "cidr": "172.16.196.0/22"}
+    assert found[0].domains == ["google.com", "whatsapp.com"]
+    assert make_dns_adapter(UnboundState(""))[0].detect_dns_allowlists() == []
+
+
 def test_set_dns_allowlist_explicit_cidr_and_empty_list():
     adapter, state = make_dns_adapter(UnboundState(""))
     result = adapter.set_dns_allowlist("opt3", {"view": "elevi", "cidr": "172.16.199.0/24"}, [])

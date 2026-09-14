@@ -3,6 +3,7 @@
 from bapp_connectors.providers.network.pfsense.unbound import (
     BEGIN_MARK,
     END_MARK,
+    list_views,
     parse_view,
     render_view,
     replace_view,
@@ -101,3 +102,9 @@ def test_roundtrip_parse_render():
     domains = ["z.ro", "a.ro", "m.ro"]
     block = render_view("elevi", "10.0.0.0/24", domains)
     assert parse_view(block, "elevi").domains == sorted(domains)
+
+
+def test_list_views_returns_view_and_cidr_pairs_once():
+    text = LEGACY + "access-control-view: 10.0.0.0/24 profesori\naccess-control-view: 172.16.196.0/22 elevi\n"
+    assert list_views(text) == [("elevi", "172.16.196.0/22"), ("profesori", "10.0.0.0/24")]
+    assert list_views("") == []

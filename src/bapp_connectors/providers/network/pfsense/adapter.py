@@ -11,6 +11,7 @@ import shlex
 from bapp_connectors.core.capabilities import DnsAllowlistCapability
 from bapp_connectors.core.dto import (
     ConnectionTestResult,
+    DetectedDnsAllowlist,
     DnsAllowlist,
     NetworkClient,
     NetworkDeviceInfo,
@@ -27,7 +28,7 @@ from bapp_connectors.providers.network.pfsense.mappers import (
     map_segments,
     segment_ref_for,
 )
-from bapp_connectors.providers.network.pfsense.unbound import parse_view, render_view, replace_view
+from bapp_connectors.providers.network.pfsense.unbound import list_views, parse_view, render_view, replace_view
 
 logger = logging.getLogger(__name__)
 
@@ -236,3 +237,30 @@ class PfSenseNetworkAdapter(NetworkPort, DnsAllowlistCapability):
 
         after = self.get_dns_allowlist(segment_ref, config)
         return after.model_copy(update={"backup": backup})
+
+    def detect_dns_allowlists(self) -> list[DetectedDnsAllowlist]:
+        """Every `access-control-view` in custom_options whose CIDR matches a segment (or the segment's subnet)."""
+        text, _section = self._read_unbound()
+        segments = self._segments()
+        found: list[DetectedDnsAllowlist] = []
+        for view, cidr in list_views(text):
+            segment = next((s for s in segments if s.cidr and _same_network(s.cidr, cidr)), None)
+            if segment is None:
+                continue
+            parsed = parse_view(text, view)
+            if parsed is None:
+                continue
+            found.append(DetectedDnsAllowlist(
+                segment_ref=segment.ref, config={"view": view, "cidr": cidr}, domains=parsed.domains, raw=parsed.block,
+            ))
+        return found
+
+
+def _same_network(a: str, b: str) -> bool:
+    import ipaddress
+
+    try:
+        na, nb = ipaddress.ip_network(a, strict=False), ipaddress.ip_network(b, strict=False)
+    except ValueError:
+        return False
+    return na == nb or nb.subnet_of(na)

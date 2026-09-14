@@ -150,3 +150,15 @@ def replace_view(text: str, view: str, block: str) -> str:
     if base and not base.endswith("\n"):
         base += "\n"
     return base + block
+
+
+def list_views(text: str) -> list[tuple[str, str]]:
+    """All `(view, cidr)` pairs declared by `access-control-view` lines, in order, without duplicates."""
+    seen: set[str] = set()
+    out: list[tuple[str, str]] = []
+    for line in text.split("\n"):
+        m = _ACCESS_RE.match(line)
+        if m and m.group(2) not in seen:
+            seen.add(m.group(2))
+            out.append((m.group(2), m.group(1)))
+    return out
