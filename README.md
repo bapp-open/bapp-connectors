@@ -29,15 +29,17 @@ A ports-and-adapters integration framework for connecting to external services: 
 <!-- PROVIDERS:BEGIN -->
 | Family | Providers | Count |
 |---|---|---|
-| **Shop** | CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce | 10 |
+| **Shop** | Company Store (BAPP), CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce | 11 |
 | **Courier** | Colete Online, GLS, Sameday | 3 |
-| **Payment** | Cardinity, EuPlatesc, LibraPay, Netopia, PayPal, Stripe, Utrust | 7 |
+| **Payment** | Cardinity, EuPlatesc, LibraPay, MobilPay, Netopia, PayPal, Stripe, Utrust | 8 |
 | **Messaging** | Discord, GoIP, Instagram DM, Matrix, Facebook Messenger, RoboSMS, Telegram, WhatsApp | 8 |
-| **Storage** | Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, WebDAV | 6 |
+| **Storage** | Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV | 7 |
 | **LLM** | Anthropic, Google Gemini, Ollama, OpenAI | 4 |
 | **Feed** | Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro | 4 |
+| **Ads** | Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads | 6 |
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
-| | **Total** | **46** |
+| **Social** | Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts | 7 |
+| | **Total** | **62** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -236,14 +238,16 @@ packages/connectors/
 │   │   └── registry.py     # Provider registry
 │   └── providers/
 <!-- STRUCTURE:BEGIN -->
-│       ├── shop/          # CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce
+│       ├── shop/          # Company Store (BAPP), CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce
 │       ├── courier/       # Colete Online, GLS, Sameday
-│       ├── payment/       # Cardinity, EuPlatesc, LibraPay, Netopia, PayPal, Stripe, Utrust
+│       ├── payment/       # Cardinity, EuPlatesc, LibraPay, MobilPay, Netopia, PayPal, Stripe, Utrust
 │       ├── messaging/     # Discord, GoIP, Instagram DM, Matrix, Facebook Messenger, RoboSMS, Telegram, WhatsApp
-│       ├── storage/       # Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, WebDAV
+│       ├── storage/       # Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV
 │       ├── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
 │       ├── feed/          # Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro
-│       └── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
+│       ├── ads/           # Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads
+│       ├── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
+│       └── social/        # Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts
 <!-- STRUCTURE:END -->
 ├── packages/django/        # Django integration (separate uv workspace)
 │   └── src/django_bapp_connectors/

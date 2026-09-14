@@ -95,7 +95,35 @@ def _map_address(addr: dict | None) -> Address | None:
     )
 
 
-def _map_contact(addr: dict | None) -> Contact | None:
+#: WooCommerce nu are camp standard pentru CUI; pluginurile de facturare romanesti
+#: il scriu in meta_data, fiecare cu cheia lui.
+BILLING_VAT_META_KEYS = (
+    "_billing_company_vat_id",
+    "_billing_cif",
+    "billing_cif",
+    "_billing_cui",
+    "billing_cui",
+    "_billing_vat_number",
+    "_billing_vat_id",
+)
+
+
+def billing_vat_id(data: dict | None) -> str:
+    """CUI-ul cumparatorului din meta_data comenzii, daca vreun plugin l-a pus acolo.
+
+    Se cere sa contina o cifra: campul e liber in magazin, iar clientii scriu in el
+    si numele firmei — un "CUI" fara cifre ar lega comanda de partenerul gresit.
+    """
+    for meta in (data or {}).get("meta_data") or []:
+        key = str(meta.get("key", "")).lower()
+        if key in BILLING_VAT_META_KEYS:
+            value = str(meta.get("value") or "").strip()
+            if value and any(ch.isdigit() for ch in value):
+                return value
+    return ""
+
+
+def _map_contact(addr: dict | None, vat_id: str = "") -> Contact | None:
     if not addr:
         return None
     first = addr.get("first_name", "").strip()
@@ -103,6 +131,7 @@ def _map_contact(addr: dict | None) -> Contact | None:
     return Contact(
         name=f"{first} {last}".strip(),
         company_name=addr.get("company", "").strip() if addr.get("company") else "",
+        vat_id=vat_id,
         email=addr.get("email", "").lower().strip() if addr.get("email") else "",
         phone=addr.get("phone", "").strip() if addr.get("phone") else "",
         address=_map_address(addr),
@@ -178,7 +207,7 @@ def order_from_woocommerce(data: dict, price_from_provider=None, status_mapper=N
         payment_type=payment_type,
         currency=data.get("currency", "RON"),
         items=items,
-        billing=_map_contact(data.get("billing")),
+        billing=_map_contact(data.get("billing"), vat_id=billing_vat_id(data)),
         shipping=_map_contact(data.get("shipping")),
         shipping_address=_map_address(data.get("shipping")),
         delivery_address=_format_delivery_address(data.get("shipping")),
