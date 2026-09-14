@@ -48,6 +48,9 @@ def make_adapter(router: Router, endpoints: str | list = ENDPOINT, **config):
 def test_endpoints_accepts_multiline_string_and_list():
     assert PfSenseNetworkAdapter._endpoints({"endpoints": "https://a:8885\n\n https://b:8885/ \n"}) == ["https://a:8885", "https://b:8885"]
     assert PfSenseNetworkAdapter._endpoints({"endpoints": ["https://a:8885"]}) == ["https://a:8885"]
+    assert PfSenseNetworkAdapter._endpoints({"endpoints": "https://a:8885, https://b:8885/;https://c:8885"}) == [
+        "https://a:8885", "https://b:8885", "https://c:8885",
+    ]
     assert PfSenseNetworkAdapter._endpoints({}) == []
 
 

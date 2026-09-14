@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 import shlex
 
 from bapp_connectors.core.capabilities import DnsAllowlistCapability
@@ -134,8 +135,9 @@ class PfSenseNetworkAdapter(NetworkPort, DnsAllowlistCapability):
 
     @staticmethod
     def _endpoints(config: dict) -> list[str]:
+        """Accept a list, or a string with URLs separated by newlines, commas, semicolons or spaces."""
         raw = config.get("endpoints", "")
-        items = raw if isinstance(raw, list) else str(raw).splitlines()
+        items = raw if isinstance(raw, list) else re.split(r"[\s,;]+", str(raw))
         return [item.strip().rstrip("/") for item in items if item and item.strip()]
 
     def _segments(self, refresh: bool = False) -> list[NetworkSegment]:
