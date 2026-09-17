@@ -1,0 +1,81 @@
+{
+ "data": [
+  {
+   "_diskquota": "128849018880",
+   "_diskused": "80052",
+   "diskquota": "122880.00",
+   "diskused": "0.08",
+   "diskusedpercent": 0,
+   "diskusedpercent_float": 6.21285289525986e-05,
+   "domain": "example.test",
+   "email": "office@example.test",
+   "humandiskquota": "120\u00a0GB",
+   "login": "office@example.test",
+   "suspended_incoming": 0,
+   "suspended_login": 0,
+   "user": "office"
+  },
+  {
+   "_diskquota": "128849018880",
+   "_diskused": "85996",
+   "diskquota": "122880.00",
+   "diskused": "0.08",
+   "diskusedpercent": 0,
+   "diskusedpercent_float": 6.67416801055272e-05,
+   "domain": "example.test",
+   "email": "contact@example.test",
+   "humandiskquota": "120\u00a0GB",
+   "login": "contact@example.test",
+   "suspended_incoming": 0,
+   "suspended_login": null,
+   "user": "contact"
+  },
+  {
+   "_diskquota": "1073741824",
+   "_diskused": "903985792",
+   "diskquota": "1024.00",
+   "diskused": "862.11",
+   "diskusedpercent": 84,
+   "diskusedpercent_float": 84.1902375221252,
+   "domain": "example.test",
+   "email": "admin@example.test",
+   "humandiskquota": "1\u00a0GB",
+   "login": "admin@example.test",
+   "suspended_incoming": 0,
+   "suspended_login": 0,
+   "user": "admin"
+  },
+  {
+   "_diskquota": "1073741824",
+   "_diskused": "79170",
+   "diskquota": "1024.00",
+   "diskused": "0.08",
+   "diskusedpercent": 0,
+   "diskusedpercent_float": 0.00737328082323074,
+   "domain": "example.test",
+   "email": "info@example.test",
+   "humandiskquota": "1\u00a0GB",
+   "login": "info@example.test",
+   "suspended_incoming": 0,
+   "suspended_login": 0,
+   "user": "info"
+  },
+  {
+   "_diskquota": "128849018880",
+   "_diskused": "24020762",
+   "diskquota": "122880.00",
+   "diskused": "22.91",
+   "diskusedpercent": 0,
+   "diskusedpercent_float": 0.0186425649250547,
+   "domain": "example.test",
+   "email": "sales@example.test",
+   "humandiskquota": "120\u00a0GB",
+   "login": "sales@example.test",
+   "suspended_incoming": 0,
+   "suspended_login": 0,
+   "user": "sales"
+  }
+ ],
+ "errors": null,
+ "status": 1
+}

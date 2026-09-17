@@ -1,0 +1,20 @@
+{
+ "data": {
+  "addon_domains": [],
+  "main_domain": {
+   "documentroot": "/home/exampleuser/public_html",
+   "domain": "example.test",
+   "homedir": "/home/exampleuser",
+   "ip": "192.0.2.10",
+   "port": "80",
+   "serveralias": "www.example.test",
+   "servername": "example.test",
+   "type": "main",
+   "user": "exampleuser"
+  },
+  "parked_domains": [],
+  "sub_domains": []
+ },
+ "errors": null,
+ "status": 1
+}

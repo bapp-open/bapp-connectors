@@ -1,0 +1,159 @@
+{
+ "data": [
+  {
+   "description": "Disk Usage",
+   "error": null,
+   "formatter": "format_bytes",
+   "id": "disk_usage",
+   "maximum": "128849018880",
+   "url": "",
+   "usage": 1305116672
+  },
+  {
+   "description": "Database Disk Usage",
+   "error": null,
+   "formatter": "format_bytes",
+   "id": "cachedmysqldiskusage",
+   "maximum": "127547244544",
+   "url": "",
+   "usage": 3342336
+  },
+  {
+   "description": "Bandwidth",
+   "error": null,
+   "formatter": "format_bytes",
+   "id": "bandwidth",
+   "maximum": "2097152000000",
+   "url": "",
+   "usage": "244485146"
+  },
+  {
+   "description": "Addon Domains",
+   "error": null,
+   "formatter": null,
+   "id": "addon_domains",
+   "maximum": "200",
+   "url": "",
+   "usage": 0
+  },
+  {
+   "description": "Subdomains",
+   "error": null,
+   "formatter": null,
+   "id": "subdomains",
+   "maximum": "200",
+   "url": "",
+   "usage": 0
+  },
+  {
+   "description": "Alias Domains",
+   "error": null,
+   "formatter": null,
+   "id": "aliases",
+   "maximum": "200",
+   "url": "",
+   "usage": 0
+  },
+  {
+   "description": "Email Accounts",
+   "error": null,
+   "formatter": null,
+   "id": "email_accounts",
+   "maximum": "1000",
+   "url": "",
+   "usage": "5"
+  },
+  {
+   "description": "Autoresponders",
+   "error": null,
+   "formatter": null,
+   "id": "autoresponders",
+   "maximum": null,
+   "url": "",
+   "usage": 0
+  },
+  {
+   "description": "Forwarders",
+   "error": null,
+   "formatter": null,
+   "id": "forwarders",
+   "maximum": null,
+   "url": "",
+   "usage": 1
+  },
+  {
+   "description": "Email Filters",
+   "error": null,
+   "formatter": null,
+   "id": "email_filters",
+   "maximum": null,
+   "url": "",
+   "usage": 0
+  },
+  {
+   "description": "FTP Accounts",
+   "error": null,
+   "formatter": null,
+   "id": "ftp_accounts",
+   "maximum": "200",
+   "url": "",
+   "usage": "0"
+  },
+  {
+   "description": "Databases",
+   "error": null,
+   "formatter": null,
+   "id": "mysql_databases",
+   "maximum": "200",
+   "url": "",
+   "usage": 1
+  },
+  {
+   "description": "CPU Usage",
+   "error": null,
+   "formatter": null,
+   "id": "lvecpu",
+   "maximum": 100,
+   "url": "",
+   "usage": 0
+  },
+  {
+   "description": "Entry Processes",
+   "error": null,
+   "formatter": null,
+   "id": "lveep",
+   "maximum": 40,
+   "url": "",
+   "usage": 0
+  },
+  {
+   "description": "Physical Memory Usage",
+   "error": null,
+   "formatter": "format_bytes",
+   "id": "lvememphy",
+   "maximum": 6442450944,
+   "url": "",
+   "usage": 0
+  },
+  {
+   "description": "IOPS",
+   "error": null,
+   "formatter": null,
+   "id": "lveiops",
+   "maximum": 1024,
+   "url": "",
+   "usage": 0
+  },
+  {
+   "description": "Number of Processes",
+   "error": null,
+   "formatter": null,
+   "id": "lvenproc",
+   "maximum": 200,
+   "url": "",
+   "usage": 0
+  }
+ ],
+ "errors": null,
+ "status": 1
+}

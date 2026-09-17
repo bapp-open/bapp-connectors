@@ -1,0 +1,32 @@
+{
+ "data": [
+  {
+   "certificate": {
+    "domains": [
+     "example.test",
+     "www.example.test"
+    ],
+    "is_autossl": 1,
+    "is_self_signed": 0,
+    "issuer.commonName": "YR1",
+    "issuer.organizationName": "Let's Encrypt",
+    "not_after": 1796087185,
+    "not_before": 1788311186,
+    "subject.commonName": "example.test"
+   },
+   "docroot": "/home/exampleuser/public_html",
+   "domains": [
+    "example.test"
+   ],
+   "fqdns": [
+    "example.test",
+    "www.example.test",
+    "mail.example.test"
+   ],
+   "ip": "192.0.2.10",
+   "servername": "example.test"
+  }
+ ],
+ "errors": null,
+ "status": 1
+}

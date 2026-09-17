@@ -1,0 +1,103 @@
+{
+ "data": [
+  {
+   "line_index": 0,
+   "text_b64": "OyBjUGFuZWwgZmlyc3Q6MTMwLjAuMTQgKHVwZGF0ZV90aW1lKToxNzgzNzk3ODY5IENwYW5lbDo6Wm9uZUZpbGU6OlZFUlNJT046MS4zIGhvc3RuYW1lOmNwYW5lbC5leGFtcGxlLm5ldCBsYXRlc3Q6MTM2LjAuMjg=",
+   "type": "comment"
+  },
+  {
+   "line_index": 2,
+   "text_b64": "JFRUTCAxNDQwMA==",
+   "type": "control"
+  },
+  {
+   "data_b64": [
+    "bnMxLmV4YW1wbGUubmV0Lg==",
+    "aG9zdG1hc3Rlci5leGFtcGxlLm5ldC4=",
+    "MjAyNjAyMTQwMQ==",
+    "MzYwMA==",
+    "MTgwMA==",
+    "MTIwOTYwMA==",
+    "ODY0MDA="
+   ],
+   "dname_b64": "ZXhhbXBsZS50ZXN0Lg==",
+   "dname_raw": "example.test.",
+   "line_index": 3,
+   "record_type": "SOA",
+   "ttl": 86400,
+   "type": "record"
+  },
+  {
+   "data_b64": [
+    "bnMxLmV4YW1wbGUubmV0Lg=="
+   ],
+   "dname_b64": "ZXhhbXBsZS50ZXN0Lg==",
+   "dname_raw": "example.test.",
+   "line_index": 9,
+   "record_type": "NS",
+   "ttl": 86400,
+   "type": "record"
+  },
+  {
+   "data_b64": [
+    "MTkyLjAuMi4xMA=="
+   ],
+   "dname_b64": "ZXhhbXBsZS50ZXN0Lg==",
+   "dname_raw": "example.test.",
+   "line_index": 12,
+   "record_type": "A",
+   "ttl": 14400,
+   "type": "record"
+  },
+  {
+   "data_b64": [
+    "MA==",
+    "ZXhhbXBsZS50ZXN0Lg=="
+   ],
+   "dname_b64": "ZXhhbXBsZS50ZXN0Lg==",
+   "dname_raw": "example.test.",
+   "line_index": 13,
+   "record_type": "MX",
+   "ttl": 14400,
+   "type": "record"
+  },
+  {
+   "data_b64": [
+    "ZXhhbXBsZS50ZXN0Lg=="
+   ],
+   "dname_b64": "bWFpbA==",
+   "dname_raw": "mail",
+   "line_index": 14,
+   "record_type": "CNAME",
+   "ttl": 14400,
+   "type": "record"
+  },
+  {
+   "data_b64": [
+    "dj1zcGYxICthICtteCAraXA0OjE5Mi4wLjIuMTAgK2lwNDoxOTIuMC4yLjEwIH5hbGw="
+   ],
+   "dname_b64": "ZXhhbXBsZS50ZXN0Lg==",
+   "dname_raw": "example.test.",
+   "line_index": 17,
+   "record_type": "TXT",
+   "ttl": 14400,
+   "type": "record"
+  },
+  {
+   "data_b64": [
+    "MA==",
+    "MA==",
+    "MjA4MA==",
+    "ZXhhbXBsZS50ZXN0Lg=="
+   ],
+   "dname_b64": "X2NhbGRhdnMuX3RjcA==",
+   "dname_raw": "_caldavs._tcp",
+   "line_index": 22,
+   "record_type": "SRV",
+   "ttl": 14400,
+   "type": "record"
+  }
+ ],
+ "errors": null,
+ "status": 1
+}

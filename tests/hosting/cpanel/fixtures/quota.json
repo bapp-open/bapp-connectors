@@ -1,0 +1,17 @@
+{
+ "data": {
+  "backup_warning_threshold_pct": 90,
+  "inode_limit": "0",
+  "inodes_remain": "0",
+  "inodes_used": 27062,
+  "megabyte_limit": 122880,
+  "megabytes_remain": 121635.34,
+  "megabytes_used": 1244.66,
+  "under_backup_threshold": 1,
+  "under_inode_limit": "1",
+  "under_megabyte_limit": "1",
+  "under_quota_overall": "1"
+ },
+ "errors": null,
+ "status": 1
+}
