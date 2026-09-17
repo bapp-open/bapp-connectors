@@ -21,6 +21,7 @@ class ProviderFamily(StrEnum):
     SOCIAL = "social"
     ADS = "ads"
     NETWORK = "network"
+    HOSTING = "hosting"
 
 
 class BackoffStrategy(StrEnum):

@@ -36,6 +36,7 @@ from .email import (
 )
 from .feed import FeedResult, FeedUploadResult, FeedValidationError, FeedValidationResult, FeedWarning
 from .financial import FinancialInvoice, FinancialInvoiceLine, FinancialTransaction, FinancialTransactionType
+from .hosting import HostingAccount, HostingDomain, HostingResource, Mailbox, PanelLink
 from .llm import (
     ChatMessage,
     ChatRole,
@@ -142,12 +143,16 @@ __all__ = [
     "FinancialTransaction",
     "FinancialTransactionType",
     "FinishReason",
+    "HostingAccount",
+    "HostingDomain",
+    "HostingResource",
     "ImageResult",
     "InboundMessage",
     "InboxAction",
     "InboxActionType",
     "LLMChunk",
     "LLMResponse",
+    "Mailbox",
     "MessageAttachment",
     "MessageChannel",
     "MessageContact",
@@ -163,6 +168,7 @@ __all__ = [
     "OrderValueTier",
     "OutboundMessage",
     "PaginatedResult",
+    "PanelLink",
     "Parcel",
     "PaymentMethodType",
     "PaymentResult",
