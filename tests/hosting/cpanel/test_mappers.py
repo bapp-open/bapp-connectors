@@ -55,3 +55,78 @@ def test_account_takes_the_hostname_from_the_connection():
     assert acc.primary_domain == "example.test"
     assert acc.server_hostname == "cpanel.example.net"
     assert acc.plan == "starter"
+
+
+from bapp_connectors.core.dto import DnsRecord  # noqa: E402
+from bapp_connectors.providers.hosting.cpanel.mappers import (  # noqa: E402
+    map_mailboxes,
+    map_zone,
+    record_to_payload,
+)
+
+
+def test_mailbox_quota_comes_from_the_byte_pair_not_the_megabyte_pair(pops_raw):
+    # diskquota is "1024.00" MB while _diskquota is "1073741824" bytes. Reading the
+    # wrong one is a factor-1048576 error that still looks plausible in a UI.
+    boxes = {b.email: b for b in map_mailboxes(pops_raw)}
+    admin = boxes["admin@example.test"]
+    assert admin.disk_quota == Decimal("1073741824")
+    assert admin.disk_used == Decimal("903985792")
+    assert admin.percent_used is not None and admin.percent_used > 80
+
+
+def test_mailbox_suspension_flags_become_booleans(pops_raw):
+    box = map_mailboxes(pops_raw)[0]
+    assert box.suspended_login is False
+    assert box.suspended_incoming is False
+
+
+def test_zone_skips_comments_and_controls_and_keeps_the_serial(zone_raw):
+    snapshot = map_zone("example.test", zone_raw)
+    assert snapshot.zone == "example.test"
+    assert snapshot.version, "the SOA serial is the write token"
+    assert all(r.record_type not in ("", None) for r in snapshot.records)
+    assert not any(r.record_type == "SOA" for r in snapshot.records), "SOA is not an editable record"
+
+
+def test_records_are_decoded_and_carry_their_line_index_as_ref(zone_raw):
+    records = map_zone("example.test", zone_raw).records
+    a_record = next(r for r in records if r.record_type == "A")
+    assert a_record.name == "example.test."
+    assert a_record.value == "192.0.2.10"
+    assert a_record.ref.isdigit(), "cPanel's ref is the line index"
+    assert a_record.ttl == 14400
+
+
+def test_mx_lifts_its_priority_out_of_the_positional_array(zone_raw):
+    mx = next(r for r in map_zone("example.test", zone_raw).records if r.record_type == "MX")
+    assert mx.priority == 0
+    assert mx.value == "example.test."
+
+
+def test_srv_keeps_weight_and_port_in_extra(zone_raw):
+    srv = next(r for r in map_zone("example.test", zone_raw).records if r.record_type == "SRV")
+    assert srv.priority == 0
+    assert srv.extra["weight"] == 0
+    assert srv.extra["port"] == 2080
+    assert srv.value == "example.test."
+
+
+def test_payload_data_is_always_an_array():
+    # The server rejects a scalar: '"data" must be an array.'
+    payload = record_to_payload(DnsRecord(name="www", record_type="A", ttl=300, value="192.0.2.11"))
+    assert payload == {"dname": "www", "ttl": 300, "record_type": "A", "data": ["192.0.2.11"]}
+
+
+def test_payload_rebuilds_mx_positionally():
+    payload = record_to_payload(
+        DnsRecord(name="example.test.", record_type="MX", ttl=300, value="mail.example.test.", priority=10)
+    )
+    assert payload["data"] == ["10", "mail.example.test."]
+
+
+def test_payload_for_an_edit_carries_the_line_index():
+    payload = record_to_payload(
+        DnsRecord(ref="13", name="www", record_type="A", ttl=300, value="192.0.2.11"), include_ref=True
+    )
+    assert payload["line_index"] == 13

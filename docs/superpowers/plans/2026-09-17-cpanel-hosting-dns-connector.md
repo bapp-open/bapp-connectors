@@ -895,8 +895,9 @@ class CpanelPop(BaseModel):
     raw_disk_used: str | None = Field(default=None, alias="_diskused")
     raw_disk_quota: str | None = Field(default=None, alias="_diskquota")
     diskusedpercent_float: float | None = None
-    suspended_login: int = 0
-    suspended_incoming: int = 0
+    suspended_login: int | None = None
+    suspended_incoming: int | None = None
+    """cPanel sends null, not 0, for a mailbox that was never suspended."""
 
     model_config = {"populate_by_name": True}
 
