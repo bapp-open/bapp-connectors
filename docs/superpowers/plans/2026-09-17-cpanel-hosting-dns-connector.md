@@ -1032,7 +1032,7 @@ from tests.fake_http import FakeHttpClient
 
 def make_client(response):
     http = FakeHttpClient()
-    http.add(None, "/execute/", response)
+    http.add(None, "execute/", response)
     return CpanelUapiClient(http_client=http), http
 
 
