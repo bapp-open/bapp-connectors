@@ -444,7 +444,7 @@ reach the server's access log.
 | UAPI signal | Framework error |
 |---|---|
 | HTTP 401/403, `Access denied` | `AuthenticationError` |
-| `could not find the function "X" in the module "Y"` | `CpanelFunctionUnavailable(PermanentProviderError)` |
+| `could not find the function "X" in the module "Y"` | `CpanelFunctionUnavailableError(PermanentProviderError)` |
 | `You do not have an email account named "…"` | `CpanelNotFoundError(PermanentProviderError)` |
 | `strength rating of "0" … too weak` | `CpanelWeakPasswordError(PermanentProviderError)` |
 | `The given serial number (…) does not match` | `DnsZoneChangedError(PermanentProviderError)` |

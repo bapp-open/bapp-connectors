@@ -711,7 +711,7 @@ git commit -m "feat(core): list_providers filtreaza si dupa capability, peste fa
 
 **Interfaces:**
 - Consumes: `HostingPort` (Task 1), `DnsPort` (Task 2), `MailboxCapability` + `PanelLinkCapability` (Task 3).
-- Produces: `manifest` (a `ProviderManifest` named `cpanel`, family `HOSTING`); errors `CpanelError`, `CpanelFunctionUnavailable`, `CpanelNotFoundError`, `CpanelWeakPasswordError`, `DnsZoneChangedError`, and the classifier `classify_uapi_error(message: str) -> ConnectorError`; pydantic models `UapiEnvelope`, `CpanelPop`, `CpanelResourceUsage`, `CpanelZoneLine`.
+- Produces: `manifest` (a `ProviderManifest` named `cpanel`, family `HOSTING`); errors `CpanelError`, `CpanelFunctionUnavailableError`, `CpanelNotFoundError`, `CpanelWeakPasswordError`, `DnsZoneChangedError`, and the classifier `classify_uapi_error(message: str) -> ConnectorError`; pydantic models `UapiEnvelope`, `CpanelPop`, `CpanelResourceUsage`, `CpanelZoneLine`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -792,7 +792,7 @@ class CpanelError(ProviderError):
     """Generic cPanel failure (transport or unexpected payload)."""
 
 
-class CpanelFunctionUnavailable(PermanentProviderError):
+class CpanelFunctionUnavailableError(PermanentProviderError):
     """The server does not expose this UAPI module or function."""
 
 
@@ -828,7 +828,7 @@ def classify_uapi_error(message: str) -> ConnectorError:
     if _WEAK_PASSWORD.search(message):
         return CpanelWeakPasswordError(message)
     if _FUNCTION_MISSING.search(message):
-        return CpanelFunctionUnavailable(message)
+        return CpanelFunctionUnavailableError(message)
     if _NOT_FOUND.search(message):
         return CpanelNotFoundError(message)
     if _DENIED.search(message):
