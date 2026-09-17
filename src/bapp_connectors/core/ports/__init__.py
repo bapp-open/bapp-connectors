@@ -3,6 +3,7 @@
 from .ads import AdsPort
 from .base import BasePort
 from .courier import CourierPort
+from .dns import DnsPort
 from .email import EmailPort
 from .feed import FeedPort
 from .hosting import HostingPort
@@ -18,6 +19,7 @@ __all__ = [
     "AdsPort",
     "BasePort",
     "CourierPort",
+    "DnsPort",
     "EmailPort",
     "FeedPort",
     "FileInfo",

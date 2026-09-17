@@ -22,6 +22,7 @@ class ProviderFamily(StrEnum):
     ADS = "ads"
     NETWORK = "network"
     HOSTING = "hosting"
+    DNS = "dns"
 
 
 class BackoffStrategy(StrEnum):

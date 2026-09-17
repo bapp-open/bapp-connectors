@@ -25,6 +25,7 @@ from .base import (
     PaginatedResult,
     ProviderMeta,
 )
+from .dns import DnsRecord, DnsZone, DnsZoneSnapshot
 from .email import (
     EmailAddress,
     EmailAttachmentContent,
@@ -127,6 +128,9 @@ __all__ = [
     "DeliveryStatus",
     "DetectedDnsAllowlist",
     "DnsAllowlist",
+    "DnsRecord",
+    "DnsZone",
+    "DnsZoneSnapshot",
     "EmailAddress",
     "EmailAttachmentContent",
     "EmailAttachmentInfo",
