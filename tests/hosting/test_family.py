@@ -53,3 +53,18 @@ def test_port_is_abstract():
         "validate_credentials",
         "test_connection",
     } <= HostingPort.__abstractmethods__
+
+
+def test_capabilities_are_plain_abcs():
+    from bapp_connectors.core.capabilities import MailboxCapability, PanelLinkCapability
+
+    assert issubclass(MailboxCapability, ABC)
+    assert not issubclass(MailboxCapability, BasePort), "a capability is not a port"
+    assert set(MailboxCapability.__abstractmethods__) == {
+        "list_mailboxes",
+        "create_mailbox",
+        "delete_mailbox",
+        "set_mailbox_quota",
+        "set_mailbox_password",
+    }
+    assert set(PanelLinkCapability.__abstractmethods__) == {"get_panel_link", "get_webmail_link"}

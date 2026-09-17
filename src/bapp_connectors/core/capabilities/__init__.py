@@ -8,7 +8,9 @@ from .financial import FinancialCapability
 from .image_generation import ImageGenerationCapability
 from .inbox import InboxCapability
 from .invoice_attach import InvoiceAttachmentCapability
+from .mailbox import MailboxCapability
 from .oauth import OAuthCapability, OAuthTokens
+from .panel_link import PanelLinkCapability
 from .product_feed import FeedFormat, FeedUploadCapability, ProductFeedCapability
 from .product_lookup import ProductLookupCapability
 from .product_management import (
@@ -45,8 +47,10 @@ __all__ = [
     "ImageGenerationCapability",
     "InboxCapability",
     "InvoiceAttachmentCapability",
+    "MailboxCapability",
     "OAuthCapability",
     "OAuthTokens",
+    "PanelLinkCapability",
     "ProductCreationCapability",
     "ProductFeedCapability",
     "ProductFullUpdateCapability",
