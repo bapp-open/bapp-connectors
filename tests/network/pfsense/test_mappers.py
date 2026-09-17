@@ -76,6 +76,30 @@ def test_map_clients_merges_leases_and_arp_and_filters_by_cidr():
     assert sorted(c.ip for c in only_elevi) == ["172.16.199.10", "172.16.199.11"]
 
 
+def test_null_fields_from_php_fall_back_to_defaults():
+    """pfSense trimite `null` pentru valorile absente (lease static fără `cid`, interfață fără range DHCP)."""
+    leases = [
+        {"act": "active", "type": "static", "ip": "172.16.199.50", "mac": "aa:bb:cc:dd:ee:ff",
+         "cid": None, "hostname": None, "online": None, "starts": None, "ends": None},
+    ]
+    clients = map_clients(leases, "", cidr=None)
+    assert len(clients) == 1
+    assert clients[0].ip == "172.16.199.50"
+    assert clients[0].hostname == "" and clients[0].lease_ends == "" and clients[0].online is False
+    assert clients[0].extra["lease_type"] == "static"
+
+    segments = map_segments([
+        {"ref": "opt3", "descr": None, "ip": "172.16.198.1", "subnet": 22,
+         "dhcp_from": None, "dhcp_to": None, "dhcp_enabled": None},
+    ])
+    assert segments[0].name == "opt3"  # fără descriere, cade pe ref
+    assert segments[0].dhcp_range == "" and segments[0].cidr == "172.16.196.0/22"
+
+    info = map_device_info({"hostname": "RM-FW-01", "version": None, "platform": None, "uptime": None})
+    assert info.hostname == "RM-FW-01" and info.version == "" and info.model == ""
+    assert info.uptime_seconds is None
+
+
 def test_segment_ref_for():
     segs = map_segments(INTERFACES)
     assert segment_ref_for("10.10.197.13", segs) == "lan"
