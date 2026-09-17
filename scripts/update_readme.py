@@ -80,6 +80,8 @@ def build_providers_table(providers: dict[str, list[dict]]) -> str:
         "llm": "LLM",
         "feed": "Feed",
         "network": "Network",
+        "hosting": "Hosting",
+        "dns": "DNS",
     }
 
     lines = [

@@ -670,6 +670,13 @@ providers/accounting/
     └── ...
 ```
 
+### A provider may belong to one family and implement several ports
+
+`family` is the registry key and the label; it does not limit what an adapter can
+implement. List every port in `capabilities` and implement them all. cPanel is
+filed under `hosting` and also implements `DnsPort`, so a DNS UI finds it with
+`registry.list_providers(capability=DnsPort)` without knowing about hosting.
+
 ---
 
 ## Provider Checklist

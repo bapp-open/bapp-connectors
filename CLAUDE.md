@@ -6,7 +6,7 @@ This file provides context for Claude Code when working in this repository.
 
 Ports-and-adapters integration framework. Zero Django dependencies in the core package.
 
-### Provider Families (11)
+### Provider Families (13)
 
 | Family | Port | Providers |
 |--------|------|-----------|
@@ -21,6 +21,8 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 | social | `SocialPort` | TikTok, YouTube Shorts, Facebook Page, Instagram, Threads, LinkedIn Page, Pinterest |
 | ads | `AdsPort` | Facebook Ads, TikTok Ads, Google Ads, Microsoft Ads, LinkedIn Ads, Pinterest Ads |
 | network | `NetworkPort` | pfSense |
+| hosting | `HostingPort` | cPanel |
+| dns | `DnsPort` | cPanel (through its hosting connection) |
 
 ### Provider File Structure (7 files each)
 
@@ -44,6 +46,10 @@ providers/{family}/{provider}/
 - **LLM platform-key fallback:** `api_key` credential is `required=False`, adapter checks `credentials.api_key` OR `config.platform_api_key`
 - **Conditional registration:** SFTP, S3, and MobilPay providers only register if paramiko/boto3/pyOpenSSL are installed
 - **Universal social stats:** `SocialPostStats`/`SocialAccountStats` fields are `None` when a platform doesn't expose a metric (never 0); platform-specific metrics go in `extra`
+- **An adapter may implement several ports:** the manifest's `capabilities` list holds ports and
+  capabilities alike, and the registry only checks `issubclass`. cPanel is filed under `hosting`
+  but also satisfies `DnsPort`, so `registry.list_providers(capability=DnsPort)` finds it.
+  Family says what a provider *is*; ports say what it *can do*.
 - **Universal ads insights:** `AdsPort.get_insights(level, ...)` returns normalized `AdInsights` on the campaign → ad group → ad hierarchy (Meta "ad set" = TikTok "adgroup" = Google "ad group"); status changes go through `set_*_status`
 
 ### Optional Capabilities
