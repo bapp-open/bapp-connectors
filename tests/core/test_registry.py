@@ -131,3 +131,21 @@ def test_create_adapter_config_defaults_to_empty():
     reg.register(_DummyShopAdapter)
     adapter = reg.create_adapter("shop", "dummy", credentials={"token": "abc"})
     assert adapter.config == {}
+
+
+def test_list_providers_filters_by_capability():
+    import bapp_connectors.providers.shop.woocommerce  # noqa: F401  (registers the adapter)
+    from bapp_connectors.core.capabilities import WebhookCapability
+    from bapp_connectors.core.ports import ShopPort
+    from bapp_connectors.core.registry import registry
+
+    shop_manifests = registry.list_providers(capability=ShopPort)
+    assert shop_manifests, "at least one shop provider is registered"
+    assert all(ShopPort in m.capabilities for m in shop_manifests)
+
+    # family and capability compose
+    both = registry.list_providers(family="shop", capability=WebhookCapability)
+    assert all(m.family.value == "shop" and WebhookCapability in m.capabilities for m in both)
+
+    # unfiltered behaviour is unchanged
+    assert len(registry.list_providers()) >= len(shop_manifests)

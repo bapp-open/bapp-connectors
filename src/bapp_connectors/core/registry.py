@@ -146,13 +146,26 @@ class ProviderRegistry:
         # CUSTOM, API_KEY, OAUTH2 — adapter handles its own auth
         return NoAuth()
 
-    def list_providers(self, family: str | None = None) -> list[ProviderManifest]:
-        """List all registered provider manifests, optionally filtered by family."""
+    def list_providers(
+        self,
+        family: str | None = None,
+        capability: type | None = None,
+    ) -> list[ProviderManifest]:
+        """List registered provider manifests.
+
+        `family` filters by the family a provider is filed under. `capability`
+        filters by any port or capability interface the provider declares, which
+        crosses families on purpose: a hosting provider that also speaks DNS is
+        found by `capability=DnsPort` even though its family is `hosting`.
+        """
         manifests = []
         for _key, cls in self._adapters.items():
             manifest = cls.manifest
-            if family is None or manifest.family.value == family:
-                manifests.append(manifest)
+            if family is not None and manifest.family.value != family:
+                continue
+            if capability is not None and capability not in manifest.capabilities:
+                continue
+            manifests.append(manifest)
         return manifests
 
     def get_manifest(self, family: str, provider: str) -> ProviderManifest:
