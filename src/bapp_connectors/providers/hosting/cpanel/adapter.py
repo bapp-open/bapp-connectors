@@ -2,23 +2,28 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Sequence
 from urllib.parse import quote
 
 from bapp_connectors.core.capabilities import MailboxCapability, PanelLinkCapability
 from bapp_connectors.core.dto import (
     ConnectionTestResult,
+    DnsRecord,
+    DnsZone,
+    DnsZoneSnapshot,
     HostingAccount,
     HostingDomain,
     HostingResource,
     Mailbox,
     PanelLink,
 )
-from bapp_connectors.core.errors import ConnectorError
+from bapp_connectors.core.errors import ConnectorError, ValidationError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.http.auth import TokenAuth
 from bapp_connectors.core.http.rate_limit import RateLimiter
 from bapp_connectors.core.http.retry import RetryPolicy
-from bapp_connectors.core.ports import HostingPort
+from bapp_connectors.core.ports import DnsPort, HostingPort
 from bapp_connectors.providers.hosting.cpanel.client import CpanelUapiClient
 from bapp_connectors.providers.hosting.cpanel.manifest import manifest
 from bapp_connectors.providers.hosting.cpanel.mappers import (
@@ -26,13 +31,18 @@ from bapp_connectors.providers.hosting.cpanel.mappers import (
     map_domains,
     map_mailboxes,
     map_usages,
+    map_zone,
+    record_to_payload,
 )
 
 
-class CpanelAdapter(HostingPort, MailboxCapability, PanelLinkCapability):
+class CpanelAdapter(HostingPort, DnsPort, MailboxCapability, PanelLinkCapability):
     """A single cPanel account, reached over UAPI with an account API token."""
 
     manifest = manifest
+
+    # Exactly what `DNS/mass_edit_zone` accepts. SOA and NS are readable but not writable.
+    supported_record_types = ("A", "AAAA", "ALIAS", "CAA", "CNAME", "HTTPS", "MX", "SRV", "SVCB", "TXT")
 
     def __init__(
         self,
@@ -171,3 +181,43 @@ class CpanelAdapter(HostingPort, MailboxCapability, PanelLinkCapability):
             kind="webmail",
             single_sign_on=True,
         )
+
+    # -- DnsPort -------------------------------------------------------------------
+
+    def list_zones(self) -> list[DnsZone]:
+        """cPanel serves one zone per domain it hosts."""
+        return [DnsZone(zone=domain.domain) for domain in self.list_domains()]
+
+    def get_zone(self, zone: str) -> DnsZoneSnapshot:
+        return map_zone(zone, self.client.call("DNS", "parse_zone", zone=zone) or [])
+
+    def apply_changes(
+        self,
+        zone: str,
+        version: str,
+        *,
+        add: Sequence[DnsRecord] = (),
+        edit: Sequence[DnsRecord] = (),
+        remove: Sequence[str] = (),
+    ) -> DnsZoneSnapshot:
+        if not (add or edit or remove):
+            raise ValidationError("At least one change is required.")
+
+        for record in (*add, *edit):
+            if record.record_type not in self.supported_record_types:
+                raise ValidationError(
+                    f"cPanel cannot write {record.record_type} records. "
+                    f"Writable types: {', '.join(self.supported_record_types)}."
+                )
+
+        payload: dict = {"zone": zone, "serial": version}
+        if add:
+            payload["add"] = [json.dumps(record_to_payload(r)) for r in add]
+        if edit:
+            payload["edit"] = [json.dumps(record_to_payload(r, include_ref=True)) for r in edit]
+        if remove:
+            payload["remove"] = list(remove)
+
+        # A stale serial raises DnsZoneChangedError from the client's error mapping.
+        self.client.call("DNS", "mass_edit_zone", method="POST", **payload)
+        return self.get_zone(zone)
