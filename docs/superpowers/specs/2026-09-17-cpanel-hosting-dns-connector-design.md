@@ -40,8 +40,8 @@ inside `capabilities=[...]`, and `registry.register` (`registry.py:56`) only che
 
 ## Verified API surface
 
-Every endpoint below was called against a live cPanel account
-(`cluster6.pidginhost.net:2083`) on 2026-09-17. Shapes in this spec are the
+Every endpoint below was called against a live cPanel account on 2026-09-17,
+over the standard secure port 2083. Shapes in this spec are the
 observed ones, not the documented ones — the published docs for `mass_edit_zone`
 are 404 at the time of writing.
 
@@ -87,7 +87,7 @@ Recovered from the server's own validation errors:
 zone    required
 serial  required, enforced:
         "The given serial number (1) does not match the DNS zone's serial
-         number (2026021401). Refresh your view of the DNS zone, then resubmit."
+         number (2026010101). Refresh your view of the DNS zone, then resubmit."
 add     {dname, ttl, record_type, data}   — data MUST be an array
 edit    {line_index, dname, ttl, record_type, data}
 remove  line_index (scalar)
@@ -380,7 +380,7 @@ allow_multiple=True,
 base_url="https://cpanel.example:2083/",      # placeholder, as pfSense and Woo do
 auth=AuthConfig(strategy=AuthStrategy.CUSTOM, required_fields=[
     CredentialField(name="hostname", label="Server", role="endpoint",
-                    help_text="e.g. cluster6.pidginhost.net"),
+                    help_text="e.g. cpanel.example.net"),
     CredentialField(name="username", label="cPanel user"),
     CredentialField(name="token", label="API token", sensitive=True),
 ]),
@@ -401,7 +401,7 @@ webhooks=WebhookConfig(supported=False),
 `AuthStrategy.CUSTOM` because the framework's `TOKEN` strategy emits
 `Authorization: <token>`, while UAPI wants `Authorization: cpanel user:token`.
 `role="endpoint"` on `hostname` lets the UI label the connection
-"cPanel · cluster6.pidginhost.net", as WooCommerce does with `domain`.
+"cPanel · cpanel.example.net", as WooCommerce does with `domain`.
 
 ### `adapter.py`
 
@@ -515,9 +515,8 @@ Cases that get a dedicated test because each one fails silently:
 
 ### Live-write policy
 
-The available test account (`scoala161ro` on `cluster6`) is a **school's production
-account** with five real mailboxes, one at 84% of quota, and a live DNS zone. No
-test writes to it.
+The account available for testing is a **live production account** with real
+mailboxes and a real DNS zone serving a real site. No test writes to it.
 
 Integration tests are read-only by default, gated on `CPANEL_HOSTNAME`,
 `CPANEL_USERNAME`, `CPANEL_TOKEN`. Write coverage is unit-level via `FakeHttpClient`.
