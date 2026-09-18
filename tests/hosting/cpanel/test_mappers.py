@@ -130,3 +130,28 @@ def test_payload_for_an_edit_carries_the_line_index():
         DnsRecord(ref="13", name="www", record_type="A", ttl=300, value="192.0.2.11"), include_ref=True
     )
     assert payload["line_index"] == 13
+
+
+def test_an_empty_mailbox_reports_its_figures_as_numbers_not_strings():
+    # cPanel sends "0.08" / "80052" as strings for a mailbox that has mail in it, but
+    # a plain int 0 for one that is empty. A str-only model rejects the whole listing.
+    raw = [
+        {
+            "email": "empty@example.test",
+            "login": "empty@example.test",
+            "user": "empty",
+            "domain": "example.test",
+            "diskused": 0,
+            "_diskused": 0,
+            "diskquota": "1024.00",
+            "_diskquota": "1073741824",
+            "diskusedpercent": 0,
+            "diskusedpercent_float": 0.0,
+            "suspended_login": None,
+            "suspended_incoming": None,
+        }
+    ]
+    box = map_mailboxes(raw)[0]
+    assert box.disk_used == Decimal("0")
+    assert box.disk_quota == Decimal("1073741824")
+    assert box.suspended_login is False

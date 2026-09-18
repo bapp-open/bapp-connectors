@@ -47,10 +47,12 @@ class CpanelPop(BaseModel):
     email: str
     login: str = ""
     domain: str = ""
-    diskused: str | None = None
-    diskquota: str | None = None
-    raw_disk_used: str | None = Field(default=None, alias="_diskused")
-    raw_disk_quota: str | None = Field(default=None, alias="_diskquota")
+    diskused: str | float | int | None = None
+    diskquota: str | float | int | None = None
+    raw_disk_used: str | float | int | None = Field(default=None, alias="_diskused")
+    raw_disk_quota: str | float | int | None = Field(default=None, alias="_diskquota")
+    """Strings for a mailbox with mail in it ("0.08", "80052"), a plain int 0 for an
+    empty one. Declaring only str rejects the whole listing over a single empty box."""
     diskusedpercent_float: float | None = None
     suspended_login: int | None = None
     suspended_incoming: int | None = None
