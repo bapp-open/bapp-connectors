@@ -14,7 +14,10 @@ from tests.fake_http import FakeHttpClient
 def make_client(response):
     http = FakeHttpClient()
     http.add(None, "execute/", response)
-    return CpanelUapiClient(http_client=http), http
+    client = CpanelUapiClient(
+        http_client=http, hostname="cpanel.example.net", username="exampleuser", token="tok"
+    )
+    return client, http
 
 
 def test_unwraps_data_on_success():
@@ -57,7 +60,7 @@ def test_reads_use_get_with_query_params():
     client.call("Email", "list_pops_with_disk", domain="example.test")
     call = http.calls[-1]
     assert call.method == "GET"
-    assert call.path == "execute/Email/list_pops_with_disk"
+    assert call.path == "https://cpanel.example.net:2083/execute/Email/list_pops_with_disk"
     assert call.kwargs["params"] == {"domain": "example.test"}
 
 
@@ -74,3 +77,15 @@ def test_none_params_are_dropped():
     client, http = make_client({"status": 1, "data": [], "errors": None})
     client.call("Email", "list_pops_with_disk", domain=None)
     assert http.calls[-1].kwargs["params"] == {}
+
+
+def test_url_is_absolute_so_the_injected_client_base_url_cannot_redirect_it():
+    client, http = make_client({"status": 1, "data": [], "errors": None})
+    client.call("DomainInfo", "list_domains")
+    assert http.calls[-1].path == "https://cpanel.example.net:2083/execute/DomainInfo/list_domains"
+
+
+def test_authorization_header_is_set_by_the_client_itself():
+    client, http = make_client({"status": 1, "data": [], "errors": None})
+    client.call("DomainInfo", "list_domains")
+    assert http.calls[-1].kwargs["headers"]["Authorization"] == "cpanel exampleuser:tok"

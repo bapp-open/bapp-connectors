@@ -405,24 +405,20 @@ webhooks=WebhookConfig(supported=False),
 
 ### `adapter.py`
 
-Rebuilds the HTTP client against the real host, the way WooCommerce does
-(`shop/woocommerce/adapter.py:147`):
+**The transport carries the host and the credentials itself.** `registry.create_adapter`
+*always* injects a `ResilientHttpClient` built from the manifest's placeholder
+`base_url`, and for `AuthStrategy.CUSTOM` it builds that client with `NoAuth`
+(`registry.py:146`). An adapter that only rebuilds the client when none was injected
+therefore never rebuilds in production: every request goes to the placeholder host
+with no `Authorization` header. This shipped in 0.37.0 and broke the first real
+connection; fixed in 0.37.1.
 
-```python
-http_client = ResilientHttpClient(
-    base_url=f"https://{hostname}:{port}/",
-    auth=TokenAuth(token=f"{username}:{token}", prefix="cpanel"),
-    retry_policy=..., rate_limiter=...,      # carried over from the manifest
-    provider_name="cpanel",
-)
-```
-
-No custom auth class is needed: `TokenAuth(prefix="cpanel")` already produces the
-exact header. Unlike WooCommerce, which drops the registry's retry policy and rate
-limiter when it rebuilds, this adapter passes both through. WooCommerce itself is
-left alone — out of scope here.
-
-`supported_record_types = ("A", "AAAA", "ALIAS", "CAA", "CNAME", "HTTPS", "MX", "SRV", "SVCB", "TXT")`
+So `CpanelUapiClient` holds `hostname`, `username`, `token` and `port`, builds an
+**absolute** url per call (`ResilientHttpClient._build_url` passes absolute urls
+through untouched) and sets its own `Authorization: cpanel user:token` header. The
+injected client contributes only its retry policy and rate limiter. This is the shape
+pfSense arrives at as well — its client builds absolute urls per endpoint — and it
+removes the fragile question of who owns the base url.
 
 ### `client.py`
 
@@ -447,8 +443,15 @@ reach the server's access log.
 | `could not find the function "X" in the module "Y"` | `CpanelFunctionUnavailableError(PermanentProviderError)` |
 | `You do not have an email account named "…"` | `CpanelNotFoundError(PermanentProviderError)` |
 | `strength rating of "0" … too weak` | `CpanelWeakPasswordError(PermanentProviderError)` |
+| DNS failure, refused connection, TLS, timeout | `CpanelUnreachableError(ProviderError)` |
 | `The given serial number (…) does not match` | `DnsZoneChangedError(PermanentProviderError)` |
 | HTTP 429/5xx, timeouts | retryable, via `RetryConfig` |
+
+`CpanelUnreachableError` exists because `ResilientHttpClient` **re-raises transport
+failures unwrapped** (`core/http/client.py:155`). Left raw, a `requests.ConnectionError`
+escapes the framework's error hierarchy and surfaces as a 500 in the host application
+rather than as a failed connection test. The client wraps them at the source, so every
+adapter method benefits, not just `test_connection`.
 
 `CpanelWeakPasswordError` and `DnsZoneChangedError` are separate because both are
 recoverable *by the user* — one means "pick a stronger password", the other means

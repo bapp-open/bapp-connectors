@@ -16,6 +16,13 @@ class CpanelError(ProviderError):
     """Generic cPanel failure (transport or unexpected payload)."""
 
 
+class CpanelUnreachableError(ProviderError):
+    """The server could not be reached at all: DNS, TLS, refused connection, timeout.
+
+    Distinct from an error the server itself reported — nothing was executed.
+    """
+
+
 class CpanelFunctionUnavailableError(PermanentProviderError):
     """The server does not expose this UAPI module or function."""
 

@@ -39,8 +39,9 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Network** | pfSense | 1 |
 | **Ads** | Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads | 6 |
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
+| **Hosting** | cPanel | 1 |
 | **Social** | Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts | 7 |
-| | **Total** | **63** |
+| | **Total** | **64** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -249,6 +250,7 @@ packages/connectors/
 │       ├── network/       # pfSense
 │       ├── ads/           # Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads
 │       ├── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
+│       ├── hosting/       # cPanel
 │       └── social/        # Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts
 <!-- STRUCTURE:END -->
 ├── packages/django/        # Django integration (separate uv workspace)

@@ -184,3 +184,76 @@ def test_registered_under_hosting_but_discoverable_as_a_dns_provider():
     assert registry.is_registered("hosting", "cpanel")
     names = {m.name for m in registry.list_providers(capability=DnsPort)}
     assert "cpanel" in names, "a hosting provider must be findable by its DNS port"
+
+
+# ── Regression: the registry always injects a client built from the manifest's
+# placeholder base_url with NoAuth (CUSTOM strategy gets no auth). The adapter must
+# not inherit either. Production sent every request to cpanel.example.net with no
+# Authorization header while the stored hostname was a real server.
+
+
+def test_requests_go_to_the_credential_host_not_the_manifest_placeholder(http):
+    adapter = CpanelAdapter(credentials=CREDENTIALS, http_client=http, config={})
+    adapter.list_mailboxes()
+    path = http.calls[-1].path
+    assert path.startswith("https://cpanel.example.net:2083/execute/"), (
+        f"request must target the credential host, got {path!r}"
+    )
+
+
+def test_every_call_carries_the_cpanel_authorization_header(http):
+    adapter = CpanelAdapter(credentials=CREDENTIALS, http_client=http, config={})
+    adapter.list_mailboxes()
+    headers = http.calls[-1].kwargs.get("headers") or {}
+    assert headers.get("Authorization") == "cpanel exampleuser:not-a-real-token"
+
+
+def test_a_registry_built_client_does_not_hijack_the_host():
+    # Exactly how registry.create_adapter builds it for an AuthStrategy.CUSTOM provider.
+    from bapp_connectors.core.http import ResilientHttpClient
+    from bapp_connectors.core.http.auth import NoAuth
+    from bapp_connectors.providers.hosting.cpanel.manifest import manifest as cpanel_manifest
+
+    injected = ResilientHttpClient(base_url=cpanel_manifest.base_url, auth=NoAuth(), provider_name="cpanel")
+    adapter = CpanelAdapter(
+        credentials={"hostname": "real.example.org", "username": "u", "token": "t"},
+        http_client=injected,
+        config={},
+    )
+    url = adapter.client.build_url("DomainInfo", "list_domains")
+    assert url == "https://real.example.org:2083/execute/DomainInfo/list_domains", url
+    assert adapter.client.auth_header() == "cpanel u:t"
+
+
+def test_test_connection_reports_an_unreachable_host_instead_of_raising():
+    # requests raises ConnectionError for DNS failures and refused connections, and
+    # ResilientHttpClient re-raises it unwrapped (core/http/client.py). Catching only
+    # ConnectorError let it escape as a 500 instead of a failed connection test.
+    import requests
+
+    class ExplodingHttpClient(FakeHttpClient):
+        def call(self, method, path, **kwargs):
+            raise requests.exceptions.ConnectionError("Failed to resolve 'nope.example.org'")
+
+    adapter = CpanelAdapter(
+        credentials={"hostname": "nope.example.org", "username": "u", "token": "t"},
+        http_client=ExplodingHttpClient(),
+        config={},
+    )
+    result = adapter.test_connection()
+    assert result.success is False
+    assert "nope.example.org" in result.message
+
+
+def test_test_connection_reports_bad_credentials_instead_of_raising(http):
+    from bapp_connectors.providers.hosting.cpanel.errors import CpanelError
+
+    class DenyingHttpClient(FakeHttpClient):
+        def call(self, method, path, **kwargs):
+            return {"status": 0, "data": None, "errors": ["Access denied"]}
+
+    adapter = CpanelAdapter(credentials=CREDENTIALS, http_client=DenyingHttpClient(), config={})
+    result = adapter.test_connection()
+    assert result.success is False
+    assert "Access denied" in result.message
+    assert CpanelError  # imported for clarity about which hierarchy is in play

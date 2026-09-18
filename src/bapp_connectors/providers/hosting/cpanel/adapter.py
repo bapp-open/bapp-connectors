@@ -20,7 +20,6 @@ from bapp_connectors.core.dto import (
 )
 from bapp_connectors.core.errors import ConnectorError, ValidationError
 from bapp_connectors.core.http import ResilientHttpClient
-from bapp_connectors.core.http.auth import TokenAuth
 from bapp_connectors.core.http.rate_limit import RateLimiter
 from bapp_connectors.core.http.retry import RetryPolicy
 from bapp_connectors.core.ports import DnsPort, HostingPort
@@ -62,13 +61,13 @@ class CpanelAdapter(HostingPort, DnsPort, MailboxCapability, PanelLinkCapability
         self.verify_ssl = bool(config.get("verify_ssl", True))
         self.timeout = int(config.get("timeout", 30))
 
-        # The manifest carries a placeholder base_url; the real server comes from
-        # per-connection credentials. Rebuild the client, carrying the manifest's
-        # retry policy and rate limiter over rather than dropping them.
-        if http_client is None and self.hostname:
+        # `registry.create_adapter` always injects a client built from the manifest's
+        # placeholder base_url, and with NoAuth because the strategy is CUSTOM. The
+        # transport below therefore carries the real host and credentials itself; the
+        # injected client contributes only its retry policy and rate limiter.
+        if http_client is None:
             http_client = ResilientHttpClient(
                 base_url=f"https://{self.hostname}:{self.port}/",
-                auth=TokenAuth(token=f"{self.username}:{self.token}", prefix="cpanel"),
                 retry_policy=RetryPolicy(
                     max_retries=manifest.retry.max_retries,
                     backoff=manifest.retry.backoff,
@@ -85,7 +84,15 @@ class CpanelAdapter(HostingPort, DnsPort, MailboxCapability, PanelLinkCapability
                 provider_name="cpanel",
             )
 
-        self.client = CpanelUapiClient(http_client=http_client, timeout=self.timeout, verify_ssl=self.verify_ssl)
+        self.client = CpanelUapiClient(
+            http_client=http_client,
+            hostname=self.hostname,
+            username=self.username,
+            token=self.token,
+            port=self.port,
+            timeout=self.timeout,
+            verify_ssl=self.verify_ssl,
+        )
 
     # -- BasePort ------------------------------------------------------------------
 
