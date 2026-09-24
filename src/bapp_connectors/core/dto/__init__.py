@@ -78,6 +78,7 @@ from .product import (
     ProductVariant,
     RelatedProductLink,
 )
+from .returns import ReturnKind, ShopReturn, ShopReturnLine, ShopReturnRefund
 from .saved_payment import CardBrand, SavedPaymentMethod
 from .shipment import AWBLabel, Parcel, Shipment, ShipmentStatus, TrackingEvent
 from .shop_rules import CustomerPricing, CustomerProductPercent, OrderValueTier, ShopRules
@@ -189,9 +190,13 @@ __all__ = [
     "PublishStatus",
     "Refund",
     "RelatedProductLink",
+    "ReturnKind",
     "SavedPaymentMethod",
     "Shipment",
     "ShipmentStatus",
+    "ShopReturn",
+    "ShopReturnLine",
+    "ShopReturnRefund",
     "ShopRules",
     "SocialAccount",
     "SocialAccountStats",

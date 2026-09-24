@@ -22,6 +22,7 @@ from .product_management import (
     RelatedProductCapability,
     VariantManagementCapability,
 )
+from .returns import ReturnsCapability
 from .rich_messaging import RichMessagingCapability
 from .saved_payment import SavedPaymentCapability
 from .settings_detection import SettingsDetectionCapability
@@ -58,6 +59,7 @@ __all__ = [
     "ProductFullUpdateCapability",
     "ProductLookupCapability",
     "RelatedProductCapability",
+    "ReturnsCapability",
     "RichMessagingCapability",
     "SavedPaymentCapability",
     "SettingsDetectionCapability",
