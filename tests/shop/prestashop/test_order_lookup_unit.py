@@ -24,3 +24,11 @@ def test_not_found_is_none():
     fake = FakeHttpClient()
     fake.add("GET", "orders", {"orders": []})
     assert _adapter(fake).find_order_by_reference("NOPE") is None
+
+
+def test_digit_reference_not_found_does_not_fall_back_to_internal_id():
+    fake = FakeHttpClient()
+    fake.add("GET", "orders", {"orders": []})
+    assert _adapter(fake).find_order_by_reference("1001") is None
+    assert len(fake.calls) == 1
+    assert fake.calls[0].path == "orders"

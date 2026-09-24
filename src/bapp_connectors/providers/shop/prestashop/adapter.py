@@ -186,10 +186,6 @@ class PrestaShopShopAdapter(
         for data in raw:
             if str(data.get("reference", "")).upper() == reference:
                 return self._enrich_order(data)
-        if reference.isdigit():
-            data = self.client.get_order(int(reference))
-            if data:
-                return self._enrich_order(data)
         return None
 
     def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
