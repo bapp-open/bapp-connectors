@@ -95,6 +95,10 @@ class TrendyolApiClient:
         content = res.get("content", []) if isinstance(res, dict) else []
         return content[0] if content else {}
 
+    def get_claims(self, start_ms: int, end_ms: int, page: int = 0, size: int = 50, **kwargs) -> dict:
+        params = {"startDate": start_ms, "endDate": end_ms, "page": page, "size": size}
+        return self._call("GET", f"order/sellers/{self.seller_id}/claims", params=params, **kwargs)
+
     # ── Products ──
 
     def get_products(self, page: int = 0, per_page: int = 100, approved: bool | None = None, **kwargs) -> dict:

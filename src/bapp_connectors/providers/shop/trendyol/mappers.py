@@ -23,6 +23,10 @@ from bapp_connectors.core.dto import (
     PaymentType,
     Product,
     ProviderMeta,
+    ReturnKind,
+    ShopReturn,
+    ShopReturnLine,
+    ShopReturnRefund,
     WebhookEvent,
     WebhookEventType,
 )
@@ -343,6 +347,53 @@ def settlements_from_trendyol(response: dict, query_type: str = "") -> Paginated
         cursor=str(page + 1) if page + 1 < total_pages else None,
         has_more=page + 1 < total_pages,
         total=response.get("totalElements"),
+    )
+
+
+# ── Returns (claims) ──
+
+TRENDYOL_CLAIM_PROGRESS = ["Created", "WaitingInAction", "WaitingFraudCheck", "InAnalysis", "Unresolved", "Rejected", "Accepted"]
+TRENDYOL_STOREFRONT_CURRENCY = {"RO": "RON", "GR": "EUR", "BG": "EUR", "HU": "HUF", "CZ": "CZK", "SK": "EUR", "PL": "PLN", "DE": "EUR"}
+
+
+def _least_advanced(statuses: list[str]) -> str:
+    live = [s for s in statuses if s != "Cancelled"]
+    if not live:
+        return "Cancelled" if statuses else ""
+    rank = {s: i for i, s in enumerate(TRENDYOL_CLAIM_PROGRESS)}
+    return min(live, key=lambda s: rank.get(s, -1))  # status necunoscut = cel mai putin avansat
+
+
+def return_from_trendyol(data: dict, currency: str = "") -> ShopReturn:
+    lines, all_statuses, accepted_total = [], [], Decimal("0")
+    for item in data.get("items") or []:
+        order_line = item.get("orderLine") or {}
+        units = item.get("claimItems") or []
+        statuses = [(u.get("claimItemStatus") or {}).get("name", "") for u in units]
+        all_statuses.extend(statuses)
+        reason = (units[0].get("customerClaimItemReason") if units else None) or {}
+        notes = list(dict.fromkeys((u.get("customerNote") or "").strip() for u in units if (u.get("customerNote") or "").strip()))
+        price = Decimal(str(order_line["price"])) if order_line.get("price") is not None else None
+        if price is not None:
+            accepted_total += price * statuses.count("Accepted")
+        lines.append(ShopReturnLine(
+            external_line_id=str(order_line.get("id", "")), sku=str(order_line.get("merchantSku") or ""),
+            barcode=str(order_line.get("barcode") or ""), name=order_line.get("productName") or "",
+            quantity=Decimal(len(units) or 1), unit_price=price, reason_code=reason.get("code") or "",
+            reason_label=reason.get("name") or "", customer_note="\n".join(notes), unit_statuses=statuses,
+        ))
+    status = _least_advanced(all_statuses)
+    name = " ".join(p for p in ((data.get("customerFirstName") or "").strip(), (data.get("customerLastName") or "").strip()) if p)
+    awb = data.get("cargoTrackingNumber")
+    return ShopReturn(
+        external_id=str(data.get("claimId") or data.get("id") or ""), external_order_id=str(data.get("orderNumber") or ""),
+        kind=ReturnKind.RETURN, status_raw=status, status_label=status,
+        requested_at=_ms_to_datetime(data.get("claimDate")), customer_name=name,
+        comment="\n".join(line.customer_note for line in lines if line.customer_note),
+        awb=str(awb) if awb else "", courier=data.get("cargoProviderName") or "",
+        tracking_url=data.get("cargoTrackingLink") or "",
+        refund=ShopReturnRefund(amount=accepted_total, currency=currency, estimated=True) if accepted_total else None,
+        lines=lines, raw=data,
     )
 
 

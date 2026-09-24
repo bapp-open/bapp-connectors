@@ -13,6 +13,7 @@ from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
     FinancialCapability,
     InvoiceAttachmentCapability,
+    ReturnsCapability,
     ShippingCapability,
     WebhookCapability,
 )
@@ -26,6 +27,7 @@ from bapp_connectors.core.dto import (
     PaginatedResult,
     Product,
     ProductUpdate,
+    ShopReturn,
     WebhookEvent,
 )
 from bapp_connectors.core.http import ResilientHttpClient
@@ -33,9 +35,11 @@ from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.providers.shop.trendyol.client import TrendyolApiClient
 from bapp_connectors.providers.shop.trendyol.manifest import TRENDYOL_LIVE_URL, TRENDYOL_STAGING_URL, manifest
 from bapp_connectors.providers.shop.trendyol.mappers import (
+    TRENDYOL_STOREFRONT_CURRENCY,
     order_from_trendyol,
     orders_from_trendyol,
     products_from_trendyol,
+    return_from_trendyol,
     settlements_from_trendyol,
     webhook_event_from_trendyol,
 )
@@ -45,7 +49,7 @@ if TYPE_CHECKING:
     from decimal import Decimal
 
 
-class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapability, WebhookCapability, FinancialCapability, ShippingCapability):
+class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapability, WebhookCapability, FinancialCapability, ShippingCapability, ReturnsCapability):
     """
     Trendyol marketplace adapter.
 
@@ -55,6 +59,7 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
     - InvoiceAttachmentCapability: attach invoices to orders
     - WebhookCapability: register, list, and parse webhooks
     - FinancialCapability: settlements and financial transactions
+    - ReturnsCapability: read-only access to return requests (claims)
     """
 
     manifest = manifest
@@ -311,6 +316,24 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
             size=size,
         )
         return settlements_from_trendyol(response, query_type=transaction_type)
+
+    # ── ReturnsCapability ──
+
+    CLAIMS_PAGE_SIZE = 50
+    CLAIMS_MAX_PAGES = 50
+
+    def get_returns(self, since: datetime, until: datetime) -> list[ShopReturn]:
+        currency = TRENDYOL_STOREFRONT_CURRENCY.get(self.country, "")
+        start_ms, end_ms = int(since.timestamp() * 1000), int(until.timestamp() * 1000)
+        out: list[ShopReturn] = []
+        for page in range(self.CLAIMS_MAX_PAGES):
+            res = self.client.get_claims(start_ms, end_ms, page=page, size=self.CLAIMS_PAGE_SIZE)
+            content = res.get("content", []) if isinstance(res, dict) else []
+            out.extend(return_from_trendyol(claim, currency=currency) for claim in content)
+            total_pages = int(res.get("totalPages") or 0) if isinstance(res, dict) else 0
+            if not content or page + 1 >= total_pages:
+                break
+        return out
 
     # ── WebhookCapability ──
 
