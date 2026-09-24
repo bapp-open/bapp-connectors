@@ -12,6 +12,7 @@ from bapp_connectors.core.capabilities import (
     AttributeManagementCapability,
     BulkUpdateCapability,
     CategoryManagementCapability,
+    OrderLookupCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     ShippingCapability,
@@ -74,6 +75,7 @@ class GomagShopAdapter(
     CategoryManagementCapability,
     AttributeManagementCapability,
     ShippingCapability,
+    OrderLookupCapability,
 ):
     """
     Gomag shop adapter.
@@ -159,6 +161,22 @@ class GomagShopAdapter(
         else:
             data = response
         return order_from_gomag(data, status_mapper=self._status_mapper)
+
+    # ── OrderLookupCapability ──
+
+    def find_order_by_reference(self, reference: str) -> Order | None:
+        reference = (reference or "").strip().lstrip("#")
+        if not reference:
+            return None
+        response = self.client.get_order(reference)
+        orders = response.get("orders") if isinstance(response, dict) else None
+        if not isinstance(orders, dict) or not orders:
+            return None
+        for data in orders.values():
+            number = str(data.get("order_id") or data.get("number") or data.get("id", ""))
+            if number == reference:
+                return order_from_gomag(data, status_mapper=self._status_mapper)
+        return None
 
     def get_products(self, cursor: str | None = None) -> PaginatedResult[Product]:
         page = int(cursor) if cursor else 1

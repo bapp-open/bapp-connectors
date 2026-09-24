@@ -21,6 +21,7 @@ from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
     CategoryManagementCapability,
     OAuthCapability,
+    OrderLookupCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     VariantManagementCapability,
@@ -70,6 +71,7 @@ class ShopifyShopAdapter(
     BulkUpdateCapability,
     CategoryManagementCapability,
     OAuthCapability,
+    OrderLookupCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     VariantManagementCapability,
@@ -195,6 +197,20 @@ class ShopifyShopAdapter(
     def get_order(self, order_id: str) -> Order:
         data = self.client.get_order(int(order_id))
         return order_from_shopify(data, price_from_provider=self._price_from_provider, status_mapper=self._status_mapper)
+
+    # ── OrderLookupCapability ──
+
+    def find_order_by_reference(self, reference: str) -> Order | None:
+        reference = (reference or "").strip().lstrip("#")
+        if not reference:
+            return None
+        rows = self.client.get_orders(limit=5, params={"name": f"#{reference}"})
+        for data in rows:
+            if str(data.get("order_number", "")) == reference or data.get("name") == f"#{reference}":
+                return order_from_shopify(
+                    data, price_from_provider=self._price_from_provider, status_mapper=self._status_mapper,
+                )
+        return None
 
     def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         if status == OrderStatus.CANCELLED:

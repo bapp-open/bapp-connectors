@@ -13,6 +13,7 @@ from bapp_connectors.core.capabilities import (
     AttributeManagementCapability,
     BulkUpdateCapability,
     CategoryManagementCapability,
+    OrderLookupCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     VariantManagementCapability,
@@ -70,6 +71,7 @@ class PrestaShopShopAdapter(
     AttributeManagementCapability,
     VariantManagementCapability,
     WebhookCapability,
+    OrderLookupCapability,
 ):
     """
     PrestaShop webservice adapter.
@@ -173,6 +175,22 @@ class PrestaShopShopAdapter(
     def get_order(self, order_id: str) -> Order:
         data = self.client.get_order(int(order_id))
         return self._enrich_order(data)
+
+    # ── OrderLookupCapability ──
+
+    def find_order_by_reference(self, reference: str) -> Order | None:
+        reference = (reference or "").strip().lstrip("#").upper()
+        if not reference:
+            return None
+        raw = self.client.get_orders(options={"display": "full", "filter[reference]": f"[{reference}]"})
+        for data in raw:
+            if str(data.get("reference", "")).upper() == reference:
+                return self._enrich_order(data)
+        if reference.isdigit():
+            data = self.client.get_order(int(reference))
+            if data:
+                return self._enrich_order(data)
+        return None
 
     def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         ps_state = self._status_mapper.to_provider(status)
