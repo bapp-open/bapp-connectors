@@ -50,3 +50,8 @@ def test_paginates(adapter, fake):
         return [{**REFUND, "id": page * 1000 + i} for i in range(100 if page == 1 else 3)]
     fake.add("GET", "refunds", respond)
     assert len(adapter.get_returns(SINCE, UNTIL)) == 103
+
+
+def test_future_refunds_are_skipped(adapter, fake):
+    fake.add("GET", "refunds", [{**REFUND, "date_created_gmt": "2026-10-15T10:00:00"}])
+    assert adapter.get_returns(SINCE, UNTIL) == []

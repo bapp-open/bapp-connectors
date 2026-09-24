@@ -56,3 +56,10 @@ def test_old_returned_orders_are_skipped(adapter, fake):
         return {"hydra:member": [_order(1, "returned", updated="2026-08-01T10:00:00+00:00")]} if kwargs["params"]["page"] == 1 else {"hydra:member": []}
     fake.add("GET", "export_orders", respond)
     assert adapter.get_returns(SINCE, UNTIL) == []
+
+
+def test_future_returned_orders_are_skipped(adapter, fake):
+    def respond(method, path, kwargs):
+        return {"hydra:member": [_order(1, "returned", updated="2026-10-15T10:00:00+00:00")]} if kwargs["params"]["page"] == 1 else {"hydra:member": []}
+    fake.add("GET", "export_orders", respond)
+    assert adapter.get_returns(SINCE, UNTIL) == []

@@ -155,6 +155,6 @@ class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability, ReturnsCapability
                 if not bids or bids[0].get("status") != "returned":
                     continue
                 dto = return_from_okazii_order(row)
-                if dto.requested_at is None or dto.requested_at >= since:
+                if dto.requested_at is None or since <= dto.requested_at <= until:
                     out.append(dto)
         return out
