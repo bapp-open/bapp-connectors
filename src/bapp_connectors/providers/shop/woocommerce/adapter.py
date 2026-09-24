@@ -21,6 +21,7 @@ from bapp_connectors.core.capabilities import (
     BulkUpsertCapability,
     CategoryManagementCapability,
     OAuthCapability,
+    OrderLookupCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     ProductLookupCapability,
@@ -104,6 +105,7 @@ class WooCommerceShopAdapter(
     CategoryManagementCapability,
     AttributeManagementCapability,
     OAuthCapability,
+    OrderLookupCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     ProductLookupCapability,
@@ -293,6 +295,20 @@ class WooCommerceShopAdapter(
             price_from_provider=self._price_from_provider,
             status_mapper=self._status_mapper,
         )
+
+    # ── OrderLookupCapability ──
+
+    def find_order_by_reference(self, reference: str) -> Order | None:
+        reference = (reference or "").strip().lstrip("#")
+        if not reference:
+            return None
+        response = self.client.get_orders(per_page=20, params={"search": reference})
+        for data in response if isinstance(response, list) else []:
+            if str(data.get("number", data.get("id", ""))) == reference:
+                return order_from_woocommerce(
+                    data, price_from_provider=self._price_from_provider, status_mapper=self._status_mapper,
+                )
+        return None
 
     def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         woo_status = self._status_mapper.to_provider(status)

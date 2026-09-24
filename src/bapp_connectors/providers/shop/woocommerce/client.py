@@ -70,6 +70,7 @@ class WooCommerceApiClient:
         if order_id:
             params["include"] = order_id
 
+        params.update(kwargs.pop("params", {}))
         return self._call("GET", "orders", params=params, **kwargs)
 
     def get_order(self, order_id: str, **kwargs) -> dict:
