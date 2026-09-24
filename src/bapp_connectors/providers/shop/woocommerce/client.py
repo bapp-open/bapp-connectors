@@ -79,6 +79,14 @@ class WooCommerceApiClient:
     def update_order(self, order_id: str, data: dict, **kwargs) -> dict:
         return self._call("PUT", f"orders/{order_id}", json=data, **kwargs)
 
+    def get_refunds(self, page: int = 1, per_page: int = 100, after: str | None = None, before: str | None = None, **kwargs) -> list[dict]:
+        params: dict[str, Any] = {"page": page, "per_page": per_page, "dates_are_gmt": "true"}
+        if after:
+            params["after"] = after
+        if before:
+            params["before"] = before
+        return self._call("GET", "refunds", params=params, **kwargs)
+
     # ── Products ──
 
     def get_products(self, page: int = 1, per_page: int = 100, **kwargs) -> list[dict]:

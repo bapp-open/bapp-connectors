@@ -6,9 +6,10 @@ This is the main entry point for the Okazii integration.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.capabilities import InvoiceAttachmentCapability, ShippingCapability
+from bapp_connectors.core.capabilities import InvoiceAttachmentCapability, ReturnsCapability, ShippingCapability
 from bapp_connectors.core.dto import (
     AWBLabel,
     ConnectionTestResult,
@@ -16,6 +17,7 @@ from bapp_connectors.core.dto import (
     OrderStatus,
     PaginatedResult,
     Product,
+    ShopReturn,
 )
 from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
 from bapp_connectors.core.ports import ShopPort
@@ -25,6 +27,7 @@ from bapp_connectors.providers.shop.okazii.mappers import (
     order_from_okazii,
     orders_from_okazii,
     products_from_okazii,
+    return_from_okazii_order,
 )
 
 if TYPE_CHECKING:
@@ -32,7 +35,7 @@ if TYPE_CHECKING:
     from decimal import Decimal
 
 
-class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability, ShippingCapability):
+class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability, ReturnsCapability, ShippingCapability):
     """
     Okazii marketplace adapter.
 
@@ -131,3 +134,27 @@ class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability, ShippingCapabilit
     def get_awb_pdf(self, awb_id: str) -> bytes:
         """Download AWB label PDF. awb_id is the AWB tracking code."""
         return self.client.get_gdl_awb_pdf(awb_id)
+
+    # ── ReturnsCapability ──
+
+    RETURNS_LOOKBACK_DAYS = 60  # export_orders filtreaza dupa data crearii, returul vine mai tarziu
+    RETURNS_MAX_PAGES = 30
+
+    def get_returns(self, since: datetime, until: datetime) -> list[ShopReturn]:
+        date_from = (since - timedelta(days=self.RETURNS_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+        out: list[ShopReturn] = []
+        seen: set[str] = set()
+        for page in range(1, self.RETURNS_MAX_PAGES + 1):
+            rows = self.client.get_orders(params={"date_from": date_from, "date_to": until.strftime("%Y-%m-%d"), "page": page})
+            fresh = [r for r in rows if str(r.get("id")) not in seen]
+            if not fresh:  # pagina goala sau serverul ignora `page`
+                break
+            for row in fresh:
+                seen.add(str(row.get("id")))
+                bids = row.get("bids") or []
+                if not bids or bids[0].get("status") != "returned":
+                    continue
+                dto = return_from_okazii_order(row)
+                if dto.requested_at is None or dto.requested_at >= since:
+                    out.append(dto)
+        return out

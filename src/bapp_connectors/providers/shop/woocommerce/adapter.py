@@ -26,6 +26,7 @@ from bapp_connectors.core.capabilities import (
     ProductFullUpdateCapability,
     ProductLookupCapability,
     RelatedProductCapability,
+    ReturnsCapability,
     SettingsDetectionCapability,
     VariantManagementCapability,
     WebhookCapability,
@@ -46,6 +47,7 @@ from bapp_connectors.core.dto import (
     ProductUpdate,
     ProductVariant,
     RelatedProductLink,
+    ShopReturn,
     WebhookEvent,
 )
 from bapp_connectors.core.http import BasicAuth, ResilientHttpClient
@@ -68,6 +70,7 @@ from bapp_connectors.providers.shop.woocommerce.mappers import (
     product_update_to_woocommerce,
     products_from_woocommerce,
     related_products_from_woocommerce,
+    return_from_woocommerce_refund,
     variant_from_woocommerce,
     variant_to_woocommerce,
     webhook_event_from_woocommerce,
@@ -110,6 +113,7 @@ class WooCommerceShopAdapter(
     ProductFullUpdateCapability,
     ProductLookupCapability,
     RelatedProductCapability,
+    ReturnsCapability,
     SettingsDetectionCapability,
     VariantManagementCapability,
     WebhookCapability,
@@ -492,6 +496,27 @@ class WooCommerceShopAdapter(
             update_data["cross_sell_ids"] = cross_sell_ids
         if update_data:
             self.client.update_product(int(product_id), update_data)
+
+    # ── ReturnsCapability ──
+
+    REFUNDS_PAGE_SIZE = 100
+    REFUNDS_MAX_PAGES = 20
+
+    def get_returns(self, since: datetime, until: datetime) -> list[ShopReturn]:
+        fmt = "%Y-%m-%dT%H:%M:%S"
+        after, before = since.astimezone(UTC).strftime(fmt), until.astimezone(UTC).strftime(fmt)
+        out: list[ShopReturn] = []
+        for page in range(1, self.REFUNDS_MAX_PAGES + 1):
+            rows = self.client.get_refunds(page=page, per_page=self.REFUNDS_PAGE_SIZE, after=after, before=before)
+            rows = rows if isinstance(rows, list) else []
+            for row in rows:
+                dto = return_from_woocommerce_refund(row)
+                # filtru local: unele versiuni WooCommerce ignora after/before pe /refunds
+                if dto.requested_at is None or since <= dto.requested_at <= until:
+                    out.append(dto)
+            if len(rows) < self.REFUNDS_PAGE_SIZE:
+                break
+        return out
 
     # ── BulkUpdateCapability ──
 

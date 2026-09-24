@@ -29,6 +29,10 @@ from bapp_connectors.core.dto import (
     ProductVariant,
     ProviderMeta,
     RelatedProductLink,
+    ReturnKind,
+    ShopReturn,
+    ShopReturnLine,
+    ShopReturnRefund,
     WebhookEvent,
     WebhookEventType,
 )
@@ -572,4 +576,35 @@ def webhook_event_from_woocommerce(headers: dict, payload: dict) -> WebhookEvent
         idempotency_key=str(delivery_id) if delivery_id else "",
         received_at=datetime.now(UTC),
         extra={"resource": resource, "webhook_id": event_id},
+    )
+
+
+# ── Returns (refunds) ──
+
+def _woo_gmt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value).replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def return_from_woocommerce_refund(data: dict) -> ShopReturn:
+    lines = []
+    for li in data.get("line_items") or []:
+        price = li.get("price")
+        lines.append(ShopReturnLine(
+            external_line_id=str(li.get("id", "")), sku=str(li.get("sku") or ""), name=li.get("name") or "",
+            quantity=abs(Decimal(str(li.get("quantity") or 0))) or Decimal("1"),
+            unit_price=abs(Decimal(str(price))) if price not in (None, "") else None,
+        ))
+    at = _woo_gmt(data.get("date_created_gmt") or data.get("date_created"))
+    amount = abs(Decimal(str(data.get("amount") or 0)))
+    return ShopReturn(
+        external_id=str(data.get("id", "")), external_order_id=str(data.get("parent_id") or ""),
+        kind=ReturnKind.REFUND, status_raw="refunded", status_label="Refunded", requested_at=at,
+        comment=(data.get("reason") or "").strip(),
+        refund=ShopReturnRefund(amount=amount, type="refund", at=at) if amount else None,
+        lines=lines, raw=data,
     )

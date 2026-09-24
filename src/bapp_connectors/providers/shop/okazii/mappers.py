@@ -21,6 +21,9 @@ from bapp_connectors.core.dto import (
     PaymentType,
     Product,
     ProviderMeta,
+    ReturnKind,
+    ShopReturn,
+    ShopReturnLine,
 )
 
 
@@ -318,4 +321,21 @@ def products_from_okazii(products_list: list[dict]) -> PaginatedResult[Product]:
         cursor=None,
         has_more=False,
         total=len(products),
+    )
+
+
+# ── Returns (orders with status "returned") ──
+
+def return_from_okazii_order(data: dict) -> ShopReturn:
+    order = order_from_okazii(data)
+    at = _parse_datetime(data.get("updatedAt", "")) or _parse_datetime(data.get("createdAt", ""))
+    lines = [
+        ShopReturnLine(external_line_id=item.item_id, sku=item.sku or "", name=item.name,
+                       quantity=item.quantity, unit_price=item.unit_price)
+        for item in order.items if not (item.extra or {}).get("is_transport")
+    ]
+    return ShopReturn(
+        external_id=str(data.get("id", "")), external_order_id=str(data.get("id", "")),
+        kind=ReturnKind.ORDER_STATUS, status_raw="returned", status_label="Returned", requested_at=at,
+        customer_name=(order.billing.name if order.billing else "") or "", lines=lines, raw=data,
     )
