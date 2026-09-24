@@ -221,6 +221,12 @@ class EmagApiClient:
         raw = self._call("POST", "awb/save", data=data, timeout=60)
         return self._parse_response(raw)
 
+    def read_rma(self, page: int = 1, per_page: int = 100, **filters: Any) -> EmagApiResponse:
+        """Read return requests (RMA). Valid filters: date_start, date_end, order_id, emag_id,
+        request_status. The `id` filter is silently ignored by eMAG."""
+        payload: dict[str, Any] = {"currentPage": page, "itemsPerPage": per_page, **filters}
+        return self._post_read("rma/read", payload)
+
     def read_awb(
         self,
         emag_id: int | None = None,

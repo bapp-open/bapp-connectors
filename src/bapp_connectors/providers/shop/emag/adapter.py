@@ -13,6 +13,7 @@ from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
     FinancialCapability,
     InvoiceAttachmentCapability,
+    ReturnsCapability,
     ShippingCapability,
     WebhookCapability,
 )
@@ -27,6 +28,7 @@ from bapp_connectors.core.dto import (
     PaginatedResult,
     Product,
     ProductUpdate,
+    ShopReturn,
 )
 from bapp_connectors.core.dto.webhook import WebhookEvent
 from bapp_connectors.core.http import ResilientHttpClient
@@ -37,11 +39,13 @@ from bapp_connectors.providers.shop.emag.errors import EmagIPWhitelistError
 from bapp_connectors.providers.shop.emag.manifest import EMAG_BASE_URLS, manifest
 from bapp_connectors.providers.shop.emag.mappers import (
     EMAG_ORDER_STATUS_MAP,
+    EMAG_TZ,
     ORDER_STATUS_TO_EMAG,
     invoices_from_emag,
     order_from_emag,
     orders_from_emag,
     products_from_emag,
+    return_from_emag,
     transactions_from_emag_invoices,
     webhook_event_from_emag,
 )
@@ -54,7 +58,7 @@ if TYPE_CHECKING:
     from decimal import Decimal
 
 
-class EmagShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapability, WebhookCapability, FinancialCapability, ShippingCapability):
+class EmagShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapability, WebhookCapability, FinancialCapability, ShippingCapability, ReturnsCapability):
     """
     eMAG marketplace adapter.
 
@@ -63,6 +67,7 @@ class EmagShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapabilit
     - BulkUpdateCapability: batch product updates
     - InvoiceAttachmentCapability: attach invoices to orders
     - WebhookCapability: IPN callback parsing (no signature verification)
+    - ReturnsCapability: read-only access to return requests (RMA)
     """
 
     manifest = manifest
@@ -369,3 +374,29 @@ class EmagShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapabilit
             page=page,
         )
         return invoices_from_emag(response)
+
+    # ── ReturnsCapability ──
+
+    RMA_PAGE_SIZE = 100
+    RMA_MAX_PAGES = 50
+
+    def get_returns(self, since: datetime, until: datetime) -> list[ShopReturn]:
+        fmt = "%Y-%m-%d %H:%M:%S"
+        start, end = since.astimezone(EMAG_TZ).strftime(fmt), until.astimezone(EMAG_TZ).strftime(fmt)
+        out: list[ShopReturn] = []
+        for page in range(1, self.RMA_MAX_PAGES + 1):
+            resp = self.client.read_rma(page=page, per_page=self.RMA_PAGE_SIZE, date_start=start, date_end=end)
+            out.extend(return_from_emag(row) for row in resp.results)
+            if len(resp.results) < self.RMA_PAGE_SIZE:
+                break
+        return out
+
+    def resolve_return_awb(self, awb_ref: str) -> str:
+        if not awb_ref:
+            return ""
+        resp = self.client.read_awb(reservation_id=int(awb_ref))
+        for row in resp.results:
+            for awb in row.get("awb") or []:
+                if awb.get("awb_number"):
+                    return str(awb["awb_number"])
+        return ""

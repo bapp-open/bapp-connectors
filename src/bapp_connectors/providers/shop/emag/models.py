@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # ── Request models ──
 
@@ -130,3 +130,11 @@ class EmagApiResponse(BaseModel):
     no_of_items: int = Field(0, alias="noOfItems")
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("results", mode="before")
+    @classmethod
+    def _wrap_single_result(cls, value):
+        # awb/read (si alte citiri punctuale) intorc `results` ca obiect, nu lista.
+        if isinstance(value, dict):
+            return [value]
+        return value if value is not None else []

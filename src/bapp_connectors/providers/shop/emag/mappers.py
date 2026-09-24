@@ -11,6 +11,7 @@ import contextlib
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from bapp_connectors.core.dto import (
     Address,
@@ -28,6 +29,10 @@ from bapp_connectors.core.dto import (
     Product,
     ProductCategory,
     ProviderMeta,
+    ReturnKind,
+    ShopReturn,
+    ShopReturnLine,
+    ShopReturnRefund,
 )
 from bapp_connectors.core.dto.webhook import WebhookEvent, WebhookEventType
 from bapp_connectors.providers.shop.emag.models import EmagApiResponse
@@ -553,4 +558,66 @@ def transactions_from_emag_invoices(response: dict) -> PaginatedResult[Financial
         items=transactions,
         has_more=invoice_result.has_more,
         total=invoice_result.total,
+    )
+
+
+# ── Returns (RMA) ──
+
+EMAG_TZ = ZoneInfo("Europe/Bucharest")
+EMAG_RMA_STATUS_LABELS: dict[int, str] = {
+    1: "Incomplete", 2: "New", 3: "Acknowledged", 4: "Refused", 5: "Canceled", 6: "Received", 7: "Finalized",
+}
+
+
+def _emag_local_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, fmt).replace(tzinfo=EMAG_TZ)
+        except ValueError:
+            continue
+    return None
+
+
+def _emag_refund(status_history: list[dict]) -> ShopReturnRefund | None:
+    total, last = Decimal("0"), None
+    for event in status_history or []:
+        if event.get("code") != "refund":
+            continue
+        for req in event.get("requests") or []:
+            total += Decimal(str(req.get("amount") or 0))
+            last = req
+    if last is None:
+        return None
+    return ShopReturnRefund(
+        amount=total, currency=last.get("currency") or "", type=last.get("refund_type") or "",
+        status=last.get("refund_status") or "", at=_emag_local_dt(last.get("status_date") or last.get("created")),
+    )
+
+
+def return_from_emag(data: dict) -> ShopReturn:
+    lines = [
+        ShopReturnLine(
+            external_line_id=str(p.get("id", "")), sku=str(p.get("product_id") or ""),
+            name=p.get("product_name") or "", quantity=Decimal(str(p.get("quantity") or 1)),
+            reason_code=str(p.get("return_reason") or ""), customer_note=(p.get("observations") or "").strip(),
+        )
+        for p in data.get("products") or []
+    ]
+    notes = [line.customer_note for line in lines if line.customer_note]
+    if (data.get("observations") or "").strip():
+        notes.append(data["observations"].strip())
+    status = data.get("request_status")
+    awbs = data.get("awbs") or []
+    reservation = awbs[0].get("reservation_id") if awbs else None
+    return ShopReturn(
+        external_id=str(data.get("emag_id", "")), external_order_id=str(data.get("order_id") or ""),
+        kind=ReturnKind.RETURN, status_raw="" if status is None else str(status),
+        status_label=EMAG_RMA_STATUS_LABELS.get(status, ""), requested_at=_emag_local_dt(data.get("date")),
+        picked_up_at=_emag_local_dt((data.get("extra_info") or {}).get("first_pickup_date")),
+        customer_name=data.get("customer_name") or "", comment="\n".join(notes),
+        awb_ref=str(reservation) if reservation else "", courier=data.get("courier_name") or "",
+        refund=_emag_refund(data.get("status_history") or []), history=list(data.get("request_history") or []),
+        lines=lines, raw=data,
     )

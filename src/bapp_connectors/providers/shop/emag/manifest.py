@@ -6,6 +6,7 @@ from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
     FinancialCapability,
     InvoiceAttachmentCapability,
+    ReturnsCapability,
     ShippingCapability,
     WebhookCapability,
 )
@@ -58,6 +59,7 @@ manifest = ProviderManifest(
         WebhookCapability,
         FinancialCapability,
         ShippingCapability,
+        ReturnsCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,
