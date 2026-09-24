@@ -287,19 +287,44 @@ class EmagShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapabilit
             return []
         awbs = []
         for r in results:
-            tracking = r.get("awb_number", "")
-            if not tracking:
-                continue
-            awbs.append(AWBLabel(
-                tracking_number=tracking,
-                extra={
-                    "emag_id": r.get("emag_id"),
-                    "reservation_id": r.get("reservation_id"),
-                    "courier_name": r.get("courier_name", ""),
-                    "status": r.get("status", ""),
-                    "type": r.get("type", ""),
-                },
-            ))
+            # Handle nested awb list (new format from awb/read returning a dict)
+            nested_awbs = r.get("awb") or []
+            if nested_awbs:
+                courier_name = ""
+                if isinstance(r.get("courier"), dict):
+                    courier_name = r["courier"].get("courier_name", "")
+                else:
+                    courier_name = r.get("courier_name", "")
+
+                for awb_entry in nested_awbs:
+                    tracking = awb_entry.get("awb_number", "")
+                    if not tracking:
+                        continue
+                    awbs.append(AWBLabel(
+                        tracking_number=tracking,
+                        extra={
+                            "emag_id": r.get("emag_id"),
+                            "reservation_id": r.get("reservation_id"),
+                            "courier_name": courier_name,
+                            "status": awb_entry.get("status", r.get("status", "")),
+                            "type": r.get("type", ""),
+                        },
+                    ))
+            else:
+                # Fallback: flat legacy response with top-level awb_number
+                tracking = r.get("awb_number", "")
+                if not tracking:
+                    continue
+                awbs.append(AWBLabel(
+                    tracking_number=tracking,
+                    extra={
+                        "emag_id": r.get("emag_id"),
+                        "reservation_id": r.get("reservation_id"),
+                        "courier_name": r.get("courier_name", ""),
+                        "status": r.get("status", ""),
+                        "type": r.get("type", ""),
+                    },
+                ))
         return awbs
 
     def get_awb_pdf(self, awb_id: str) -> bytes:

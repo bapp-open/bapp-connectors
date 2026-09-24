@@ -88,3 +88,57 @@ def test_resolve_return_awb_handles_dict_results(adapter, fake):
 def test_resolve_return_awb_empty_ref_makes_no_call(adapter, fake):
     assert adapter.resolve_return_awb("") == ""
     assert fake.calls == []
+
+
+# ── get_order_awbs tests (for awb/read dict response) ──
+
+def test_get_order_awbs_nested_object_response(adapter, fake):
+    """Test awb/read returns nested object with awb list."""
+    fake.add("POST", "awb/read", {
+        "isError": False,
+        "results": {
+            "emag_id": 500000001,
+            "order_id": "500000001",
+            "reservation_id": 481000001,
+            "awb": [
+                {"awb_number": "1ONBLR000000001", "awb_barcode": "...", "status": "delivered"},
+                {"awb_number": "1ONBLR000000002", "awb_barcode": "...", "status": "picked_up"},
+            ],
+            "courier": {"courier_name": "sameday", "courier_id": 1},
+            "status": {"code": "delivered"},
+            "rma_id": None,
+            "type": "normal",
+        }
+    })
+    awbs = adapter.get_order_awbs("500000001")
+    assert len(awbs) == 2
+    assert awbs[0].tracking_number == "1ONBLR000000001"
+    assert awbs[1].tracking_number == "1ONBLR000000002"
+    assert awbs[0].extra["courier_name"] == "sameday"
+    assert awbs[0].extra["emag_id"] == 500000001
+
+
+def test_get_order_awbs_flat_legacy_response(adapter, fake):
+    """Test fallback for flat legacy awb_number at top level."""
+    fake.add("POST", "awb/read", {
+        "isError": False,
+        "results": [
+            {
+                "awb_number": "1ONBLR000000003",
+                "courier_name": "dhl",
+                "status": "shipped",
+                "type": "normal",
+            }
+        ]
+    })
+    awbs = adapter.get_order_awbs("500000001")
+    assert len(awbs) == 1
+    assert awbs[0].tracking_number == "1ONBLR000000003"
+    assert awbs[0].extra["courier_name"] == "dhl"
+
+
+def test_get_order_awbs_empty_results(adapter, fake):
+    """Test empty results returns empty list."""
+    fake.add("POST", "awb/read", {"isError": False, "results": {}})
+    awbs = adapter.get_order_awbs("500000001")
+    assert awbs == []
