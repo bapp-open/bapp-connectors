@@ -48,7 +48,7 @@ def test_maps_rma(adapter, fake):
     assert (r.external_id, r.external_order_id, r.status_raw, r.status_label) == ("7000001", "500000001", "7", "Finalized")
     assert r.lines[0].sku == "81255" and r.lines[0].customer_note == "Nu se potriveste pe dimensiune"
     assert r.lines[0].reason_code == "51" and r.lines[0].quantity == Decimal(1)
-    assert r.lines[0].reason_label == "Motiv 51"
+    assert r.lines[0].reason_label == "Vreau sa returnez un produs functional > Am comandat produsul gresit"
     assert r.comment == "Nu se potriveste pe dimensiune"
     assert r.refund.amount == Decimal("22.89") and r.refund.type == "CO" and r.refund.currency == "RON"
     assert r.awb_ref == "481000001" and r.awb == "" and r.courier == "sameday"
@@ -150,3 +150,37 @@ def test_get_order_awbs_empty_results(adapter, fake):
     fake.add("POST", "awb/read", {"isError": False, "results": {}})
     awbs = adapter.get_order_awbs("500000001")
     assert awbs == []
+
+
+def test_return_reason_labels_follow_the_documented_hierarchy():
+    from bapp_connectors.providers.shop.emag.return_reasons import EMAG_RETURN_REASONS, emag_return_reason_label
+    assert len(EMAG_RETURN_REASONS) == 182
+    assert emag_return_reason_label(122) == (
+        "Vreau sa returnez un produs nefunctional > Produsul este lovit/spart > Ambalajul este intact")
+    assert emag_return_reason_label("172").endswith("Am primit un produs cu alte specificatii")
+    assert emag_return_reason_label(99999) == "Motiv 99999"
+    assert emag_return_reason_label("") == "" and emag_return_reason_label(None) == ""
+
+
+def test_unified_reason_for_emag_codes():
+    from bapp_connectors.core.dto import ReturnReason
+    from bapp_connectors.providers.shop.emag.return_reasons import EMAG_RETURN_REASONS, emag_return_reason
+    assert emag_return_reason(122) == ReturnReason.DAMAGED        # nefunctional > lovit/spart > ambalaj intact
+    assert emag_return_reason(51) == ReturnReason.ORDERED_BY_MISTAKE
+    assert emag_return_reason(172) == ReturnReason.NOT_AS_DESCRIBED
+    assert emag_return_reason(43) == ReturnReason.WRONG_ITEM
+    assert emag_return_reason(99999) == ReturnReason.OTHER
+    # "Alt motiv" inherits its parent: nefunctional > Alt motiv = defective
+    by_label = {v: k for k, v in EMAG_RETURN_REASONS.items()}
+    assert emag_return_reason(by_label["Vreau sa returnez un produs nefunctional > Alt motiv"]) == ReturnReason.DEFECTIVE
+    assert emag_return_reason(by_label["Produsul primit prezinta un defect sau este incomplet"]) == ReturnReason.DEFECTIVE
+    assert emag_return_reason(by_label["Produsul primit prezinta un defect sau este incomplet > Lipseste un accesoriu"]) == ReturnReason.MISSING_PARTS
+    # every documented id resolves to a valid unified reason
+    assert all(isinstance(emag_return_reason(k), ReturnReason) for k in EMAG_RETURN_REASONS)
+
+
+def test_rma_line_carries_the_unified_reason(adapter, fake):
+    from bapp_connectors.core.dto import ReturnReason
+    fake.add("POST", "rma/read", {"isError": False, "results": [RMA]})
+    [r] = adapter.get_returns(SINCE, UNTIL)
+    assert r.lines[0].reason == ReturnReason.ORDERED_BY_MISTAKE

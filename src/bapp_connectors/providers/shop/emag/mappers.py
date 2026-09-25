@@ -597,9 +597,15 @@ def _emag_refund(status_history: list[dict]) -> ShopReturnRefund | None:
 
 
 def _emag_reason_label(code: str) -> str:
-    # eMAG's RMA payload never sends a human label for the return reason, only a numeric
-    # code -- fall back to a readable placeholder so the UI column isn't blank.
-    return f"Motiv {code}" if code else ""
+    # the RMA payload carries only the numeric return_reason; the text comes from eMAG's
+    # documented hierarchy (return_reasons.py), "Motiv <id>" for ids it doesn't list
+    from bapp_connectors.providers.shop.emag.return_reasons import emag_return_reason_label
+    return emag_return_reason_label(code)
+
+
+def _emag_reason(code):
+    from bapp_connectors.providers.shop.emag.return_reasons import emag_return_reason
+    return emag_return_reason(code)
 
 
 def return_from_emag(data: dict) -> ShopReturn:
@@ -609,6 +615,7 @@ def return_from_emag(data: dict) -> ShopReturn:
             name=p.get("product_name") or "", quantity=Decimal(str(p.get("quantity") or 1)),
             reason_code=str(p.get("return_reason") or ""),
             reason_label=_emag_reason_label(str(p.get("return_reason") or "")),
+            reason=_emag_reason(p.get("return_reason")),
             customer_note=(p.get("observations") or "").strip(),
         )
         for p in data.get("products") or []

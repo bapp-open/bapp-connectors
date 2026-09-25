@@ -107,3 +107,15 @@ def test_empty_window_with_null_content(adapter, fake):
     # Trendyol answers an empty window with {"content": null, "totalElements": 0}
     fake.add("GET", "claims", {"content": None, "page": 0, "size": 0, "totalElements": 0, "totalPages": 0})
     assert adapter.get_returns(SINCE, UNTIL) == []
+
+
+def test_unified_reason_from_customer_code(adapter, fake):
+    from bapp_connectors.core.dto import ReturnReason
+    from bapp_connectors.providers.shop.trendyol.mappers import trendyol_return_reason
+    fake.add("GET", "claims", {"content": [_claim([_unit("Accepted")])], "totalPages": 1})
+    [r] = adapter.get_returns(SINCE, UNTIL)
+    assert r.lines[0].reason == ReturnReason.SIZE_FIT  # BIGSIZE
+    assert trendyol_return_reason("UNDELIVERED") == ReturnReason.NOT_DELIVERED
+    assert trendyol_return_reason("DAMAGEDITEM") == ReturnReason.DAMAGED
+    assert trendyol_return_reason("NONPUNITIVEAPPROVAL") == ReturnReason.OTHER
+    assert trendyol_return_reason(None) == ReturnReason.OTHER

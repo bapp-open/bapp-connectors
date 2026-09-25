@@ -24,6 +24,7 @@ from bapp_connectors.core.dto import (
     Product,
     ProviderMeta,
     ReturnKind,
+    ReturnReason,
     ShopReturn,
     ShopReturnLine,
     ShopReturnRefund,
@@ -356,6 +357,28 @@ TRENDYOL_CLAIM_PROGRESS = ["Created", "WaitingInAction", "WaitingFraudCheck", "I
 TRENDYOL_STOREFRONT_CURRENCY = {"RO": "RON", "GR": "EUR", "BG": "EUR", "HU": "HUF", "CZ": "CZK", "SK": "EUR", "PL": "PLN", "DE": "EUR"}
 
 
+# customer claim reason codes (claimItems[].customerClaimItemReason.code) -> unified ReturnReason;
+# the codes seen in production (RO/GR/BG, 2025-2026). Unknown codes -> "other".
+TRENDYOL_REASON_MAP: dict[str, str] = {
+    "UNDELIVERED": "not_delivered",
+    "INTLOSTCARGO": "not_delivered",
+    "LATEINTDELIVERY": "not_delivered",
+    "DAMAGEDITEM": "damaged",
+    "MISSINGPART": "missing_parts",
+    "MISSINGPRODUCT": "missing_parts",
+    "WRONGITEM": "wrong_item",
+    "DIFFERENTITEM": "not_as_described",
+    "FAKEPRODUCT": "not_as_described",
+    "SMALLSIZE": "size_fit",
+    "BIGSIZE": "size_fit",
+    "ABANDON": "changed_mind",
+}
+
+
+def trendyol_return_reason(code: str | None) -> ReturnReason:
+    return ReturnReason(TRENDYOL_REASON_MAP.get((code or "").upper(), "other"))
+
+
 def _least_advanced(statuses: list[str]) -> str:
     live = [s for s in statuses if s != "Cancelled"]
     if not live:
@@ -382,7 +405,8 @@ def return_from_trendyol(data: dict, currency: str = "") -> ShopReturn:
             external_line_id=str(order_line.get("id", "")), sku=str(order_line.get("merchantSku") or ""),
             barcode=str(order_line.get("barcode") or ""), name=order_line.get("productName") or "",
             quantity=Decimal(quantity), unit_price=price, reason_code=reason.get("code") or "",
-            reason_label=reason.get("name") or "", customer_note="\n".join(notes), unit_statuses=statuses,
+            reason_label=reason.get("name") or "",
+            reason=trendyol_return_reason(reason.get("code")), customer_note="\n".join(notes), unit_statuses=statuses,
         ))
     status = _least_advanced(all_statuses)
     name = " ".join(p for p in ((data.get("customerFirstName") or "").strip(), (data.get("customerLastName") or "").strip()) if p)
