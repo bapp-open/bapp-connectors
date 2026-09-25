@@ -101,3 +101,9 @@ def test_claim_without_awb(adapter, fake):
     fake.add("GET", "claims", {"content": [_claim([_unit("Created")], awb=None)], "totalPages": 1})
     [r] = adapter.get_returns(SINCE, UNTIL)
     assert r.awb == ""
+
+
+def test_empty_window_with_null_content(adapter, fake):
+    # Trendyol answers an empty window with {"content": null, "totalElements": 0}
+    fake.add("GET", "claims", {"content": None, "page": 0, "size": 0, "totalElements": 0, "totalPages": 0})
+    assert adapter.get_returns(SINCE, UNTIL) == []

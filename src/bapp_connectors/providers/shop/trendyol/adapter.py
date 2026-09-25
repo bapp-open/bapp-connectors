@@ -328,7 +328,7 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
         out: list[ShopReturn] = []
         for page in range(self.CLAIMS_MAX_PAGES):
             res = self.client.get_claims(start_ms, end_ms, page=page, size=self.CLAIMS_PAGE_SIZE)
-            content = res.get("content", []) if isinstance(res, dict) else []
+            content = (res.get("content") or []) if isinstance(res, dict) else []
             out.extend(return_from_trendyol(claim, currency=currency) for claim in content)
             total_pages = int(res.get("totalPages") or 0) if isinstance(res, dict) else 0
             if not content or page + 1 >= total_pages:

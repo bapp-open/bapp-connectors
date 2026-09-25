@@ -194,7 +194,7 @@ def order_from_trendyol(data: dict) -> Order:
 
 def orders_from_trendyol(response: dict) -> PaginatedResult[Order]:
     """Map a paginated Trendyol orders response to PaginatedResult[Order]."""
-    content = response.get("content", [])
+    content = response.get("content") or []
     orders = [order_from_trendyol(o) for o in content]
     total_pages = response.get("totalPages", 1)
     page = response.get("page", 0)
@@ -245,7 +245,7 @@ def product_from_trendyol(data: dict) -> Product:
 
 def products_from_trendyol(response: dict) -> PaginatedResult[Product]:
     """Map a paginated Trendyol products response."""
-    content = response.get("content", [])
+    content = response.get("content") or []
     products = [product_from_trendyol(p) for p in content]
     total_pages = response.get("totalPages", 1)
     page = response.get("page", 0)
@@ -338,7 +338,7 @@ def settlement_from_trendyol(data: dict, query_type: str = "") -> FinancialTrans
 
 def settlements_from_trendyol(response: dict, query_type: str = "") -> PaginatedResult[FinancialTransaction]:
     """Map a paginated Trendyol settlements/financials response."""
-    content = response.get("content", [])
+    content = response.get("content") or []
     items = [settlement_from_trendyol(t, query_type=query_type) for t in content]
     total_pages = response.get("totalPages", 1)
     page = response.get("page", 0)

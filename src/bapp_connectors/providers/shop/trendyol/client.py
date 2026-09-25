@@ -92,7 +92,7 @@ class TrendyolApiClient:
 
     def get_order(self, order_id: str) -> dict:
         res = self.get_orders(order_id=order_id)
-        content = res.get("content", []) if isinstance(res, dict) else []
+        content = (res.get("content") or []) if isinstance(res, dict) else []
         return content[0] if content else {}
 
     def get_claims(self, start_ms: int, end_ms: int, page: int = 0, size: int = 50, **kwargs) -> dict:
