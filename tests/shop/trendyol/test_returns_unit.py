@@ -70,6 +70,19 @@ def test_cancelled_units_ignored_unless_all_cancelled(adapter, fake):
     assert first.status_raw == "Accepted" and second.status_raw == "Cancelled"
 
 
+def test_quantity_counts_non_cancelled_units_only(adapter, fake):
+    # 2 units total, 1 Cancelled -> quantity is the 1 live unit, not len(units).
+    fake.add("GET", "claims", {"content": [_claim([_unit("Cancelled"), _unit("Accepted")])], "totalPages": 1})
+    [r] = adapter.get_returns(SINCE, UNTIL)
+    assert r.lines[0].quantity == Decimal(1)
+
+
+def test_quantity_falls_back_to_unit_count_when_all_cancelled(adapter, fake):
+    fake.add("GET", "claims", {"content": [_claim([_unit("Cancelled"), _unit("Cancelled")])], "totalPages": 1})
+    [r] = adapter.get_returns(SINCE, UNTIL)
+    assert r.lines[0].quantity == Decimal(2)
+
+
 def test_estimated_refund_for_accepted_units(adapter, fake):
     fake.add("GET", "claims", {"content": [_claim([_unit("Accepted"), _unit("Accepted")])], "totalPages": 1})
     [r] = adapter.get_returns(SINCE, UNTIL)

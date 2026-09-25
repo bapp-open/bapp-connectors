@@ -376,10 +376,12 @@ def return_from_trendyol(data: dict, currency: str = "") -> ShopReturn:
         price = Decimal(str(order_line["price"])) if order_line.get("price") is not None else None
         if price is not None:
             accepted_total += price * statuses.count("Accepted")
+        live_units = sum(1 for s in statuses if s != "Cancelled")
+        quantity = live_units or len(units) or 1  # all units cancelled -> fall back to the raw unit count
         lines.append(ShopReturnLine(
             external_line_id=str(order_line.get("id", "")), sku=str(order_line.get("merchantSku") or ""),
             barcode=str(order_line.get("barcode") or ""), name=order_line.get("productName") or "",
-            quantity=Decimal(len(units) or 1), unit_price=price, reason_code=reason.get("code") or "",
+            quantity=Decimal(quantity), unit_price=price, reason_code=reason.get("code") or "",
             reason_label=reason.get("name") or "", customer_note="\n".join(notes), unit_statuses=statuses,
         ))
     status = _least_advanced(all_statuses)

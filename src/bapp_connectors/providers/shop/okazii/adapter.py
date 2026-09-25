@@ -6,6 +6,7 @@ This is the main entry point for the Okazii integration.
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -33,6 +34,8 @@ from bapp_connectors.providers.shop.okazii.mappers import (
 if TYPE_CHECKING:
     from datetime import datetime
     from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 
 class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability, ReturnsCapability, ShippingCapability):
@@ -157,4 +160,11 @@ class OkaziiShopAdapter(ShopPort, InvoiceAttachmentCapability, ReturnsCapability
                 dto = return_from_okazii_order(row)
                 if dto.requested_at is None or since <= dto.requested_at <= until:
                     out.append(dto)
+            if page == self.RETURNS_MAX_PAGES:
+                # The loop stops at RETURNS_MAX_PAGES regardless of whether the server still had
+                # more rows to give -- this page was non-empty, so older returns may be silently dropped.
+                logger.warning(
+                    "okazii get_returns hit the %s-page cap with rows still coming (since=%s, until=%s)",
+                    self.RETURNS_MAX_PAGES, since, until,
+                )
         return out

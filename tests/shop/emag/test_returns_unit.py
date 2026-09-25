@@ -48,6 +48,7 @@ def test_maps_rma(adapter, fake):
     assert (r.external_id, r.external_order_id, r.status_raw, r.status_label) == ("7000001", "500000001", "7", "Finalized")
     assert r.lines[0].sku == "81255" and r.lines[0].customer_note == "Nu se potriveste pe dimensiune"
     assert r.lines[0].reason_code == "51" and r.lines[0].quantity == Decimal(1)
+    assert r.lines[0].reason_label == "Motiv 51"
     assert r.comment == "Nu se potriveste pe dimensiune"
     assert r.refund.amount == Decimal("22.89") and r.refund.type == "CO" and r.refund.currency == "RON"
     assert r.awb_ref == "481000001" and r.awb == "" and r.courier == "sameday"
@@ -77,6 +78,13 @@ def test_no_pickup_and_no_refund(adapter, fake):
     fake.add("POST", "rma/read", {"isError": False, "results": [rma]})
     [r] = adapter.get_returns(SINCE, UNTIL)
     assert r.picked_up_at is None and r.refund is None and r.awb_ref == ""
+
+
+def test_reason_label_falls_back_to_placeholder_only_when_missing_code(adapter, fake):
+    rma = {**RMA, "products": [{**RMA["products"][0], "return_reason": None}]}
+    fake.add("POST", "rma/read", {"isError": False, "results": [rma]})
+    [r] = adapter.get_returns(SINCE, UNTIL)
+    assert r.lines[0].reason_code == "" and r.lines[0].reason_label == ""
 
 
 def test_resolve_return_awb_handles_dict_results(adapter, fake):

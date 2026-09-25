@@ -596,12 +596,20 @@ def _emag_refund(status_history: list[dict]) -> ShopReturnRefund | None:
     )
 
 
+def _emag_reason_label(code: str) -> str:
+    # eMAG's RMA payload never sends a human label for the return reason, only a numeric
+    # code -- fall back to a readable placeholder so the UI column isn't blank.
+    return f"Motiv {code}" if code else ""
+
+
 def return_from_emag(data: dict) -> ShopReturn:
     lines = [
         ShopReturnLine(
             external_line_id=str(p.get("id", "")), sku=str(p.get("product_id") or ""),
             name=p.get("product_name") or "", quantity=Decimal(str(p.get("quantity") or 1)),
-            reason_code=str(p.get("return_reason") or ""), customer_note=(p.get("observations") or "").strip(),
+            reason_code=str(p.get("return_reason") or ""),
+            reason_label=_emag_reason_label(str(p.get("return_reason") or "")),
+            customer_note=(p.get("observations") or "").strip(),
         )
         for p in data.get("products") or []
     ]
