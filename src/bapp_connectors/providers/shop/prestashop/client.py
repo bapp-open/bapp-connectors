@@ -250,6 +250,11 @@ class PrestaShopApiClient:
         """Update an order via PUT."""
         return self._call("PUT", f"orders/{order_id}", json={"order": data}, **kwargs)
 
+    def get_order_states(self, **kwargs) -> list[dict]:
+        """The shop's order states (`order_states` resource), the merchant's own ones included."""
+        result = self._call("GET", "order_states", params={"display": "full"}, **kwargs)
+        return self._unwrap_list(result if isinstance(result, dict) else {}, "order_states", "order_state")
+
     def create_order_history(self, data: dict, **kwargs) -> dict | list | str:
         """Create an order history entry (PrestaShop's way to change order status)."""
         result = self._call("POST", "order_histories", json={"order_history": data}, **kwargs)

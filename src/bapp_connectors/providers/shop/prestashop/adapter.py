@@ -14,8 +14,10 @@ from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
     CategoryManagementCapability,
     OrderLookupCapability,
+    OrderStatusCatalogCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
+    RemoteOrderStatus,
     VariantManagementCapability,
     WebhookCapability,
 )
@@ -72,6 +74,7 @@ class PrestaShopShopAdapter(
     VariantManagementCapability,
     WebhookCapability,
     OrderLookupCapability,
+    OrderStatusCatalogCapability,
 ):
     """
     PrestaShop webservice adapter.
@@ -187,6 +190,46 @@ class PrestaShopShopAdapter(
             if str(data.get("reference", "")).upper() == reference:
                 return self._enrich_order(data)
         return None
+
+    # ── Order status catalogue ──
+
+    def list_order_statuses(self) -> list[RemoteOrderStatus]:
+        """The shop's order states, the merchant's own ones included.
+
+        PrestaShop identifies a state by a numeric id and names it per language, so the id is
+        what `set_order_status_raw` takes and the label is the first language's name.
+        """
+        statuses: list[RemoteOrderStatus] = []
+        seen: set[str] = set()
+        for row in (self.client.get_order_states() or []):
+            if not isinstance(row, dict):
+                continue
+            state_id = str(row.get("id") or "").strip()
+            if not state_id or state_id in seen:
+                continue
+            seen.add(state_id)
+            name = _extract_multilang_name(row.get("name", "")) or state_id
+            statuses.append(
+                RemoteOrderStatus(
+                    id=state_id,
+                    label=name,
+                    framework_status=getattr(self._status_mapper.to_framework(state_id, None), "value", "") or "",
+                    extra={key: row[key] for key in ("color", "paid", "shipped", "delivered") if key in row},
+                )
+            )
+        return statuses
+
+    def set_order_status_raw(self, order_id: str, raw_status: str) -> Order:
+        """Set the state by PrestaShop's own numeric id, skipping the framework translation."""
+        state = str(raw_status or "").strip()
+        if not state:
+            raise ValueError("PrestaShop needs an order state id")
+        try:
+            state_id = int(state)
+        except (TypeError, ValueError):
+            raise ValueError(f"PrestaShop order states are numeric ids, got {raw_status!r}") from None
+        self.client.create_order_history({"id_order": int(order_id), "id_order_state": state_id})
+        return self.get_order(order_id)
 
     def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         ps_state = self._status_mapper.to_provider(status)

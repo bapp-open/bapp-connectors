@@ -22,10 +22,12 @@ from bapp_connectors.core.capabilities import (
     CategoryManagementCapability,
     OAuthCapability,
     OrderLookupCapability,
+    OrderStatusCatalogCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     ProductLookupCapability,
     RelatedProductCapability,
+    RemoteOrderStatus,
     ReturnsCapability,
     SettingsDetectionCapability,
     VariantManagementCapability,
@@ -109,6 +111,7 @@ class WooCommerceShopAdapter(
     AttributeManagementCapability,
     OAuthCapability,
     OrderLookupCapability,
+    OrderStatusCatalogCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     ProductLookupCapability,
@@ -313,6 +316,46 @@ class WooCommerceShopAdapter(
                     data, price_from_provider=self._price_from_provider, status_mapper=self._status_mapper,
                 )
         return None
+
+    # ── Order status catalogue ──
+
+    def list_order_statuses(self) -> list[RemoteOrderStatus]:
+        """Every status this shop has registered, plugin and custom ones included.
+
+        WooCommerce exposes no plain list; the orders-totals report is the documented way and
+        returns `[{slug, name, total}]`. Slugs come back bare ("processing"), while the REST
+        API also accepts the `wc-` prefixed form — the bare slug is what `update_order` wants.
+        """
+        statuses: list[RemoteOrderStatus] = []
+        seen: set[str] = set()
+        for row in (self.client.get_order_status_totals() or []):
+            if not isinstance(row, dict):
+                continue
+            slug = str(row.get("slug") or "").strip()
+            if not slug or slug in seen:
+                continue
+            seen.add(slug)
+            statuses.append(
+                RemoteOrderStatus(
+                    id=slug,
+                    label=str(row.get("name") or slug),
+                    framework_status=getattr(self._status_mapper.to_framework(slug, None), "value", "") or "",
+                    extra={"total": row["total"]} if "total" in row else {},
+                )
+            )
+        return statuses
+
+    def set_order_status_raw(self, order_id: str, raw_status: str) -> Order:
+        """Set the status by WooCommerce's own slug, skipping the framework translation."""
+        slug = str(raw_status or "").strip()
+        if not slug:
+            raise ValueError("WooCommerce needs a status slug")
+        data = self.client.update_order(order_id, {"status": slug})
+        return order_from_woocommerce(
+            data,
+            price_from_provider=self._price_from_provider,
+            status_mapper=self._status_mapper,
+        )
 
     def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         woo_status = self._status_mapper.to_provider(status)

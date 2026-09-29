@@ -7,6 +7,7 @@ from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
     CategoryManagementCapability,
     OrderLookupCapability,
+    OrderStatusCatalogCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
     VariantManagementCapability,
@@ -67,6 +68,7 @@ manifest = ProviderManifest(
         VariantManagementCapability,
         WebhookCapability,
         OrderLookupCapability,
+        OrderStatusCatalogCapability,
     ],
     rate_limit=RateLimitConfig(
         requests_per_second=5,
