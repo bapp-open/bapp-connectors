@@ -14,15 +14,77 @@ Key differences from EuPlatesc:
 
 from __future__ import annotations
 
+import base64
 import binascii
 import datetime
 import hashlib
 import hmac
+import json
 import logging
 import os
+import secrets
+import time
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
+
+# Field limits from the LibraPay implementation manual (IV.1).
+MAX_DESC_LENGTH = 50
+MAX_BACKREF_LENGTH = 80
+
+COUNTRY_NAMES = {"RO": "Romania"}
+
+
+def generate_order_id() -> str:
+    """A fresh LibraPay ORDER: 6-19 digits, unique per order, no leading zero.
+
+    Milliseconds since the epoch (13 digits, never starting with 0) plus six
+    random digits — 19, the most LibraPay allows — so checkouts started in the
+    same millisecond still differ.
+    """
+    return f"{int(time.time() * 1000)}{secrets.randbelow(1_000_000):06d}"
+
+
+def build_data_custom(
+    amount: float,
+    description: str,
+    email: str = "",
+    name: str = "",
+    phone: str = "",
+    city: str = "",
+    country: str = "",
+    address: str = "",
+    tax_id: str = "",
+) -> str:
+    """DATA_CUSTOM: base64 of the ProductsData + UserData the manual marks mandatory.
+
+    The manual shows PHP ``serialize``; phclient has sent JSON in production
+    for years and LibraPay accepts it, so JSON it is (no PHP serializer needed).
+    """
+    country_name = COUNTRY_NAMES.get((country or "RO").upper(), country) or "Romania"
+    user = {
+        "Email": email,
+        "Name": name,
+        "Phone": phone,
+        "BillingEmail": email,
+        "BillingName": name,
+        "BillingPhone": phone,
+        "BillingCity": city,
+        "BillingCountry": country_name,
+        "BillingAddress": address,
+        "BillingID": tax_id,
+        "ShippingEmail": email,
+        "ShippingName": name,
+        "ShippingAddress": address,
+        "ShippingPhone": phone,
+        "ShippingCity": city,
+        "ShippingCountry": country_name,
+    }
+    data = {
+        "ProductsData": {0: {"ItemName": description[:MAX_DESC_LENGTH], "Quantity": 1, "Price": f"{amount:.2f}"}},
+        "UserData": user,
+    }
+    return base64.b64encode(json.dumps(data).encode()).decode()
 
 
 def _enc(val) -> str:
@@ -80,8 +142,13 @@ def build_checkout_form(
     merchant_email: str,
     key: bytes,
     back_url: str = "",
+    data_custom: str = "",
 ) -> dict:
-    """Build LibraPay checkout form data with HMAC-SHA1 signature."""
+    """Build LibraPay checkout form data with HMAC-SHA1 signature.
+
+    ``order_id`` must already be LibraPay's numeric ORDER (``generate_order_id``);
+    ``description`` is cut to the 50 characters LibraPay allows.
+    """
     timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d%H%M%S")
     nonce = binascii.b2a_hex(os.urandom(16)).decode()
 
@@ -89,7 +156,7 @@ def build_checkout_form(
         ("AMOUNT", f"{amount:.2f}"),
         ("CURRENCY", currency),
         ("ORDER", order_id),
-        ("DESC", description),
+        ("DESC", description[:MAX_DESC_LENGTH]),
         ("MERCH_NAME", merchant_name),
         ("MERCH_URL", merchant_url),
         ("MERCHANT", merchant),
@@ -115,6 +182,7 @@ def build_checkout_form(
         "TIMESTAMP": data["TIMESTAMP"],
         "NONCE": data["NONCE"],
         "BACKREF": back_url,
+        "DATA_CUSTOM": data_custom,
         "P_SIGN": p_sign,
     }
     return result

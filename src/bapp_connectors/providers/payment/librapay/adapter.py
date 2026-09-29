@@ -23,10 +23,14 @@ from bapp_connectors.core.dto import (
 
 if TYPE_CHECKING:
     from bapp_connectors.core.dto import BillingDetails
+from bapp_connectors.core.errors import ValidationError
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
 from bapp_connectors.providers.payment.librapay.client import (
+    MAX_BACKREF_LENGTH,
     build_checkout_form,
+    build_data_custom,
+    generate_order_id,
     verify_ipn_hmac,
 )
 from bapp_connectors.providers.payment.librapay.manifest import (
@@ -45,6 +49,9 @@ class LibraPayPaymentAdapter(PaymentPort, WebhookCapability):
     """LibraPay payment adapter."""
 
     manifest = manifest
+
+    # LibraPay rejects a BACKREF longer than this; hosts shorten their return URL.
+    max_return_url_length = MAX_BACKREF_LENGTH
 
     def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
@@ -97,13 +104,40 @@ class LibraPayPaymentAdapter(PaymentPort, WebhookCapability):
         client_email: str | None = None,
         billing: BillingDetails | None = None,
     ) -> CheckoutSession:
-        back_url = success_url or self._back_url or ""
+        """Build the auto-submitting LibraPay form.
 
+        LibraPay's ORDER must be 6-19 digits, so a numeric one is generated and
+        returned as ``session_id``; the caller's ``identifier`` goes into DESC,
+        which LibraPay echoes back in the IPN (max 50 chars, shown to the payer).
+        """
+        currency = (currency or "RON").upper()
+        if currency != "RON":
+            raise ValidationError(f"LibraPay accepts only RON payments, not {currency}.")
+        back_url = success_url or self._back_url or ""
+        if len(back_url) > MAX_BACKREF_LENGTH:
+            raise ValidationError(
+                f"LibraPay return URL is {len(back_url)} characters; the limit is {MAX_BACKREF_LENGTH}."
+            )
+        email = (billing.email if billing else "") or client_email or ""
+        name = ""
+        if billing:
+            name = billing.company or f"{billing.first_name} {billing.last_name}".strip()
+        data_custom = build_data_custom(
+            amount=float(amount),
+            description=description,
+            email=email,
+            name=name or email,
+            phone=billing.phone if billing else "",
+            city=billing.city if billing else "",
+            country=billing.country if billing else "",
+            address=billing.address_line1 if billing else "",
+            tax_id=billing.tax_id if billing else "",
+        )
         form_data = build_checkout_form(
             amount=float(amount),
-            currency=currency or "RON",
-            order_id=identifier,
-            description=description,
+            currency=currency,
+            order_id=generate_order_id(),
+            description=identifier,
             merchant=self._merchant,
             terminal=self._terminal,
             merchant_name=self._merchant_name,
@@ -111,9 +145,9 @@ class LibraPayPaymentAdapter(PaymentPort, WebhookCapability):
             merchant_email=self._merchant_email,
             key=self._key,
             back_url=back_url,
+            data_custom=data_custom,
         )
-
-        return checkout_session_from_librapay(form_data, self._form_url)
+        return checkout_session_from_librapay(form_data, self._form_url, description)
 
     def get_payment(self, payment_id: str) -> PaymentResult:
         raise NotImplementedError("LibraPay does not support querying payment status via API. Use IPN notifications.")
@@ -155,6 +189,15 @@ class LibraPayPaymentAdapter(PaymentPort, WebhookCapability):
             ipn_data = {}
 
         return webhook_event_from_librapay(ipn_data)
+
+    def webhook_response(self, outcome: str) -> str:
+        """LibraPay resends the IPN until the body is exactly "1".
+
+        A forged or unverifiable IPN is acknowledged too (retrying cannot fix a
+        bad signature, and phclient does the same); only an error on our side
+        withholds the "1" so LibraPay tries again.
+        """
+        return "0" if outcome == "error" else "1"
 
     def get_payment_from_ipn(self, ipn_data: dict) -> PaymentResult:
         """Parse an already-decoded IPN dict into a PaymentResult."""

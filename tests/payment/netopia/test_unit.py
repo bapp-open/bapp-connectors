@@ -7,6 +7,7 @@ credential validation and connection setup without network calls.
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 
 import pytest
@@ -268,6 +269,19 @@ class TestNetopiaCheckout:
         }))
         session = a.create_checkout_session(Decimal("1"), "RON", "d", "O-1")
         assert session.payment_url == "https://pay/x"
+
+    def test_billing_details_reach_the_payload(self):
+        from bapp_connectors.core.dto import BillingDetails
+
+        a, fake = _adapter_with(("payment/card/start", {
+            "error": {"code": "101", "message": "Redirect user to payment page"},
+            "payment": {"ntpID": "NTP9", "paymentURL": "https://pay/x", "status": 1},
+        }))
+        billing = BillingDetails(email="c@x.ro", first_name="Ion", last_name="Pop", city="Iasi",
+                                 address_line1="Str. 1")
+        a.create_checkout_session(Decimal("1"), "RON", "d", "O-1", billing=billing)
+        body = json.loads(fake.calls[0].kwargs["data"])["order"]["billing"]
+        assert (body["firstName"], body["lastName"], body["city"], body["details"]) == ("Ion", "Pop", "Iasi", "Str. 1")
 
     def test_refused_start_raises(self):
         a, _ = _adapter_with(("payment/card/start", {"error": {"code": "19", "message": "Invalid signature"}}))

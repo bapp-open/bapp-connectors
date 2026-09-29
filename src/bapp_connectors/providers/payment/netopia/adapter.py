@@ -135,12 +135,12 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
         city = ""
         address = ""
         if billing:
-            parts = billing.name.split(" ", 1) if billing.name else ["", ""]
-            first_name = parts[0]
-            last_name = parts[1] if len(parts) > 1 else ""
-            if billing.address:
-                city = billing.address.city or ""
-                address = billing.address.street or ""
+            # BillingDetails has first/last name and flat address fields; the old
+            # `billing.name` / `billing.address` raised AttributeError on any billing.
+            first_name = billing.first_name or billing.company
+            last_name = billing.last_name
+            city = billing.city
+            address = ", ".join(x for x in (billing.address_line1, billing.address_line2) if x)
 
         response = self.client.start_payment(
             amount=float(amount),
