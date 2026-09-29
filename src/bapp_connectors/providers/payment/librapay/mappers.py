@@ -14,6 +14,9 @@ from bapp_connectors.core.dto import (
     WebhookEventType,
 )
 
+# TRTYPE of a refund IPN (pay_sales.php): 24 full, 25 partial.
+REFUND_TRTYPES = {"24", "25"}
+
 
 def checkout_session_from_librapay(form_data: dict, form_url: str, description: str = "") -> CheckoutSession:
     return CheckoutSession(
@@ -35,6 +38,8 @@ def checkout_session_from_librapay(form_data: dict, form_url: str, description: 
 def payment_result_from_ipn(ipn_data: dict) -> PaymentResult:
     rc = ipn_data.get("RC", "")
     status = "approved" if rc == "00" else f"error_{rc}"
+    if rc == "00" and ipn_data.get("TRTYPE") in REFUND_TRTYPES:
+        status = "refunded"
 
     return PaymentResult(
         payment_id=ipn_data.get("INT_REF", ipn_data.get("ORDER", "")),
@@ -75,7 +80,10 @@ def webhook_event_from_librapay(ipn_data: dict) -> WebhookEvent:
         # LibraPay's sync pings come without DESC; phclient ignores them too.
         event_type = WebhookEventType.UNKNOWN
     elif action == "0" and rc == "00":
-        event_type = WebhookEventType.PAYMENT_COMPLETED
+        # A refund (pay_sales.php, TRTYPE 24/25) is reported the same way as the
+        # sale; without this it would read as a second completed payment.
+        refund = ipn_data.get("TRTYPE") in REFUND_TRTYPES
+        event_type = WebhookEventType.PAYMENT_REFUNDED if refund else WebhookEventType.PAYMENT_COMPLETED
     else:
         event_type = LIBRAPAY_ACTION_EVENTS.get(action, WebhookEventType.UNKNOWN)
     return WebhookEvent(

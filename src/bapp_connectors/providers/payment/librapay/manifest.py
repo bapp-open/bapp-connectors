@@ -21,6 +21,8 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType,
 
 LIBRAPAY_LIVE_URL = "https://secure.librapay.ro/pay_auth.php"
 LIBRAPAY_SANDBOX_URL = "https://merchant.librapay.ro/pay_auth.php"
+LIBRAPAY_LIVE_REFUND_URL = "https://secure.librapay.ro/pay_sales.php"
+LIBRAPAY_SANDBOX_REFUND_URL = "https://merchant.librapay.ro/pay_sales.php"
 
 manifest = ProviderManifest(
     name="librapay",

@@ -38,11 +38,11 @@ COUNTRY_NAMES = {"RO": "Romania"}
 def generate_order_id() -> str:
     """A fresh LibraPay ORDER: 6-19 digits, unique per order, no leading zero.
 
-    Milliseconds since the epoch (13 digits, never starting with 0) plus six
-    random digits — 19, the most LibraPay allows — so checkouts started in the
-    same millisecond still differ.
+    Milliseconds since the epoch (13 digits, never starting with 0) plus five
+    random digits = 18. The manual allows 19, but LibraPay's own comments in
+    the libra-pay library say 18, so stay inside both.
     """
-    return f"{int(time.time() * 1000)}{secrets.randbelow(1_000_000):06d}"
+    return f"{int(time.time() * 1000)}{secrets.randbelow(100_000):05d}"
 
 
 def build_data_custom(
@@ -104,6 +104,29 @@ def compute_hmac(data: OrderedDict, key: bytes) -> str:
     for val in data.values():
         hash_str += _enc(val)
     return hmac.new(key, hash_str.encode(), hashlib.sha1).hexdigest().upper()
+
+
+# TRTYPE for pay_sales.php: 24 = full refund, 25 = partial refund.
+TRTYPE_REFUND_FULL = "24"
+TRTYPE_REFUND_PARTIAL = "25"
+
+
+def build_refund_form(order_id: str, amount: float, terminal: str, trtype: str, back_url: str, key: bytes) -> dict:
+    """Signed form for a refund POSTed to ``pay_sales.php``.
+
+    Not in the official manual: field set and P_SIGN order (AMOUNT, ORDER,
+    TERMINAL, TRTYPE, TIMESTAMP, NONCE, BACKREF) follow the libra-pay library.
+    """
+    data = OrderedDict([
+        ("AMOUNT", f"{amount:.2f}"),
+        ("ORDER", order_id),
+        ("TERMINAL", terminal),
+        ("TRTYPE", trtype),
+        ("TIMESTAMP", datetime.datetime.now(datetime.UTC).strftime("%Y%m%d%H%M%S")),
+        ("NONCE", binascii.b2a_hex(os.urandom(16)).decode()),
+        ("BACKREF", back_url),
+    ])
+    return {**data, "P_SIGN": compute_hmac(data, key)}
 
 
 def verify_ipn_hmac(post_data: dict, key: bytes) -> bool:

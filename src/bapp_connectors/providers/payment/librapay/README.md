@@ -38,7 +38,7 @@ When `sandbox` is enabled, the form action URL switches to
 |------------|-----------|
 | Create checkout session | Yes (form-based) |
 | Get payment status | No (IPN only) |
-| Refund | No (manual via back office) |
+| Refund | Yes, UNVERIFIED — `pay_sales.php` (TRTYPE 24 full / 25 partial), per the libra-pay library |
 | Webhook verification (IPN) | Yes (HMAC-SHA1) |
 | Webhook parsing (IPN) | Yes |
 
@@ -131,10 +131,16 @@ is uppercased.
 
 - **No REST API:** LibraPay is entirely form-based. There is no endpoint to query
   payment status -- results come exclusively via IPN notifications.
-- **Refunds are manual:** Must be processed through the LibraPay merchant back office.
-  The manual documents no refund call; the unofficial Node library `libra-pay` posts
-  `TRTYPE` 24/25 to `pay_sales.php`, unconfirmed by LibraPay, so it is not implemented.
+- **Refunds (unverified):** the manual documents no refund call. `refund()` follows
+  the unofficial libra-pay library: POST to `pay_sales.php` with `AMOUNT`, `ORDER`,
+  `TERMINAL`, `TRTYPE` (24 full / 25 partial, `full=False`), `TIMESTAMP`, `NONCE`,
+  `BACKREF`, signed in that order, `Referer` = `BACKREF`. `payment_id` is the numeric
+  ORDER; `amount` is required. Sent once with `retry=False` (a retried refund could
+  pay back twice). A body of `1` is `completed`; any other 200 is `unknown` with the
+  raw answer in `extra.response` — check the back office before retrying. The refund
+  IPN (TRTYPE 24/25, RC 00) maps to `PAYMENT_REFUNDED`, not a second completion.
 - **`get_payment()` raises `NotImplementedError`:** Since there is no status query API.
+- **ORDER length:** the manual allows 19 digits, LibraPay's library comments say 18; `generate_order_id` makes 18.
 - **Uppercase field names:** All form and IPN fields use uppercase names (`AMOUNT`,
   `CURRENCY`, `ORDER`, etc.), unlike EuPlatesc which uses lowercase.
 - **HMAC-SHA1 vs HMAC-MD5:** LibraPay uses SHA1 while EuPlatesc uses MD5. The signature

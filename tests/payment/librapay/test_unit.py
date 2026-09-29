@@ -316,3 +316,98 @@ class TestManualExample:
         ])
         key = binascii.unhexlify("00112233445566778899AABBCCDDEEFF")
         assert compute_hmac(data, key) == "FACC882CA67E109E409E3974DDEDA8AAB13A5E48"
+
+
+class TestRefund:
+    """Refund via pay_sales.php — not in the manual, follows the libra-pay library."""
+
+    def _adapter(self, response, sandbox=False):
+        from types import SimpleNamespace
+
+        from tests.fake_http import FakeHttpClient
+
+        fake = FakeHttpClient()
+        fake.add("POST", "pay_sales.php", response if callable(response) else SimpleNamespace(**response))
+        a = LibraPayPaymentAdapter(
+            credentials={"merchant": MERCHANT, "terminal": TERMINAL, "key": KEY_HEX,
+                         "merchant_name": "Shop", "merchant_url": "https://shop.ro", "merchant_email": "s@shop.ro"},
+            http_client=fake, config={"sandbox": sandbox},
+        )
+        return a, fake
+
+    def test_full_refund_posts_trtype_24_once_without_retry(self):
+        a, fake = self._adapter({"status_code": 200, "text": "1"})
+        refund = a.refund("100001234567890123", Decimal("150.00"))
+        assert refund.status == "completed"
+        assert refund.amount == Decimal("150.00")
+        (call,) = fake.calls
+        assert call.path == "https://secure.librapay.ro/pay_sales.php"
+        assert call.kwargs["retry"] is False  # a retried refund could pay back twice
+        form = call.kwargs["data"]
+        assert (form["TRTYPE"], form["AMOUNT"], form["ORDER"], form["TERMINAL"]) == (
+            "24", "150.00", "100001234567890123", TERMINAL)
+
+    def test_partial_refund_is_trtype_25(self):
+        a, fake = self._adapter({"status_code": 200, "text": "1"})
+        a.refund("100001", Decimal("10.00"), full=False)
+        assert fake.calls[0].kwargs["data"]["TRTYPE"] == "25"
+
+    def test_p_sign_follows_the_library_field_order(self):
+        from collections import OrderedDict
+
+        from bapp_connectors.providers.payment.librapay.client import compute_hmac
+
+        a, fake = self._adapter({"status_code": 200, "text": "1"})
+        a.refund("100001", Decimal("10.00"))
+        form = fake.calls[0].kwargs["data"]
+        signed = OrderedDict((k, form[k]) for k in ("AMOUNT", "ORDER", "TERMINAL", "TRTYPE", "TIMESTAMP", "NONCE", "BACKREF"))
+        assert form["P_SIGN"] == compute_hmac(signed, KEY)
+        assert fake.calls[0].kwargs["headers"]["Referer"] == form["BACKREF"] == "https://shop.ro"
+
+    def test_sandbox_uses_the_merchant_host(self):
+        a, fake = self._adapter({"status_code": 200, "text": "1"}, sandbox=True)
+        a.refund("100001", Decimal("1.00"))
+        assert fake.calls[0].path == "https://merchant.librapay.ro/pay_sales.php"
+
+    def test_an_unexpected_answer_is_unknown_not_failed(self):
+        """Raising here could make someone refund again while the first one went through."""
+        a, _ = self._adapter({"status_code": 200, "text": "Tranzactie procesata"})
+        refund = a.refund("100001", Decimal("1.00"))
+        assert refund.status == "unknown"
+        assert refund.extra["response"] == "Tranzactie procesata"
+
+    def test_http_error_raises(self):
+        from bapp_connectors.core.errors import ProviderError
+
+        a, _ = self._adapter({"status_code": 500, "text": "oops"})
+        with pytest.raises(ProviderError):
+            a.refund("100001", Decimal("1.00"))
+
+    def test_transport_error_is_wrapped(self):
+        import requests
+
+        from bapp_connectors.core.errors import ProviderError
+
+        def down(method, path, kwargs):
+            raise requests.ConnectionError("DNS")
+
+        a, _ = self._adapter(down)
+        with pytest.raises(ProviderError, match="DNS"):
+            a.refund("100001", Decimal("1.00"))
+
+    def test_amount_is_required(self):
+        a, fake = self._adapter({"status_code": 200, "text": "1"})
+        with pytest.raises(ValidationError, match="amount"):
+            a.refund("100001")
+        assert fake.calls == []
+
+    def test_payment_id_must_be_the_numeric_order(self):
+        a, _ = self._adapter({"status_code": 200, "text": "1"})
+        with pytest.raises(ValidationError, match="numeric ORDER"):
+            a.refund("IR456", Decimal("1.00"))
+
+    @pytest.mark.parametrize("trtype", ["24", "25"])
+    def test_refund_ipn_is_payment_refunded_not_a_second_completion(self, trtype):
+        event = webhook_event_from_librapay(_build_signed_ipn(TRTYPE=trtype))
+        assert event.event_type == WebhookEventType.PAYMENT_REFUNDED
+        assert payment_result_from_ipn(_build_signed_ipn(TRTYPE=trtype)).status == "refunded"

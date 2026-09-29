@@ -9,8 +9,12 @@ from __future__ import annotations
 
 import binascii
 import json
+import logging
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
+
+import requests
 
 from bapp_connectors.core.capabilities import WebhookCapability
 from bapp_connectors.core.dto import (
@@ -23,18 +27,23 @@ from bapp_connectors.core.dto import (
 
 if TYPE_CHECKING:
     from bapp_connectors.core.dto import BillingDetails
-from bapp_connectors.core.errors import ValidationError
+from bapp_connectors.core.errors import ProviderError, ValidationError
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
 from bapp_connectors.providers.payment.librapay.client import (
     MAX_BACKREF_LENGTH,
+    TRTYPE_REFUND_FULL,
+    TRTYPE_REFUND_PARTIAL,
     build_checkout_form,
     build_data_custom,
+    build_refund_form,
     generate_order_id,
     verify_ipn_hmac,
 )
 from bapp_connectors.providers.payment.librapay.manifest import (
+    LIBRAPAY_LIVE_REFUND_URL,
     LIBRAPAY_LIVE_URL,
+    LIBRAPAY_SANDBOX_REFUND_URL,
     LIBRAPAY_SANDBOX_URL,
     manifest,
 )
@@ -43,6 +52,8 @@ from bapp_connectors.providers.payment.librapay.mappers import (
     payment_result_from_ipn,
     webhook_event_from_librapay,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class LibraPayPaymentAdapter(PaymentPort, WebhookCapability):
@@ -152,8 +163,57 @@ class LibraPayPaymentAdapter(PaymentPort, WebhookCapability):
     def get_payment(self, payment_id: str) -> PaymentResult:
         raise NotImplementedError("LibraPay does not support querying payment status via API. Use IPN notifications.")
 
-    def refund(self, payment_id: str, amount: Decimal | None = None, reason: str = "") -> Refund:
-        raise NotImplementedError("LibraPay refunds are processed via the merchant back office.")
+    def refund(self, payment_id: str, amount: Decimal | None = None, reason: str = "", *, full: bool = True) -> Refund:
+        """Refund through ``pay_sales.php`` — UNVERIFIED against LibraPay.
+
+        The official manual has no refund call; this follows the libra-pay
+        library (TRTYPE 24 full / 25 partial). ``payment_id`` is the LibraPay
+        ORDER (the checkout ``session_id``), not INT_REF. ``amount`` is required
+        because we do not store the original total; pass ``full=False`` for a
+        partial refund.
+
+        Sent once, never retried: a retry after a timeout could refund twice.
+        Only a body of exactly "1" counts as success; any other 200 answer is
+        returned as status "unknown" with the raw body — the refund may still
+        have gone through, check the LibraPay back office before trying again.
+        """
+        if amount is None:
+            raise ValidationError("LibraPay refunds need the amount (the original total for a full refund).")
+        if not str(payment_id).isdigit():
+            raise ValidationError(f"LibraPay refunds take the numeric ORDER, got {payment_id!r}.")
+        back_url = self._back_url or self._merchant_url
+        form = build_refund_form(
+            order_id=str(payment_id),
+            amount=float(amount),
+            terminal=self._terminal,
+            trtype=TRTYPE_REFUND_FULL if full else TRTYPE_REFUND_PARTIAL,
+            back_url=back_url,
+            key=self._key,
+        )
+        url = LIBRAPAY_SANDBOX_REFUND_URL if self._sandbox else LIBRAPAY_LIVE_REFUND_URL
+        try:
+            response = self._http_client.call(
+                "POST", url, data=form, headers={"Referer": back_url}, retry=False, direct_response=True,
+            )
+        except requests.RequestException as exc:
+            raise ProviderError(f"LibraPay refund request failed: {exc}") from exc
+        body = (response.text or "").strip()
+        if response.status_code >= 400:
+            raise ProviderError(f"LibraPay refund HTTP {response.status_code}: {body[:300]}",
+                                status_code=response.status_code)
+        status = "completed" if body == "1" else "unknown"
+        if status == "unknown":
+            logger.warning("LibraPay refund for ORDER %s answered %r; check the back office", payment_id, body[:300])
+        return Refund(
+            refund_id=str(payment_id),
+            payment_id=str(payment_id),
+            amount=Decimal(str(amount)),
+            currency="RON",
+            reason=reason,
+            status=status,
+            created_at=datetime.now(UTC),
+            extra={"trtype": form["TRTYPE"], "response": body[:1000]},
+        )
 
     # ── Webhook / IPN ──
 
