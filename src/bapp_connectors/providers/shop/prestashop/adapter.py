@@ -242,7 +242,7 @@ class PrestaShopShopAdapter(
             for row in (self.client.get_order_states() or []):
                 if isinstance(row, dict) and str(row.get("paid") or "") in ("1", "true", "True"):
                     return str(row.get("id") or "")
-        except Exception:  # noqa: BLE001 - magazinul nu raspunde: mergem pe starea implicita
+        except Exception:  # magazinul nu raspunde: mergem pe starea implicita
             pass
         return self.DEFAULT_PAID_STATE
 
