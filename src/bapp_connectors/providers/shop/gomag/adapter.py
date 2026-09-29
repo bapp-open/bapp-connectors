@@ -13,8 +13,10 @@ from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
     CategoryManagementCapability,
     OrderLookupCapability,
+    OrderStatusCatalogCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
+    RemoteOrderStatus,
     ShippingCapability,
 )
 from bapp_connectors.core.dto import (
@@ -76,6 +78,7 @@ class GomagShopAdapter(
     AttributeManagementCapability,
     ShippingCapability,
     OrderLookupCapability,
+    OrderStatusCatalogCapability,
 ):
     """
     Gomag shop adapter.
@@ -196,6 +199,44 @@ class GomagShopAdapter(
         if not gomag_status:
             raise ValueError(f"Cannot map OrderStatus.{status} to a Gomag status")
         self.client.update_order_status(order_id, gomag_status)
+        return self.get_order(order_id)
+
+    # ── Order status catalogue ──
+
+    def list_order_statuses(self) -> list[RemoteOrderStatus]:
+        """The statuses this shop defines, the merchant's own ones included.
+
+        Gomag's update endpoint takes the status NAME, not a numeric id, so the name is what
+        `id` carries; a numeric id, when the response has one, rides along in `extra` so a
+        caller can still tell two identically named statuses apart.
+        """
+        rows = _normalize_gomag_list(self.client.get_order_statuses(), key="status")
+        statuses: list[RemoteOrderStatus] = []
+        seen: set[str] = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("name") or row.get("status") or row.get("title") or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            extra = {key: row[key] for key in ("id", "status_id", "color", "position") if key in row}
+            statuses.append(
+                RemoteOrderStatus(
+                    id=name,
+                    label=name,
+                    framework_status=getattr(self._status_mapper.to_framework(name, None), "value", "") or "",
+                    extra=extra,
+                )
+            )
+        return statuses
+
+    def set_order_status_raw(self, order_id: str, raw_status: str) -> Order:
+        """Set a status by Gomag's own name, skipping the framework translation."""
+        status = str(raw_status or "").strip()
+        if not status:
+            raise ValueError("Gomag needs a status name")
+        self.client.update_order_status(order_id, status)
         return self.get_order(order_id)
 
     def create_order(self, order: Order) -> Order:
