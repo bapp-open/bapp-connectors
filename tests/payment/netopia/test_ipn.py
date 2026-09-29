@@ -1,6 +1,7 @@
 """
 Netopia IPN signature verification — tokens signed here the way Netopia signs
-them (RS512 JWT in Verification-Token, sub = base64(sha512(body))).
+them (RS512 JWT in Verification-Token, sub = base64(sha512(body))). The test key
+is passed as the ``public_key`` override, since only Netopia holds its private key.
 """
 
 from __future__ import annotations
@@ -123,11 +124,34 @@ class TestRejectedIpn:
                                      "sub": base64.b64encode(hashlib.sha512(BODY).digest()).decode()}).encode())
         assert adapter().verify_webhook({"Verification-Token": f"{head}.{claims}."}, BODY) is False
 
-    def test_no_public_key_fails_closed(self):
+    def test_without_override_only_netopias_key_is_trusted(self):
+        # Our test key is not Netopia's, so with no override the token must fail.
         assert adapter(public_key="").verify_webhook({"Verification-Token": make_token()}, BODY) is False
 
-    def test_garbage_public_key_fails_closed(self):
+    def test_garbage_override_falls_back_to_netopias_key_and_still_rejects(self):
         assert adapter(public_key="not a key").verify_webhook({"Verification-Token": make_token()}, BODY) is False
+
+
+class TestNetopiaPublishedKey:
+
+    def test_published_key_loads(self):
+        from bapp_connectors.providers.payment.netopia.ipn import NETOPIA_IPN_PUBLIC_KEY, load_public_key
+
+        assert load_public_key(NETOPIA_IPN_PUBLIC_KEY).key_size == 2048
+
+    def test_connection_form_does_not_ask_for_a_key(self):
+        assert "public_key" not in {f.name for f in manifest.auth.required_fields}
+
+
+class TestIpnAcknowledgement:
+    """errorType drives Netopia's resend: 0 recorded, 1 retry, 2 give up."""
+
+    @pytest.mark.parametrize("outcome,error_type", [("ok", 0), ("error", 1), ("rejected", 2)])
+    def test_error_type(self, outcome, error_type):
+        assert adapter().webhook_response(outcome)["errorType"] == error_type
+
+    def test_ok_has_no_error_code(self):
+        assert adapter().webhook_response("ok") == {"errorType": 0, "errorCode": None, "errorMessage": ""}
 
 
 class TestGenericPathFailsClosed:

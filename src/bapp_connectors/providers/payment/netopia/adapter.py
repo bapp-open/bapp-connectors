@@ -25,6 +25,7 @@ from bapp_connectors.providers.payment.netopia.client import NetopiaApiClient
 from bapp_connectors.providers.payment.netopia.errors import NetopiaOperationError, raise_for_netopia_error
 from bapp_connectors.providers.payment.netopia.ipn import (
     NETOPIA_IPN_HEADER,
+    NETOPIA_IPN_PUBLIC_KEY,
     NetopiaIpnVerificationError,
     get_header,
     verify_ipn_token,
@@ -199,17 +200,16 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
     def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
         """Verify a Netopia IPN by its signed ``Verification-Token`` JWT.
 
-        ``secret`` is ignored: Netopia signs with its own key pair, checked
-        against the ``public_key`` credential. Fails closed — no key, no token
-        or any failed check returns False.
+        ``secret`` is ignored: Netopia signs with its own key pair. The key is
+        Netopia's published one; a ``public_key`` credential, if a connection has
+        one, is tried as well (key rotation before a release ships). Fails
+        closed — no token or any failed check returns False.
         """
+        keys = [NETOPIA_IPN_PUBLIC_KEY]
+        if extra := (self.credentials.get("public_key") or "").strip():
+            keys.insert(0, extra)
         try:
-            verify_ipn_token(
-                get_header(headers, NETOPIA_IPN_HEADER),
-                body,
-                self.credentials.get("public_key", ""),
-                self.pos_signature,
-            )
+            verify_ipn_token(get_header(headers, NETOPIA_IPN_HEADER), body, self.pos_signature, keys)
         except NetopiaIpnVerificationError as exc:
             logger.warning("Netopia IPN rejected: %s", exc)
             return False
@@ -217,6 +217,19 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
             logger.error("Netopia IPN rejected: the 'cryptography' package is required (bapp-connectors[netopia])")
             return False
         return True
+
+    def webhook_response(self, outcome: str) -> dict:
+        """The IPN acknowledgement Netopia expects, as the official plugins send it.
+
+        ``errorType`` drives Netopia's resend: 0 = recorded, 1 = temporary
+        (Netopia retries), 2 = permanent (no retry). ``outcome`` is "ok",
+        "rejected" (signature failed — retrying cannot help) or "error".
+        """
+        if outcome == "ok":
+            return {"errorType": 0, "errorCode": None, "errorMessage": ""}
+        if outcome == "rejected":
+            return {"errorType": 2, "errorCode": 0x10000101, "errorMessage": "IPN verification failed"}
+        return {"errorType": 1, "errorCode": 1, "errorMessage": "IPN could not be recorded, retry"}
 
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
         """Parse a Netopia IPN JSON payload into a WebhookEvent."""

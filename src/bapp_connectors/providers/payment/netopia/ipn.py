@@ -12,6 +12,11 @@ ipn.py) make:
 
 Stricter than the SDKs on purpose: the algorithm is pinned to RS512 instead of
 taken from the token header, and a missing public key fails instead of passing.
+
+The signing key is Netopia's own and the same for every merchant, live and
+sandbox: the official WooCommerce and OpenCart plugins ship it hardcoded
+(``NETOPIA_IPN_PUBLIC_KEY``). The per-POS ``live.<POS>.public.cer`` from the
+admin panel is the legacy mobilPay (v1) encryption certificate, not this key.
 """
 
 from __future__ import annotations
@@ -29,6 +34,19 @@ logger = logging.getLogger(__name__)
 NETOPIA_IPN_HEADER = "Verification-Token"
 NETOPIA_ISSUER = "NETOPIA Payments"
 EXPIRY_LEEWAY_SECONDS = 300
+
+# From netopiapayments/WooCommerce v2/wc-netopiapayments-gateway.php and
+# netopiapayments/opencart-plugin catalog/controller/payment/mobilpay.php.
+NETOPIA_IPN_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy6pUDAFLVul4y499gz1P
+gGSvTSc82U3/ih3e5FDUs/F0Jvfzc4cew8TrBDrw7Y+AYZS37D2i+Xi5nYpzQpu7
+ryS4W+qvgAA1SEjiU1Sk2a4+A1HeH+vfZo0gDrIYTh2NSAQnDSDxk5T475ukSSwX
+L9tYwO6CpdAv3BtpMT5YhyS3ipgPEnGIQKXjh8GMgLSmRFbgoCTRWlCvu7XOg94N
+fS8l4it2qrEldU8VEdfPDfFLlxl3lUoLEmCncCjmF1wRVtk4cNu+WtWQ4mBgxpt0
+tX2aJkqp4PV3o5kI4bqHq/MS7HVJ7yxtj/p8kawlVYipGsQj3ypgltQ3bnYV/LRq
+8QIDAQAB
+-----END PUBLIC KEY-----
+"""
 
 _PEM_RE = re.compile(r"-----BEGIN ([A-Z ]+)-----(.*?)-----END \1-----", re.DOTALL)
 
@@ -86,8 +104,12 @@ def _to_seconds(value: float) -> float:
     return value / 1000 if value > 1e11 else value
 
 
-def verify_ipn_token(token: str, body: bytes, public_key_text: str, pos_signature: str) -> dict:
-    """Verify a Netopia IPN token against the raw body. Returns the claims or raises."""
+def verify_ipn_token(token: str, body: bytes, pos_signature: str, public_keys: list[str] | None = None) -> dict:
+    """Verify a Netopia IPN token against the raw body. Returns the claims or raises.
+
+    ``public_keys`` defaults to Netopia's published key; an override (key
+    rotation, tests) is tried as given.
+    """
     from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.asymmetric import padding
@@ -108,11 +130,15 @@ def verify_ipn_token(token: str, body: bytes, public_key_text: str, pos_signatur
     if header.get("alg") != "RS512":
         raise NetopiaIpnVerificationError(f"unexpected token algorithm {header.get('alg')!r}")
 
-    public_key = load_public_key(public_key_text)
-    try:
-        public_key.verify(signature, f"{head_b64}.{claims_b64}".encode(), padding.PKCS1v15(), hashes.SHA512())
-    except InvalidSignature as exc:
-        raise NetopiaIpnVerificationError("token signature does not match the public key") from exc
+    signed = f"{head_b64}.{claims_b64}".encode()
+    for key_text in public_keys or [NETOPIA_IPN_PUBLIC_KEY]:
+        try:
+            load_public_key(key_text).verify(signature, signed, padding.PKCS1v15(), hashes.SHA512())
+            break
+        except (InvalidSignature, NetopiaIpnVerificationError):
+            continue
+    else:
+        raise NetopiaIpnVerificationError("token signature does not match Netopia's public key")
 
     if claims.get("iss") != NETOPIA_ISSUER:
         raise NetopiaIpnVerificationError(f"unexpected issuer {claims.get('iss')!r}")
