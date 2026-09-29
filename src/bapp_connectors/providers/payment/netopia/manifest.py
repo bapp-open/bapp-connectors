@@ -16,7 +16,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import PaymentPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
-NETOPIA_LIVE_URL = "https://secure.netopia-payments.com/"
+# secure.netopia-payments.com is the marketing site (302 to netopia-payments.com);
+# the live v2 API is still served from the mobilPay host.
+NETOPIA_LIVE_URL = "https://secure.mobilpay.ro/pay/"
 NETOPIA_SANDBOX_URL = "https://secure.sandbox.netopia-payments.com/"
 
 manifest = ProviderManifest(

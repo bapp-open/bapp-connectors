@@ -22,21 +22,70 @@ from bapp_connectors.core.dto import (
 
 # ── Status mappings ──
 
+# Purchase statuses from the official SDK (netopiapayments/composer, IPN.php).
 NETOPIA_STATUS_MAP: dict[int, str] = {
-    0: "pending",
-    3: "paid_pending",
+    1: "new",
+    2: "opened",  # pre-authorized, not captured
+    3: "paid",  # captured
+    4: "canceled",  # voided
     5: "confirmed",
-    12: "cancelled",
-    15: "credit",  # refunded
+    6: "pending",
+    7: "scheduled",
+    8: "credit",  # captured, then refunded
+    9: "chargeback_init",
+    10: "chargeback_accept",
+    11: "error",
+    12: "declined",
+    13: "fraud",  # held for review
+    14: "pending_auth",
+    15: "3d_auth",  # customer must complete 3-D Secure
+    16: "chargeback_representment",
+    17: "reversed",
+    18: "pending_any",
+    19: "programmed_recurrent_payment",
+    20: "canceled_programmed_recurrent_payment",
+    21: "trial_pending",
+    22: "trial",
+    23: "expired",  # never paid
 }
 
 NETOPIA_STATUS_FRIENDLY: dict[str, str] = {
-    "pending": "pending",
-    "paid_pending": "processing",
+    "new": "pending",
+    "opened": "authorized",
+    "paid": "completed",
+    "canceled": "cancelled",
     "confirmed": "completed",
-    "cancelled": "cancelled",
+    "pending": "pending",
+    "scheduled": "pending",
     "credit": "refunded",
+    "chargeback_init": "disputed",
+    "chargeback_accept": "refunded",
+    "error": "failed",
+    "declined": "failed",
+    "fraud": "processing",
+    "pending_auth": "processing",
+    "3d_auth": "pending",
+    "chargeback_representment": "disputed",
+    "reversed": "cancelled",
+    "pending_any": "pending",
+    "programmed_recurrent_payment": "pending",
+    "canceled_programmed_recurrent_payment": "cancelled",
+    "trial_pending": "pending",
+    "trial": "pending",
+    "expired": "cancelled",
 }
+
+
+def netopia_status(data: dict) -> tuple[int | None, str, str]:
+    """Return (code, raw name, normalized status).
+
+    Netopia puts the status in ``payment.status``; a top-level ``status`` is
+    only a fallback for older payload shapes.
+    """
+    payment = data.get("payment") or {}
+    code = payment.get("status") if isinstance(payment.get("status"), int) else data.get("status")
+    raw = NETOPIA_STATUS_MAP.get(code, "unknown") if isinstance(code, int) else str(code or "unknown")
+    return code if isinstance(code, int) else None, raw, NETOPIA_STATUS_FRIENDLY.get(raw, raw)
 
 
 # ── Checkout Session mapper ──
@@ -74,18 +123,12 @@ def checkout_session_from_netopia(data: dict, amount: Decimal, currency: str, de
 
 def payment_from_netopia(data: dict) -> PaymentResult:
     """Map a Netopia payment status response to a normalized PaymentResult DTO."""
-    status_code = data.get("status")
-    raw_status = (
-        NETOPIA_STATUS_MAP.get(status_code, "unknown")
-        if isinstance(status_code, int)
-        else str(status_code or "unknown")
-    )
-    normalized_status = NETOPIA_STATUS_FRIENDLY.get(raw_status, raw_status)
+    status_code, raw_status, normalized_status = netopia_status(data)
 
-    payment = data.get("payment", {})
-    order = data.get("order", {})
-    amount = Decimal(str(order.get("amount", 0)))
-    currency = (order.get("currency") or "RON").upper()
+    payment = data.get("payment") or {}
+    order = data.get("order") or {}
+    amount = Decimal(str(payment.get("amount") or order.get("amount") or 0))
+    currency = (payment.get("currency") or order.get("currency") or "RON").upper()
     ntp_id = payment.get("ntpID") or order.get("ntpID") or data.get("ntpID", "")
 
     paid_at = None
@@ -115,12 +158,21 @@ def payment_from_netopia(data: dict) -> PaymentResult:
 # ── Refund mapper ──
 
 
-def refund_from_netopia(data: dict, payment_id: str) -> Refund:
-    """Map a Netopia refund/credit response to a normalized Refund DTO."""
-    order = data.get("order", {})
-    amount = Decimal(str(order.get("amount", 0)))
-    currency = (order.get("currency") or "RON").upper()
-    ntp_id = data.get("payment", {}).get("ntpID") or data.get("ntpID", "")
+def refund_from_netopia(data: dict, payment_id: str, requested_amount: Decimal | None = None) -> Refund:
+    """Map a Netopia credit response to a normalized Refund DTO.
+
+    Call only after ``raise_for_netopia_error``: a refused credit never reaches
+    here. The response has no ``order``; the refunded amount is what was asked
+    for, else what Netopia reports on ``payment``.
+    """
+    payment = data.get("payment") or {}
+    status_code, raw_status, normalized_status = netopia_status(data)
+    if requested_amount is not None:
+        amount = Decimal(str(requested_amount))
+    else:
+        amount = Decimal(str(payment.get("amount") or 0))
+    currency = (payment.get("currency") or "RON").upper()
+    ntp_id = payment.get("ntpID") or data.get("ntpID") or payment_id
 
     return Refund(
         refund_id=str(ntp_id),
@@ -131,7 +183,9 @@ def refund_from_netopia(data: dict, payment_id: str) -> Refund:
         status="completed",
         created_at=datetime.now(UTC),
         extra={
-            "netopia_status": data.get("status"),
+            "netopia_status_code": status_code,
+            "netopia_status": raw_status,
+            "payment_status": normalized_status,
         },
         provider_meta=ProviderMeta(
             provider="netopia",
@@ -146,22 +200,23 @@ def refund_from_netopia(data: dict, payment_id: str) -> Refund:
 
 
 NETOPIA_IPN_EVENT_MAP: dict[str, WebhookEventType] = {
-    "pending": WebhookEventType.PAYMENT_PENDING,        # status 0
-    "paid_pending": WebhookEventType.PAYMENT_PENDING,   # status 3
-    "confirmed": WebhookEventType.PAYMENT_COMPLETED,    # status 5
-    "cancelled": WebhookEventType.PAYMENT_FAILED,       # status 12
-    "credit": WebhookEventType.PAYMENT_REFUNDED,        # status 15 (refund)
+    "pending": WebhookEventType.PAYMENT_PENDING,
+    "processing": WebhookEventType.PAYMENT_PENDING,
+    "authorized": WebhookEventType.PAYMENT_PENDING,
+    "completed": WebhookEventType.PAYMENT_COMPLETED,
+    "failed": WebhookEventType.PAYMENT_FAILED,
+    "cancelled": WebhookEventType.PAYMENT_FAILED,
+    "refunded": WebhookEventType.PAYMENT_REFUNDED,
 }
 
 
 def webhook_event_from_netopia(data: dict) -> WebhookEvent:
     """Map a Netopia IPN notification to a WebhookEvent DTO."""
-    status_code = data.get("status")
-    raw_status = NETOPIA_STATUS_MAP.get(status_code, "unknown") if isinstance(status_code, int) else str(status_code or "unknown")
-    event_type = NETOPIA_IPN_EVENT_MAP.get(raw_status, WebhookEventType.UNKNOWN)
+    status_code, raw_status, normalized_status = netopia_status(data)
+    event_type = NETOPIA_IPN_EVENT_MAP.get(normalized_status, WebhookEventType.UNKNOWN)
 
-    payment = data.get("payment", {})
-    order = data.get("order", {})
+    payment = data.get("payment") or {}
+    order = data.get("order") or {}
     ntp_id = payment.get("ntpID") or order.get("ntpID") or data.get("ntpID", "")
 
     return WebhookEvent(
@@ -170,6 +225,9 @@ def webhook_event_from_netopia(data: dict) -> WebhookEvent:
         provider="netopia",
         provider_event_type=f"payment.{raw_status}",
         payload=data,
-        idempotency_key=str(ntp_id),
+        # One payment gets several IPNs (paid, then refunded); keying on the
+        # ntpID alone dropped the later ones as duplicates. The normalized
+        # status keeps "paid" (3) and "confirmed" (5) as one completion.
+        idempotency_key=f"{ntp_id}:{normalized_status}",
         received_at=datetime.now(UTC),
     )

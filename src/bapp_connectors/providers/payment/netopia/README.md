@@ -3,7 +3,7 @@
 Romanian payment gateway (Netopia Payments / mobilPay) for online card payments with JSON API and IPN notifications.
 
 - **API version:** JSON API (v2)
-- **Base URL:** `https://secure.mobilpay.ro/pay/` (live), `https://sandboxsecure.mobilpay.ro/pay/` (sandbox)
+- **Base URL:** `https://secure.mobilpay.ro/pay/` (live), `https://secure.sandbox.netopia-payments.com/` (sandbox)
 - **Auth:** API key in `Authorization` header + POS signature in request body
 - **Webhooks:** Supported (IPN JSON POST, no HMAC signature)
 - **Rate limit:** 10 req/s, burst 20
@@ -31,8 +31,10 @@ enable the sandbox environment. Defaults to `"true"`.
 | Capability | Supported |
 |------------|-----------|
 | Create checkout session | Yes (JSON API) |
-| Get payment status | Yes (`payment/status` endpoint) |
-| Refund | No (raises `UnsupportedFeatureError`) |
+| Get payment status | Yes (`operation/status`) |
+| Refund (full or partial) | Yes (`operation/credit`) |
+| Cancel an uncaptured payment | Yes, `cancel_payment()` (adapter method, not on `PaymentPort`) |
+| List transactions | **No** — the API has no listing, report or settlement endpoint |
 | Webhook verification (IPN) | Yes (structure check only) |
 | Webhook parsing (IPN) | Yes |
 
@@ -41,7 +43,10 @@ enable the sandbox environment. Defaults to `"true"`.
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | POST | `payment/card/start` | Start a new payment (returns `paymentURL`) |
-| POST | `payment/status` | Get payment status by NTP ID |
+| POST | `operation/status` | Payment status by NTP ID (also used by `test_connection`) |
+| POST | `operation/credit` | Refund, full or partial |
+| POST | `operation/void` | Cancel a pre-authorized (status 2) payment |
+| POST | `operation/expire` | Close a started, never-paid payment |
 
 ## Payment Flow
 
@@ -58,24 +63,27 @@ The returned `CheckoutSession.extra` contains:
 
 ## Payment Status Mapping
 
-### Netopia status codes
+Codes come from the official SDK (`netopiapayments/composer`, `IPN.php`). The
+status lives in `payment.status`; a top-level `status` is only a fallback.
 
-| Status Code | Raw Status | Framework Status |
-|-------------|------------|------------------|
-| `0` | `pending` | `pending` |
-| `3` | `paid_pending` | `processing` |
-| `5` | `confirmed` | `completed` |
-| `12` | `cancelled` | `cancelled` |
-| `15` | `credit` | `refunded` |
+| Code | Raw status | Framework status | WebhookEventType |
+|------|------------|------------------|------------------|
+| 1 | `new` | `pending` | `PAYMENT_PENDING` |
+| 2 | `opened` (pre-authorized) | `authorized` | `PAYMENT_PENDING` |
+| 3 | `paid` | `completed` | `PAYMENT_COMPLETED` |
+| 4 | `canceled` (void) | `cancelled` | `PAYMENT_FAILED` |
+| 5 | `confirmed` | `completed` | `PAYMENT_COMPLETED` |
+| 8 | `credit` (refunded) | `refunded` | `PAYMENT_REFUNDED` |
+| 9, 16 | chargeback | `disputed` | `UNKNOWN` |
+| 10 | `chargeback_accept` | `refunded` | `PAYMENT_REFUNDED` |
+| 11, 12 | `error`, `declined` | `failed` | `PAYMENT_FAILED` |
+| 13, 14 | `fraud` (review), `pending_auth` | `processing` | `PAYMENT_PENDING` |
+| 15 | `3d_auth` (3-D Secure required) | `pending` | `PAYMENT_PENDING` |
+| 17, 23 | `reversed`, `expired` | `cancelled` | `PAYMENT_FAILED` |
 
-### Webhook event type mapping
-
-| Netopia Status | WebhookEventType |
-|----------------|------------------|
-| `confirmed` | `PAYMENT_COMPLETED` (via `ORDER_UPDATED`) |
-| `paid_pending` | `ORDER_UPDATED` |
-| `cancelled` | `ORDER_CANCELLED` |
-| `credit` | `ORDER_UPDATED` |
+The IPN idempotency key is `<ntpID>:<framework status>`, so a refund IPN after
+the payment IPN is not dropped as a duplicate, while `paid` (3) and `confirmed`
+(5) still collapse into one completion.
 
 ## Request Payload Structure
 
@@ -109,13 +117,18 @@ The `payment/card/start` endpoint expects a nested JSON payload:
 
 ## API Quirks
 
-- **No HMAC on IPN:** Unlike EuPlatesc and LibraPay, Netopia does not sign IPN
-  notifications with HMAC. Verification only checks that the payload is valid JSON
-  containing expected fields (`payment`, `order`, or `status`). Security relies on the
-  `notify_url` being a non-guessable server-side endpoint.
-- **Refunds not supported programmatically:** The adapter raises
-  `UnsupportedFeatureError`. Refunds must be processed via the Netopia admin panel or
-  are handled through the `credit` IPN callback (status code 15).
+- **IPN signature not verified yet:** Netopia signs each IPN with a JWT in the
+  `Verification-token` header (RS512, merchant's Netopia public key). The adapter
+  does not check it: `verify_webhook` only checks the payload is JSON with the
+  expected fields, so security currently relies on a non-guessable `notify_url`.
+- **Errors come back as HTTP 200:** a refused operation answers 200 with
+  `{"error": {"code": "103", ...}}`. `raise_for_netopia_error` treats `00`
+  (approved), `100` (3-D Secure) and `101` (redirect) as success and raises
+  `NetopiaOperationError` (permanent, not retried) for anything else.
+- **Live host:** the API lives on `secure.mobilpay.ro/pay/`;
+  `secure.netopia-payments.com` is the marketing site and 302s every call.
+- **`healz` is unauthenticated:** it cannot tell a good key from a bad one, so
+  `test_connection` queries `operation/status` for a placeholder ntpID instead.
 - **Sandbox mode via credentials:** The `sandbox` flag is a credential field (not a
   setting), which switches the base URL between live and sandbox environments.
 - **`test_connection()` uses a minimal payment call:** Netopia has no dedicated auth-test

@@ -21,6 +21,7 @@ from bapp_connectors.core.dto import (
 from bapp_connectors.core.http import MultiHeaderAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
 from bapp_connectors.providers.payment.netopia.client import NetopiaApiClient
+from bapp_connectors.providers.payment.netopia.errors import NetopiaOperationError, raise_for_netopia_error
 from bapp_connectors.providers.payment.netopia.manifest import (
     NETOPIA_LIVE_URL,
     NETOPIA_SANDBOX_URL,
@@ -145,10 +146,12 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
             cancel_url=cancel_url or "",
             success_url=success_url or "",
         )
+        raise_for_netopia_error(response, "start payment")
         return checkout_session_from_netopia(response, amount, currency, description)
 
     def get_payment(self, payment_id: str) -> PaymentResult:
         response = self.client.get_status(ntp_id=payment_id)
+        raise_for_netopia_error(response, "status")
         return payment_from_netopia(response)
 
     def refund(self, payment_id: str, amount: Decimal | None = None, reason: str = "") -> Refund:
@@ -156,7 +159,31 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
             ntp_id=payment_id,
             amount=float(amount) if amount is not None else None,
         )
-        return refund_from_netopia(response, payment_id)
+        raise_for_netopia_error(response, "refund")
+        return refund_from_netopia(response, payment_id, requested_amount=amount)
+
+    def cancel_payment(self, payment_id: str) -> PaymentResult:
+        """Cancel a payment that has not been captured.
+
+        A pre-authorized payment (status 2) is voided, releasing the hold on the
+        card; one never paid is expired. Money already taken cannot be
+        cancelled, only refunded.
+        """
+        current = self.get_payment(payment_id)
+        if current.status == "authorized":
+            response = self.client.void(ntp_id=payment_id)
+            operation = "void"
+        elif current.status in ("pending", "processing"):
+            response = self.client.expire(ntp_id=payment_id)
+            operation = "expire"
+        else:
+            raise NetopiaOperationError(
+                f"Netopia payment {payment_id} is {current.status}; "
+                + ("refund it instead." if current.status == "completed" else "nothing to cancel."),
+                code=str(current.extra.get("netopia_status_code") or ""),
+            )
+        raise_for_netopia_error(response, operation)
+        return payment_from_netopia(response)
 
     # ── WebhookCapability ──
 

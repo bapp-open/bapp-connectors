@@ -11,6 +11,8 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.errors import AuthenticationError
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -56,12 +58,17 @@ class NetopiaApiClient:
     # ── Auth / Connection Test ──
 
     def test_auth(self) -> bool:
-        """Verify credentials by calling the health endpoint."""
+        """Verify the API key with an authenticated call.
+
+        ``healz`` answers without checking the key, so it cannot tell a good key
+        from a bad one. A status query for a placeholder ntpID does: a bad key
+        gets HTTP 401, a good one gets a 200 carrying "Invalid ntpID".
+        """
         try:
-            result = self._call("GET", "healz")
-            return result == "ok" or (isinstance(result, dict) and not result.get("error"))
-        except Exception:
+            self._json_post("operation/status", {"posID": self.pos_signature, "ntpID": "0"})
+        except AuthenticationError:
             return False
+        return True
 
     # ── Payment: Card ──
 
@@ -176,7 +183,8 @@ class NetopiaApiClient:
 
     def get_status(self, ntp_id: str | None = None, order_id: str | None = None) -> dict:
         """Get payment status by NTP ID or order ID."""
-        payload: dict[str, Any] = {}
+        # The official SDK always sends posID alongside the ids.
+        payload: dict[str, Any] = {"posID": self.pos_signature}
         if ntp_id:
             payload["ntpID"] = ntp_id
         if order_id:
@@ -203,7 +211,7 @@ class NetopiaApiClient:
 
     def expire(self, ntp_id: str) -> dict:
         """Expire a pending payment."""
-        return self._json_post("operation/expire", {"ntpID": ntp_id})
+        return self._json_post("operation/expire", {"posID": self.pos_signature, "ntpID": ntp_id})
 
     def get_payment_options(self, ntp_id: str, instrument: dict | None = None) -> dict:
         """Get available installments and loyalty points for a payment."""
