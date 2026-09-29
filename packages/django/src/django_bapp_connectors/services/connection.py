@@ -118,6 +118,30 @@ def _serialize_provider(manifest: ProviderManifest) -> dict[str, Any]:
     }
 
 
+# Set on an http client once execution logging is attached, so a host that also
+# attaches its own (aio-backend did, via adapter.http_client) does not log twice.
+EXECUTION_LOG_MARKER = "_bapp_execution_log_attached"
+
+
+def resolve_http_client(adapter):
+    """The adapter's ResilientHttpClient, wherever the provider keeps it.
+
+    Most keep it as ``adapter.client.http``; the form-based payment providers
+    (LibraPay, MobilPay, Cardinity) as ``adapter._http_client``, Utrust as
+    ``adapter._client.http``. Only looking at ``client.http`` left their calls
+    — refunds included — out of the execution log.
+    """
+    for candidate in (
+        getattr(getattr(adapter, "client", None), "http", None),
+        getattr(getattr(adapter, "_client", None), "http", None),
+        getattr(adapter, "http_client", None),
+        getattr(adapter, "_http_client", None),
+    ):
+        if candidate is not None and hasattr(candidate, "middleware"):
+            return candidate
+    return None
+
+
 class ConnectionService:
     """Service layer for managing connector connections."""
 
@@ -137,13 +161,13 @@ class ConnectionService:
         if log_execution:
             try:
                 from django_bapp_connectors.callbacks import make_execution_log_callback
-                # Resolve the ResilientHttpClient — adapters store it as adapter.client.http
-                http_client = getattr(getattr(adapter, 'client', None), 'http', None)
-                if http_client and hasattr(http_client, 'middleware'):
+                http_client = resolve_http_client(adapter)
+                if http_client is not None and not getattr(http_client, EXECUTION_LOG_MARKER, False):
                     execution_log_model = connection.execution_logs.model
                     on_response, on_error = make_execution_log_callback(execution_log_model, connection)
                     http_client.middleware.add_on_response(on_response)
                     http_client.middleware.add_on_error(on_error)
+                    setattr(http_client, EXECUTION_LOG_MARKER, True)
             except Exception:
                 logger.debug("Could not attach execution log callbacks", exc_info=True)
         return adapter

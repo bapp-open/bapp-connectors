@@ -194,6 +194,7 @@ class LibraPayPaymentAdapter(PaymentPort, WebhookCapability):
         try:
             response = self._http_client.call(
                 "POST", url, data=form, headers={"Referer": back_url}, retry=False, direct_response=True,
+                log_body=True,  # the answer to a refund is not documented: keep it in the execution log
             )
         except requests.RequestException as exc:
             raise ProviderError(f"LibraPay refund request failed: {exc}") from exc

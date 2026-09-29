@@ -118,6 +118,9 @@ class ResilientHttpClient:
         **kwargs,
     ) -> requests.Response | dict | list | str:
         """Execute a single HTTP request (called by retry wrapper)."""
+        # Loggers keep bodies only for failed calls; `log_body=True` asks them to keep
+        # this one's too (providers that answer errors with 200, or unknown answers).
+        log_body = kwargs.pop("log_body", False)
         # Rate limiting
         if self.rate_limiter:
             self.rate_limiter.wait()
@@ -141,6 +144,7 @@ class ResilientHttpClient:
             kwargs=kwargs,
             started_at=time.monotonic(),
             provider=self.provider_name,
+            extra={"log_body": log_body},
         )
         self.middleware.fire_on_request(req_ctx)
 
@@ -161,6 +165,9 @@ class ResilientHttpClient:
             request=req_ctx,
             status_code=response.status_code,
             duration_ms=duration_ms,
+            # The raw response, not a decoded body: decoding every 2xx (product lists,
+            # feeds) would cost CPU no logger wants. Callbacks read it when they keep it.
+            extra={"response": response},
         )
         self.middleware.fire_on_response(resp_ctx)
 

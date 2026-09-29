@@ -4,11 +4,32 @@ Webhook service — receive, verify, deduplicate, dispatch.
 
 from __future__ import annotations
 
+import json
 import logging
+import uuid
 
+from bapp_connectors.core.errors import WebhookVerificationError
 from bapp_connectors.core.webhooks import WebhookDispatcher
 
 logger = logging.getLogger(__name__)
+
+# A rejected webhook is stored for inspection, but anyone who knows the URL can send
+# one: cap what a single request can write.
+_REJECTED_MAX_CHARS = 16000
+_REJECTED_DROP_HEADERS = {"cookie", "authorization"}
+
+
+def stored_webhook_body(payload) -> bytes:
+    """Rebuild the request body from a stored payload, for re-parsing.
+
+    The dispatcher stores a non-JSON body (LibraPay/EuPlatesc post a form) as
+    ``{"raw": <text>}``; re-encoding that dict as JSON handed the adapter
+    ``{"raw": ...}`` instead of the form, so a LibraPay IPN re-parsed as unknown
+    and the checkout never completed.
+    """
+    if isinstance(payload, dict) and set(payload) == {"raw"} and isinstance(payload["raw"], str):
+        return payload["raw"].encode()
+    return json.dumps(payload).encode() if isinstance(payload, dict) else b""
 
 
 class WebhookService:
@@ -30,6 +51,39 @@ class WebhookService:
             return self.webhook_event_model.objects.filter(idempotency_key=idempotency_key).exists()
         return False
 
+    def _store_rejected(self, provider: str, headers: dict, body: bytes, error: Exception, connection=None):
+        """Keep a webhook that failed signature verification, to see what arrived.
+
+        Status "rejected": never processed, and no ``webhook_event_received`` signal
+        (a forged IPN must not start a flow). The idempotency key is random, so a
+        genuine retry of the same notification is not blocked by it.
+        """
+        if not self.webhook_event_model:
+            return
+        try:
+            text = body.decode("utf-8", errors="replace")[:_REJECTED_MAX_CHARS] if body else ""
+            try:
+                payload = json.loads(text)
+                if not isinstance(payload, dict):
+                    payload = {"raw": text}
+            except ValueError:
+                payload = {"raw": text}
+            create_kwargs = {
+                "provider": provider,
+                "event_type": "unknown",
+                "idempotency_key": f"rejected:{uuid.uuid4().hex}",
+                "payload": payload,
+                "headers": {k: v for k, v in dict(headers or {}).items() if str(k).lower() not in _REJECTED_DROP_HEADERS},
+                "signature_valid": False,
+                "status": "rejected",
+                "error": str(error)[:2000],
+            }
+            if connection is not None:
+                create_kwargs["connection"] = connection
+            self.webhook_event_model.objects.create(**create_kwargs)
+        except Exception:
+            logger.warning("Could not store rejected webhook for %s", provider, exc_info=True)
+
     def receive(
         self,
         provider: str,
@@ -47,14 +101,18 @@ class WebhookService:
         Returns the persisted WebhookEvent model instance (or the DTO if no model).
         """
         # Parse and verify via the core dispatcher
-        webhook_event = self._dispatcher.receive(
-            provider=provider,
-            headers=headers,
-            body=body,
-            signature_method=signature_method,
-            signature_header=signature_header,
-            secret=secret,
-        )
+        try:
+            webhook_event = self._dispatcher.receive(
+                provider=provider,
+                headers=headers,
+                body=body,
+                signature_method=signature_method,
+                signature_header=signature_header,
+                secret=secret,
+            )
+        except WebhookVerificationError as exc:
+            self._store_rejected(provider, headers, body, exc, connection)
+            raise
 
         # Adapter normalization (the dispatcher stores UNKNOWN on purpose): overwrite the
         # generic DTO with the provider's own parse BEFORE the duplicate check, so both the

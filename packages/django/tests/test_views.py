@@ -279,12 +279,13 @@ class TestNetopiaIpnSignature:
     def _post(self, client, conn, **headers):
         return client.post(f"/webhooks/{conn.pk}/ipn/", data=NETOPIA_BODY, content_type="application/json", **headers)
 
-    def test_forged_ipn_is_not_stored(self, client, netopia):
+    def test_forged_ipn_is_kept_only_as_rejected(self, client, netopia):
         from .testapp.models import WebhookEvent
 
         response = self._post(client, netopia)
         assert response.status_code == 200
-        assert WebhookEvent.objects.count() == 0
+        # stored for inspection, never as something to process
+        assert list(WebhookEvent.objects.values_list("status", "signature_valid")) == [("rejected", False)]
 
     def test_signed_ipn_is_stored(self, client, netopia, netopia_key):
         from .testapp.models import WebhookEvent

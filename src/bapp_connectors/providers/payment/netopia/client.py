@@ -51,9 +51,15 @@ class NetopiaApiClient:
             headers.update(extra)
         return self.http.call(method, path, headers=headers, **kwargs)
 
-    def _json_post(self, path: str, payload: dict) -> dict | list | str:
+    def _json_post(self, path: str, payload: dict, log_body: bool = False) -> dict | list | str:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        return self._call("POST", path, data=data)
+        return self._call("POST", path, data=data, log_body=log_body)
+
+    def _operation(self, path: str, payload: dict) -> dict | list | str:
+        """An operation on an existing payment. Netopia answers a refused one with
+        HTTP 200 + error.code, so the body is kept in the execution log even on 2xx.
+        (Not the payment start: that body carries the payer's personal data.)"""
+        return self._json_post(path, payload, log_body=True)
 
     # ── Auth / Connection Test ──
 
@@ -65,7 +71,7 @@ class NetopiaApiClient:
         gets HTTP 401, a good one gets a 200 carrying "Invalid ntpID".
         """
         try:
-            self._json_post("operation/status", {"posID": self.pos_signature, "ntpID": "0"})
+            self._operation("operation/status", {"posID": self.pos_signature, "ntpID": "0"})
         except AuthenticationError:
             return False
         return True
@@ -189,29 +195,29 @@ class NetopiaApiClient:
             payload["ntpID"] = ntp_id
         if order_id:
             payload["orderID"] = order_id
-        return self._json_post("operation/status", payload)
+        return self._operation("operation/status", payload)
 
     def capture(self, ntp_id: str, amount: float | None = None) -> dict:
         """Capture a pre-authorized payment (full or partial)."""
         payload: dict[str, Any] = {"ntpID": ntp_id}
         if amount is not None:
             payload["amount"] = amount
-        return self._json_post("operation/capture", payload)
+        return self._operation("operation/capture", payload)
 
     def void(self, ntp_id: str) -> dict:
         """Void/cancel a pre-authorized payment."""
-        return self._json_post("operation/void", {"ntpID": ntp_id})
+        return self._operation("operation/void", {"ntpID": ntp_id})
 
     def credit(self, ntp_id: str, amount: float | None = None) -> dict:
         """Refund a payment (full or partial)."""
         payload: dict[str, Any] = {"ntpID": ntp_id}
         if amount is not None:
             payload["amount"] = amount
-        return self._json_post("operation/credit", payload)
+        return self._operation("operation/credit", payload)
 
     def expire(self, ntp_id: str) -> dict:
         """Expire a pending payment."""
-        return self._json_post("operation/expire", {"posID": self.pos_signature, "ntpID": ntp_id})
+        return self._operation("operation/expire", {"posID": self.pos_signature, "ntpID": ntp_id})
 
     def get_payment_options(self, ntp_id: str, instrument: dict | None = None) -> dict:
         """Get available installments and loyalty points for a payment."""

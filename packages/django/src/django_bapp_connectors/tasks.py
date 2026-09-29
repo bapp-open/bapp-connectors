@@ -143,10 +143,9 @@ try:
     @shared_task
     def process_webhook(webhook_event_id: int, app_label: str = "", model_name: str = ""):
         """Process a persisted webhook event."""
-        import json
-
         from django.apps import apps
 
+        from django_bapp_connectors.services.webhook import stored_webhook_body
         from django_bapp_connectors.signals import webhook_event_processed
 
         WebhookEventModel = apps.get_model(app_label, model_name)
@@ -160,7 +159,7 @@ try:
             if connection:
                 adapter = connection.get_adapter()
                 if hasattr(adapter, "parse_webhook"):
-                    body = json.dumps(event.payload).encode() if isinstance(event.payload, dict) else b""
+                    body = stored_webhook_body(event.payload)
                     parsed_dto = adapter.parse_webhook(event.headers or {}, body)
 
             # Backstop: rows stored before the receive-time typing (or stored via a path
