@@ -8,6 +8,7 @@ Netopia v2 API with JSON endpoints and API key authentication.
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING
 
 from bapp_connectors.core.capabilities import WebhookCapability
@@ -22,6 +23,12 @@ from bapp_connectors.core.http import MultiHeaderAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
 from bapp_connectors.providers.payment.netopia.client import NetopiaApiClient
 from bapp_connectors.providers.payment.netopia.errors import NetopiaOperationError, raise_for_netopia_error
+from bapp_connectors.providers.payment.netopia.ipn import (
+    NETOPIA_IPN_HEADER,
+    NetopiaIpnVerificationError,
+    get_header,
+    verify_ipn_token,
+)
 from bapp_connectors.providers.payment.netopia.manifest import (
     NETOPIA_LIVE_URL,
     NETOPIA_SANDBOX_URL,
@@ -33,6 +40,8 @@ from bapp_connectors.providers.payment.netopia.mappers import (
     refund_from_netopia,
     webhook_event_from_netopia,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from decimal import Decimal
@@ -188,18 +197,26 @@ class NetopiaPaymentAdapter(PaymentPort, WebhookCapability):
     # ── WebhookCapability ──
 
     def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
-        """Verify a Netopia IPN notification.
+        """Verify a Netopia IPN by its signed ``Verification-Token`` JWT.
 
-        Netopia IPN sends JSON with payment status. The verification is done
-        by checking that the payload is valid JSON and contains expected fields.
-        Netopia does not use HMAC signatures on IPN — instead, the notifyUrl
-        must be a server-side endpoint that Netopia calls directly.
+        ``secret`` is ignored: Netopia signs with its own key pair, checked
+        against the ``public_key`` credential. Fails closed — no key, no token
+        or any failed check returns False.
         """
         try:
-            data = json.loads(body)
-            return "payment" in data or "order" in data or "status" in data
-        except (json.JSONDecodeError, ValueError):
+            verify_ipn_token(
+                get_header(headers, NETOPIA_IPN_HEADER),
+                body,
+                self.credentials.get("public_key", ""),
+                self.pos_signature,
+            )
+        except NetopiaIpnVerificationError as exc:
+            logger.warning("Netopia IPN rejected: %s", exc)
             return False
+        except ImportError:
+            logger.error("Netopia IPN rejected: the 'cryptography' package is required (bapp-connectors[netopia])")
+            return False
+        return True
 
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
         """Parse a Netopia IPN JSON payload into a WebhookEvent."""

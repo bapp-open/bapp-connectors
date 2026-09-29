@@ -214,3 +214,80 @@ class TestOAuthCallback:
         )
         response = client.get(f"/webhooks/oauth/callback/facebook/?code=abc123&state={state}")
         assert response.status_code == 400
+
+
+# ── Netopia: adapter-verified IPN signature ──
+
+NETOPIA_POS = "30AD-TEST-POS1-SIG0-0000"
+NETOPIA_BODY = b'{"order": {"orderID": "O-1"}, "payment": {"ntpID": "NTP1", "status": 3}}'
+
+
+@pytest.fixture(scope="module")
+def netopia_key():
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+def _netopia_token(key, body: bytes) -> str:
+    """An IPN token signed the way Netopia signs it (RS512, sub = sha512 of the body)."""
+    import base64
+    import hashlib
+    import json
+    import time
+
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+
+    def b64url(data: bytes) -> str:
+        return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+    head = b64url(json.dumps({"alg": "RS512", "typ": "JWT"}).encode())
+    claims = b64url(json.dumps({
+        "iss": "NETOPIA Payments",
+        "aud": [NETOPIA_POS],
+        "sub": base64.b64encode(hashlib.sha512(body).digest()).decode(),
+        "exp": int(time.time()) + 600,
+    }).encode())
+    signature = key.sign(f"{head}.{claims}".encode(), padding.PKCS1v15(), hashes.SHA512())
+    return f"{head}.{claims}.{b64url(signature)}"
+
+
+class TestNetopiaIpnSignature:
+    """The RS512 JWT is checked by the adapter; nothing unsigned may be stored."""
+
+    @pytest.fixture
+    def netopia(self, db, netopia_key):
+        from cryptography.hazmat.primitives import serialization
+
+        import bapp_connectors.providers.payment.netopia  # noqa: F401  (registers the adapter)
+
+        public_pem = netopia_key.public_key().public_bytes(
+            serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode()
+        conn = Connection.objects.create(
+            provider_family="payment",
+            provider_name="netopia",
+            display_name="Netopia",
+            is_enabled=True,
+            is_connected=True,
+        )
+        conn.credentials = {"api_key": "k", "pos_signature": NETOPIA_POS, "public_key": public_pem}
+        conn.save()
+        return conn
+
+    def _post(self, client, conn, **headers):
+        return client.post(f"/webhooks/{conn.pk}/ipn/", data=NETOPIA_BODY, content_type="application/json", **headers)
+
+    def test_forged_ipn_is_not_stored(self, client, netopia):
+        from .testapp.models import WebhookEvent
+
+        response = self._post(client, netopia)
+        assert response.status_code == 200
+        assert WebhookEvent.objects.count() == 0
+
+    def test_signed_ipn_is_stored(self, client, netopia, netopia_key):
+        from .testapp.models import WebhookEvent
+
+        self._post(client, netopia, HTTP_VERIFICATION_TOKEN=_netopia_token(netopia_key, NETOPIA_BODY))
+        assert WebhookEvent.objects.count() == 1

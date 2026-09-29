@@ -43,6 +43,14 @@ manifest = ProviderManifest(
                 help_text="Netopia POS signature identifier.",
             ),
             CredentialField(
+                name="public_key",
+                label="Public Key (PEM)",
+                sensitive=False,
+                required=False,
+                help_text="Netopia public key or certificate (.cer/.pem) used to verify IPN signatures. "
+                "Without it every IPN is rejected.",
+            ),
+            CredentialField(
                 name="sandbox",
                 label="Sandbox Mode",
                 sensitive=False,
@@ -86,7 +94,10 @@ manifest = ProviderManifest(
     ),
     webhooks=WebhookConfig(
         supported=True,
-        signature_method=None,  # Netopia uses IPN with server-side verification
+        # RS512 JWT in Verification-Token, checked by the adapter's verify_webhook
+        # (needs the public_key credential); the generic verifier rejects it.
+        signature_method="netopia-jwt",
+        signature_header="Verification-Token",
         events=["payment.confirmed", "payment.pending", "payment.cancelled", "payment.credit"],
     ),
 )

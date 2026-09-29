@@ -14,6 +14,14 @@ from django.views.decorators.csrf import csrf_exempt
 logger = logging.getLogger(__name__)
 
 
+def _adapter_verified_methods() -> frozenset:
+    try:
+        from bapp_connectors.core.webhooks import ADAPTER_VERIFIED_METHODS
+    except ImportError:  # core older than 0.39.4
+        return frozenset()
+    return ADAPTER_VERIFIED_METHODS
+
+
 def _handle_verify_challenge(request: HttpRequest, connection_id: int) -> HttpResponse:
     """Handle webhook URL verification challenges (e.g. Meta hub.verify_token).
 
@@ -99,8 +107,12 @@ def webhook_receiver(request: HttpRequest, connection_id: int, action: str) -> H
                     if manifest.webhooks.supported:
                         signature_method = manifest.webhooks.signature_method
                         signature_header = manifest.webhooks.signature_header or ""
+                        # Schemes that need provider state (Netopia's RS512 JWT) are verified
+                        # by the adapter alone; the generic verifier rejects them.
+                        if signature_method in _adapter_verified_methods() and adapter.verify_webhook(headers, body):
+                            signature_method = None
                 except Exception:
-                    pass  # Fall through with no signature verification
+                    logger.warning("Webhook signature setup failed for connection %s", connection_id, exc_info=True)
 
             service = WebhookService(webhook_event_model=WebhookEventModel)
             event = service.receive(

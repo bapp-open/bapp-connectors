@@ -5,7 +5,7 @@ Romanian payment gateway (Netopia Payments / mobilPay) for online card payments 
 - **API version:** JSON API (v2)
 - **Base URL:** `https://secure.mobilpay.ro/pay/` (live), `https://secure.sandbox.netopia-payments.com/` (sandbox)
 - **Auth:** API key in `Authorization` header + POS signature in request body
-- **Webhooks:** Supported (IPN JSON POST, no HMAC signature)
+- **Webhooks:** Supported (IPN JSON POST, RS512 JWT in `Verification-Token`, verified with the `public_key` credential)
 - **Rate limit:** 10 req/s, burst 20
 
 ## Credentials
@@ -35,7 +35,7 @@ enable the sandbox environment. Defaults to `"true"`.
 | Refund (full or partial) | Yes (`operation/credit`) |
 | Cancel an uncaptured payment | Yes, `cancel_payment()` (adapter method, not on `PaymentPort`) |
 | List transactions | **No** — the API has no listing, report or settlement endpoint |
-| Webhook verification (IPN) | Yes (structure check only) |
+| Webhook verification (IPN) | Yes — RS512 JWT, fails closed without `public_key` |
 | Webhook parsing (IPN) | Yes |
 
 ## API Endpoints
@@ -117,10 +117,15 @@ The `payment/card/start` endpoint expects a nested JSON payload:
 
 ## API Quirks
 
-- **IPN signature not verified yet:** Netopia signs each IPN with a JWT in the
-  `Verification-token` header (RS512, merchant's Netopia public key). The adapter
-  does not check it: `verify_webhook` only checks the payload is JSON with the
-  expected fields, so security currently relies on a non-guessable `notify_url`.
+- **IPN signature:** each IPN carries an RS512 JWT in `Verification-Token`
+  (`iss` "NETOPIA Payments", `aud` = POS signature, `sub` = base64 sha512 of the
+  raw body). `verify_webhook` checks all of it against the `public_key`
+  credential (PEM certificate or public key; a PEM flattened onto one line is
+  fine) and fails closed: no key, no token or any failed check → False. The
+  algorithm is pinned to RS512, unlike the official SDKs which trust the token
+  header. Needs `cryptography` (`bapp-connectors[netopia]`). The manifest's
+  `signature_method="netopia-jwt"` maps to a generic verifier that always
+  rejects, so a host that skips the adapter cannot accept an IPN by accident.
 - **Errors come back as HTTP 200:** a refused operation answers 200 with
   `{"error": {"code": "103", ...}}`. `raise_for_netopia_error` treats `00`
   (approved), `100` (3-D Secure) and `101` (redirect) as success and raises

@@ -44,7 +44,7 @@ wheels = [
 
 [[package]]
 name = "bapp-connectors"
-version = "0.39.3"
+version = "0.39.4"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
@@ -61,6 +61,9 @@ dev = [
 mobilpay = [
     { name = "cryptography" },
     { name = "pyopenssl" },
+]
+netopia = [
+    { name = "cryptography" },
 ]
 oauth = [
     { name = "oauthlib" },
@@ -80,6 +83,7 @@ requires-dist = [
     { name = "boto3", marker = "extra == 's3'", specifier = ">=1.28" },
     { name = "boto3", marker = "extra == 'ses'", specifier = ">=1.28" },
     { name = "cryptography", marker = "extra == 'mobilpay'", specifier = ">=41.0" },
+    { name = "cryptography", marker = "extra == 'netopia'", specifier = ">=41.0" },
     { name = "oauthlib", marker = "extra == 'oauth'", specifier = ">=3.0" },
     { name = "paramiko", marker = "extra == 'sftp'", specifier = ">=3.0" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -90,7 +94,7 @@ requires-dist = [
     { name = "responses", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
 ]
-provides-extras = ["oauth", "sftp", "s3", "ses", "mobilpay", "dev"]
+provides-extras = ["oauth", "sftp", "s3", "ses", "mobilpay", "netopia", "dev"]
 
 [[package]]
 name = "bcrypt"
@@ -644,7 +648,7 @@ wheels = [
 
 [[package]]
 name = "django-bapp-connectors"
-version = "0.25.0"
+version = "0.25.1"
 source = { editable = "packages/django" }
 dependencies = [
     { name = "bapp-connectors" },

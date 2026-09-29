@@ -57,6 +57,22 @@ class HmacSha1Verifier(SignatureVerifier):
         return hmac.compare_digest(expected, actual)
 
 
+class AdapterOnlyVerifier(SignatureVerifier):
+    """Rejects: the scheme needs provider state (a key pair, the POS id) that
+    only the adapter has, so only ``adapter.verify_webhook`` can accept it.
+
+    Hosts call the adapter first and pass ``signature_method=None`` once it
+    verified; reaching this verifier means that did not happen.
+    """
+
+    def verify(self, body: bytes, signature: str, secret: str) -> bool:
+        return False
+
+
+# Signature methods whose verification lives in the adapter, not in a shared secret.
+ADAPTER_VERIFIED_METHODS = frozenset({"netopia-jwt"})
+
+
 class NoopVerifier(SignatureVerifier):
     """No verification (for providers that don't sign webhooks)."""
 
@@ -70,5 +86,6 @@ def get_verifier(method: str | None) -> SignatureVerifier:
         None: NoopVerifier(),
         "hmac-sha256": HmacSha256Verifier(),
         "hmac-sha1": HmacSha1Verifier(),
+        **{m: AdapterOnlyVerifier() for m in ADAPTER_VERIFIED_METHODS},
     }
     return verifiers.get(method, NoopVerifier())

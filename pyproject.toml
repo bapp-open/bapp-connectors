@@ -1,6 +1,6 @@
 [project]
 name = "bapp-connectors"
-version = "0.39.3"
+version = "0.39.4"
 description = "Reusable integration framework for external service connectors (shops, couriers, payments, messaging, storage)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,6 +16,7 @@ sftp = ["paramiko>=3.0"]
 s3 = ["boto3>=1.28"]
 ses = ["boto3>=1.28"]
 mobilpay = ["pyOpenSSL>=23.0", "cryptography>=41.0"]
+netopia = ["cryptography>=41.0"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
