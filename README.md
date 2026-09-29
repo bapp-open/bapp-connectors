@@ -30,7 +30,7 @@ A ports-and-adapters integration framework for connecting to external services: 
 | Family | Providers | Count |
 |---|---|---|
 | **Shop** | Company Store (BAPP), CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce | 11 |
-| **Courier** | Colete Online, GLS, Sameday | 3 |
+| **Courier** | Cargus, Colete Online, DPD Romania, eColet, FAN Courier, GLS, Sameday | 7 |
 | **Payment** | Cardinity, EuPlatesc, LibraPay, MobilPay, Netopia, PayPal, Stripe, Utrust | 8 |
 | **Messaging** | Discord, GoIP, Instagram DM, Matrix, Facebook Messenger, RoboSMS, Telegram, WhatsApp | 8 |
 | **Storage** | Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV | 7 |
@@ -41,7 +41,7 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
 | **Hosting** | cPanel | 1 |
 | **Social** | Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts | 7 |
-| | **Total** | **64** |
+| | **Total** | **68** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -241,7 +241,7 @@ packages/connectors/
 │   └── providers/
 <!-- STRUCTURE:BEGIN -->
 │       ├── shop/          # Company Store (BAPP), CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce
-│       ├── courier/       # Colete Online, GLS, Sameday
+│       ├── courier/       # Cargus, Colete Online, DPD Romania, eColet, FAN Courier, GLS, Sameday
 │       ├── payment/       # Cardinity, EuPlatesc, LibraPay, MobilPay, Netopia, PayPal, Stripe, Utrust
 │       ├── messaging/     # Discord, GoIP, Instagram DM, Matrix, Facebook Messenger, RoboSMS, Telegram, WhatsApp
 │       ├── storage/       # Dropbox, FTP File Storage, Google Drive, OneDrive, S3 Storage, SFTP, WebDAV
