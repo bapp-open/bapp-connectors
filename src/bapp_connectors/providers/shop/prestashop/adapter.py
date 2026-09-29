@@ -14,6 +14,7 @@ from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
     CategoryManagementCapability,
     OrderLookupCapability,
+    OrderPaymentCapability,
     OrderStatusCatalogCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
@@ -74,6 +75,7 @@ class PrestaShopShopAdapter(
     VariantManagementCapability,
     WebhookCapability,
     OrderLookupCapability,
+    OrderPaymentCapability,
     OrderStatusCatalogCapability,
 ):
     """
@@ -91,6 +93,7 @@ class PrestaShopShopAdapter(
     def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
         self.credentials = credentials
         config = config or {}
+        self._config = config          # `paid_state_id` & co. se citesc la cerere, nu la init
         self._api_url = self._build_api_url(credentials.get("domain", ""))
 
         # VAT configuration
@@ -218,6 +221,43 @@ class PrestaShopShopAdapter(
                 )
             )
         return statuses
+
+    # ── Payment ──
+
+    #: Starea in care se muta o comanda platita, cand shop-ul nu spune altceva. 2 = „Plata
+    #: acceptata" in instalarea implicita PrestaShop.
+    DEFAULT_PAID_STATE = "2"
+
+    def paid_state_id(self) -> str:
+        """Starea care inseamna „platita": cea din config, altfel prima cu marcajul `paid`.
+
+        PrestaShop n-are un steag de plata pe comanda: plata se exprima prin starea in care
+        sta. Comerciantul isi poate face propria stare platita, de-aia se citeste din magazin
+        in loc sa fie hardcodata.
+        """
+        configured = str((getattr(self, "_config", None) or {}).get("paid_state_id") or "").strip()
+        if configured:
+            return configured
+        try:
+            for row in (self.client.get_order_states() or []):
+                if isinstance(row, dict) and str(row.get("paid") or "") in ("1", "true", "True"):
+                    return str(row.get("id") or "")
+        except Exception:  # noqa: BLE001 - magazinul nu raspunde: mergem pe starea implicita
+            pass
+        return self.DEFAULT_PAID_STATE
+
+    def mark_order_paid(self, order_id: str, *, amount=None, method: str = "",
+                        transaction_id: str = "", paid_at: str = "") -> Order:
+        """Muta comanda intr-o stare de platita. Suma si referinta nu incap aici.
+
+        Istoricul comenzii tine doar starea; `order_payments` ar fi locul sumei si al
+        referintei, dar cere si moneda si contul, pe care apelantul nu le are mereu.
+        """
+        state = self.paid_state_id()
+        if not state:
+            raise ValueError("PrestaShop nu are o stare de comanda platita")
+        self.client.create_order_history({"id_order": int(order_id), "id_order_state": int(state)})
+        return self.get_order(order_id)
 
     def set_order_status_raw(self, order_id: str, raw_status: str) -> Order:
         """Set the state by PrestaShop's own numeric id, skipping the framework translation."""

@@ -11,6 +11,7 @@ from .invoice_attach import InvoiceAttachmentCapability
 from .mailbox import MailboxCapability
 from .oauth import OAuthCapability, OAuthTokens
 from .order_lookup import OrderLookupCapability
+from .order_payment import OrderPaymentCapability
 from .order_status_catalog import OrderStatusCatalogCapability, RemoteOrderStatus
 from .panel_link import PanelLinkCapability
 from .product_feed import FeedFormat, FeedUploadCapability, ProductFeedCapability
@@ -54,6 +55,7 @@ __all__ = [
     "OAuthCapability",
     "OAuthTokens",
     "OrderLookupCapability",
+    "OrderPaymentCapability",
     "OrderStatusCatalogCapability",
     "PanelLinkCapability",
     "ProductCreationCapability",

@@ -22,6 +22,7 @@ from bapp_connectors.core.capabilities import (
     CategoryManagementCapability,
     OAuthCapability,
     OrderLookupCapability,
+    OrderPaymentCapability,
     OrderStatusCatalogCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
@@ -111,6 +112,7 @@ class WooCommerceShopAdapter(
     AttributeManagementCapability,
     OAuthCapability,
     OrderLookupCapability,
+    OrderPaymentCapability,
     OrderStatusCatalogCapability,
     ProductCreationCapability,
     ProductFullUpdateCapability,
@@ -344,6 +346,31 @@ class WooCommerceShopAdapter(
                 )
             )
         return statuses
+
+    # ── Payment ──
+
+    def mark_order_paid(self, order_id: str, *, amount=None, method: str = "",
+                        transaction_id: str = "", paid_at: str = "") -> Order:
+        """Flip WooCommerce's own paid flag.
+
+        `set_paid` is what the store's checkout uses: WooCommerce stamps `date_paid` itself and
+        applies its usual side effects (a pending order moves to processing, stock is reduced),
+        which is exactly what a human clicking "mark as paid" in wp-admin gets. The amount is not
+        sent: Woo takes the order's own total and would reject a partial figure here.
+        """
+        data: dict = {"set_paid": True}
+        if transaction_id:
+            data["transaction_id"] = str(transaction_id)
+        if method:
+            data["payment_method_title"] = str(method)
+        if paid_at:
+            data["date_paid"] = str(paid_at)
+        response = self.client.update_order(order_id, data)
+        return order_from_woocommerce(
+            response,
+            price_from_provider=self._price_from_provider,
+            status_mapper=self._status_mapper,
+        )
 
     def set_order_status_raw(self, order_id: str, raw_status: str) -> Order:
         """Set the status by WooCommerce's own slug, skipping the framework translation."""
