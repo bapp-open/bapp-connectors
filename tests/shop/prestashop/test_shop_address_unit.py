@@ -178,3 +178,70 @@ def test_a_shop_whose_root_does_not_answer_is_still_a_good_connection():
     built = _with_root(root_text="Fatal error: Uncaught TypeError ...")
     result = built.test_connection()
     assert result.success is True
+
+
+# ── pozele produselor, ca adrese publice ─────────────────────────────────────────────────────
+
+PRODUCT_WITH_IMAGES = {
+    "id": "52928",
+    "reference": "TL-CLE-165",
+    "name": "Cleste",
+    "id_default_image": "120764",
+    "associations": {"images": [{"id": "120763"}, {"id": "120764"}]},
+}
+
+
+def test_the_photos_are_public_urls_of_the_shop():
+    """Verificat pe un magazin real: `/img/p/<cifre>/<id>.jpg` raspunde 200 fara autentificare."""
+    from bapp_connectors.providers.shop.prestashop.mappers import product_from_prestashop
+
+    product = product_from_prestashop(PRODUCT_WITH_IMAGES, SHOP)
+    assert [photo.url for photo in product.photos] == [
+        f"{SHOP}/img/p/1/2/0/7/6/4/120764.jpg",   # imaginea implicita, prima
+        f"{SHOP}/img/p/1/2/0/7/6/3/120763.jpg",
+    ]
+
+
+def test_the_webservice_image_path_is_not_used():
+    """Adresa din `/api/images/...` cere cheia, deci ar fi o poza rupta in orice `<img src>`."""
+    from bapp_connectors.providers.shop.prestashop.mappers import product_from_prestashop
+
+    product = product_from_prestashop(PRODUCT_WITH_IMAGES, SHOP)
+    assert all("/api/" not in photo.url for photo in product.photos)
+
+
+def test_one_image_comes_back_as_a_dict_not_a_list():
+    """PrestaShop colapseaza lista de un element; fara asta produsul ar ramine fara poza."""
+    from bapp_connectors.providers.shop.prestashop.mappers import product_from_prestashop
+
+    data = dict(PRODUCT_WITH_IMAGES, associations={"images": {"id": "999"}}, id_default_image="")
+    product = product_from_prestashop(data, SHOP)
+    assert [photo.url for photo in product.photos] == [f"{SHOP}/img/p/9/9/9/999.jpg"]
+
+
+def test_a_product_without_images_has_no_photos():
+    from bapp_connectors.providers.shop.prestashop.mappers import product_from_prestashop
+
+    data = {"id": "1", "reference": "X", "associations": {}, "id_default_image": ""}
+    assert product_from_prestashop(data, SHOP).photos == []
+
+
+def test_without_a_shop_url_no_photo_is_invented():
+    from bapp_connectors.providers.shop.prestashop.mappers import product_from_prestashop
+
+    assert product_from_prestashop(PRODUCT_WITH_IMAGES, "").photos == []
+
+
+def test_the_listing_passes_the_shop_url_down():
+    built = adapter()
+    built.recording.urls.clear()
+
+    class _Client(RecordingClient):
+        pass
+
+    built.client.http._execute_request = lambda *a, **k: {"products": [PRODUCT_WITH_IMAGES]}  # type: ignore[method-assign]
+    page = built.get_products()
+    assert [photo.url for photo in page.items[0].photos] == [
+        f"{SHOP}/img/p/1/2/0/7/6/4/120764.jpg",
+        f"{SHOP}/img/p/1/2/0/7/6/3/120763.jpg",
+    ]

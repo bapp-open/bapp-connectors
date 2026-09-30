@@ -95,6 +95,8 @@ class PrestaShopShopAdapter(
         config = config or {}
         self._config = config          # `paid_state_id` & co. se citesc la cerere, nu la init
         self._api_url = self._build_api_url(credentials.get("domain", ""))
+        # adresa publica a magazinului (fara `/api`): de acolo se servesc pozele
+        self._shop_url = self._api_url[: -len("api/")].rstrip("/") if self._api_url.endswith("api/") else ""
 
         # VAT configuration
         self._prices_include_vat = config.get("prices_include_vat", True)
@@ -344,7 +346,7 @@ class PrestaShopShopAdapter(
 
         options = {"display": "full", "limit": f"{offset},{per_page}"}
         results = self.client.get_products(options=options)
-        paginated = products_from_prestashop(results)
+        paginated = products_from_prestashop(results, self._shop_url)
 
         if len(results) >= per_page:
             paginated = PaginatedResult(
@@ -373,7 +375,7 @@ class PrestaShopShopAdapter(
         data = product_to_prestashop(product, price_to_provider=self._price_to_provider)
         result = self.client.create_product(data)
         if isinstance(result, dict):
-            return product_from_prestashop(result)
+            return product_from_prestashop(result, self._shop_url)
         return product
 
     def delete_product(self, product_id: str) -> None:

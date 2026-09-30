@@ -23,6 +23,7 @@ from bapp_connectors.core.dto import (
     PaymentType,
     Product,
     ProductCategory,
+    ProductPhoto,
     ProductVariant,
     ProviderMeta,
 )
@@ -323,11 +324,51 @@ def orders_from_prestashop(orders: list[Order]) -> PaginatedResult[Order]:
 # ── Product mappers ──
 
 
-def product_from_prestashop(data: dict) -> Product:
+def product_image_ids(data: dict) -> list[str]:
+    """Image ids of a product, default one first, from `associations.images`.
+
+    `display=full` returns them as `{"images": [{"id": "120764"}, ...]}`, or as a single
+    dict when there is exactly one — PrestaShop collapses one-element lists.
+    """
+    images = ((data.get("associations") or {}).get("images")) or []
+    if isinstance(images, dict):
+        images = [images]
+    ids = [str(item.get("id")) for item in images if isinstance(item, dict) and item.get("id")]
+    default = str(data.get("id_default_image") or "")
+    if default and default in ids:
+        ids = [default] + [image_id for image_id in ids if image_id != default]
+    elif default and not ids:
+        ids = [default]
+    return ids
+
+
+def product_image_url(shop_url: str, image_id: str) -> str:
+    """Public address of an image: `https://shop/img/p/1/2/3/123.jpg`.
+
+    NU adresa din webservice (`/api/images/products/...`): aia cere cheia, deci ar fi o poză
+    ruptă în orice `<img src>`. Calea `/img/p/<cifrele id-ului>/<id>.jpg` e cea pe care
+    PrestaShop o servește public și nu depinde de tipurile de imagine ale temei.
+    """
+    digits = "/".join(str(image_id))
+    return f"{shop_url.rstrip('/')}/img/p/{digits}/{image_id}.jpg"
+
+
+def product_photos(data: dict, shop_url: str) -> list[ProductPhoto]:
+    """Pozele produsului, ca adrese publice; gol când magazinul nu are niciuna."""
+    if not shop_url:
+        return []
+    return [
+        ProductPhoto(url=product_image_url(shop_url, image_id), position=index)
+        for index, image_id in enumerate(product_image_ids(data))
+    ]
+
+
+def product_from_prestashop(data: dict, shop_url: str = "") -> Product:
     """Map a PrestaShop product response to a normalized Product DTO."""
     name = _extract_multilang_name(data.get("name", ""))
 
     return Product(
+        photos=product_photos(data, shop_url),
         product_id=str(data.get("id", "")),
         sku=data.get("reference", ""),
         barcode=data.get("ean13", ""),
@@ -361,9 +402,9 @@ def product_from_prestashop(data: dict) -> Product:
     )
 
 
-def products_from_prestashop(results: list[dict]) -> PaginatedResult[Product]:
+def products_from_prestashop(results: list[dict], shop_url: str = "") -> PaginatedResult[Product]:
     """Map a list of PrestaShop product results to PaginatedResult[Product]."""
-    products = [product_from_prestashop(p) for p in results]
+    products = [product_from_prestashop(p, shop_url) for p in results]
     return PaginatedResult(
         items=products,
         cursor=None,
