@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# atributul cu care PrestaShop marcheaza fiecare resursa din lista de la radacina
+XLINK_HREF = "{http://www.w3.org/1999/xlink}href"
+
 
 class PrestaShopApiClient:
     """
@@ -142,18 +145,34 @@ class PrestaShopApiClient:
 
     # ── Auth / Connection Test ──
 
+    def api_resources(self) -> set[str]:
+        """Resursele pe care cheia chiar le poate atinge, din rădăcina webservice-ului.
+
+        XML, nu JSON: pe unele magazine randarea JSON a listei de resurse crapă în
+        `WebserviceOutputJSON` (TypeError), deci întrebarea „ce drepturi are cheia" n-ar avea
+        niciodată răspuns. Lista e aceeași în ambele formate. Un magazin care nu răspunde la
+        rădăcină nu e o eroare: atunci pur și simplu nu afirmăm nimic despre drepturi.
+        """
+        try:
+            response = self.http.call("GET", self._url(""), auth=self._auth, direct_response=True)
+            text = getattr(response, "text", "") or ""
+            root = ET.fromstring(text)
+        except Exception:  # noqa: BLE001 - lipsa listei nu invalideaza o cheie care merge
+            logger.info("prestashop: the webservice root did not return a resource list")
+            return set()
+        return {child.tag for child in root.iter() if child.get(XLINK_HREF)}
+
     def test_auth(self) -> dict:
         """Fetch one product to prove the key works; raises what actually failed.
 
-        Nu inghitim exceptia: un DNS gresit, un webservice oprit sau un 404 raportate ca
-        „authentication failed" trimit omul sa refaca un token bun (s-a intimplat).
+        Nu înghițim excepția: un DNS greșit, un webservice oprit sau un 404 raportate ca
+        „authentication failed" trimit omul să refacă un token bun (s-a întâmplat).
+        Drepturile le citim de la magazin, nu le presupunem.
         """
         result = self._call("GET", "products", params={"limit": "1"})
-        if isinstance(result, dict) and "products" in result:
-            return {"api": {"products": True, "orders": True, "categories": True,
-                            "addresses": True, "countries": True, "customers": True,
-                            "stock_availables": True, "images": True, "taxes": True}}
-        return {}
+        if not (isinstance(result, dict) and "products" in result):
+            return {}
+        return {"api": {name: True for name in self.api_resources()}}
 
     # ── Orders ──
 

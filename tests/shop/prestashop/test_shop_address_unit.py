@@ -60,7 +60,9 @@ def test_the_manifest_base_url_is_a_placeholder_not_a_shop():
 def test_a_call_goes_to_the_shop_address():
     built = adapter()
     built.client.test_auth()
-    assert built.recording.urls == [f"{SHOP}/api/products"]
+    # produsele intii (dovada cheii), apoi radacina (drepturile) — ambele la magazin
+    assert built.recording.urls[0] == f"{SHOP}/api/products"
+    assert all(url.startswith(SHOP) for url in built.recording.urls)
 
 
 def test_the_injected_client_is_moved_onto_the_shop_as_well():
@@ -79,13 +81,13 @@ def test_nothing_goes_to_the_placeholder_host():
 def test_a_shop_url_that_already_ends_in_api_is_not_doubled():
     built = adapter(domain=f"{SHOP}/api")
     built.client.test_auth()
-    assert built.recording.urls == [f"{SHOP}/api/products"]
+    assert built.recording.urls[0] == f"{SHOP}/api/products"
 
 
 def test_a_trailing_slash_does_not_change_the_address():
     built = adapter(domain=f"{SHOP}/")
     built.client.test_auth()
-    assert built.recording.urls == [f"{SHOP}/api/products"]
+    assert built.recording.urls[0] == f"{SHOP}/api/products"
 
 
 def test_a_connection_without_a_shop_address_says_so():
@@ -100,7 +102,7 @@ def test_a_connection_without_a_shop_address_says_so():
 def test_the_query_auth_variant_goes_to_the_shop_too():
     built = adapter(use_query_auth=True)
     built.client.test_auth()
-    assert built.recording.urls == [f"{SHOP}/api/products"]
+    assert built.recording.urls[0] == f"{SHOP}/api/products"
 
 
 def test_test_connection_reports_what_really_failed():
@@ -116,3 +118,63 @@ def test_test_connection_reports_what_really_failed():
     assert result.success is False
     assert "Max retries" in result.message
     assert "Authentication failed" not in result.message
+
+
+# ── drepturile cheii, citite de la magazin ───────────────────────────────────────────────────
+
+RESOURCE_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+ <api shop_name="Sogest">
+  <products xlink:href="https://sogest.ro/api/products" get="true"/>
+  <orders xlink:href="https://sogest.ro/api/orders" get="true"/>
+  <addresses xlink:href="https://sogest.ro/api/addresses" get="true"/>
+ </api>
+</prestashop>"""
+
+
+class _Response:
+    def __init__(self, text):
+        self.text = text
+
+
+class ResourceClient(RecordingClient):
+    """Radacina webservice-ului raspunde XML; restul, ca la un magazin normal."""
+
+    def __init__(self, root_text=RESOURCE_XML, **kwargs):
+        super().__init__(**kwargs)
+        self.root_text = root_text
+
+    def _execute_request(self, method, path, direct_response=False, headers=None, **kwargs):
+        url = self._build_url(path)
+        self.urls.append(url)
+        if url.rstrip("/").endswith("/api"):
+            return _Response(self.root_text)
+        return PRODUCTS
+
+
+def _with_root(root_text=RESOURCE_XML):
+    http = ResourceClient(root_text=root_text, base_url=manifest.base_url, auth=NoAuth(),
+                          provider_name=manifest.name)
+    built = PrestaShopShopAdapter(credentials={"domain": SHOP, "token": "cheie"}, http_client=http)
+    built.recording = http  # type: ignore[attr-defined]
+    return built
+
+
+def test_the_permissions_come_from_the_shop_not_from_a_hardcoded_list():
+    built = _with_root()
+    assert built.client.api_resources() == {"products", "orders", "addresses"}
+
+
+def test_a_key_without_orders_is_reported_as_missing_that_permission():
+    built = _with_root()
+    result = built.test_connection()
+    assert result.success is False
+    assert "orders" not in result.message          # orders EXISTA in XML-ul de mai sus
+    assert "countries" in result.message           # astea lipsesc cu adevarat
+
+
+def test_a_shop_whose_root_does_not_answer_is_still_a_good_connection():
+    """Pe unele magazine radacina crapa (bug de randare); o cheie care merge ramine buna."""
+    built = _with_root(root_text="Fatal error: Uncaught TypeError ...")
+    result = built.test_connection()
+    assert result.success is True
