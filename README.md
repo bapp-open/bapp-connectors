@@ -29,7 +29,7 @@ A ports-and-adapters integration framework for connecting to external services: 
 <!-- PROVIDERS:BEGIN -->
 | Family | Providers | Count |
 |---|---|---|
-| **Shop** | Company Store (BAPP), CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce | 11 |
+| **Shop** | Altex Marketplace, Company Store (BAPP), CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce | 12 |
 | **Courier** | Cargus, Colete Online, DPD Romania, eColet, FAN Courier, GLS, Sameday | 7 |
 | **Payment** | Cardinity, EuPlatesc, LibraPay, MobilPay, Netopia, PayPal, Stripe, Utrust | 8 |
 | **Messaging** | Discord, GoIP, Instagram DM, Matrix, Facebook Messenger, RoboSMS, Telegram, WhatsApp | 8 |
@@ -41,7 +41,7 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
 | **Hosting** | cPanel | 1 |
 | **Social** | Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts | 7 |
-| | **Total** | **68** |
+| | **Total** | **69** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -240,7 +240,7 @@ packages/connectors/
 │   │   └── registry.py     # Provider registry
 │   └── providers/
 <!-- STRUCTURE:BEGIN -->
-│       ├── shop/          # Company Store (BAPP), CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce
+│       ├── shop/          # Altex Marketplace, Company Store (BAPP), CEL.ro, eMAG, Gomag, Magento, Okazii, PrestaShop, Shopify, Trendyol, Vendigo, WooCommerce
 │       ├── courier/       # Cargus, Colete Online, DPD Romania, eColet, FAN Courier, GLS, Sameday
 │       ├── payment/       # Cardinity, EuPlatesc, LibraPay, MobilPay, Netopia, PayPal, Stripe, Utrust
 │       ├── messaging/     # Discord, GoIP, Instagram DM, Matrix, Facebook Messenger, RoboSMS, Telegram, WhatsApp
