@@ -157,7 +157,7 @@ class PrestaShopApiClient:
             response = self.http.call("GET", self._url(""), auth=self._auth, direct_response=True)
             text = getattr(response, "text", "") or ""
             root = ET.fromstring(text)
-        except Exception:  # noqa: BLE001 - lipsa listei nu invalideaza o cheie care merge
+        except Exception:  # lipsa listei nu invalideaza o cheie care merge
             logger.info("prestashop: the webservice root did not return a resource list")
             return set()
         return {child.tag for child in root.iter() if child.get(XLINK_HREF)}
@@ -172,7 +172,7 @@ class PrestaShopApiClient:
         result = self._call("GET", "products", params={"limit": "1"})
         if not (isinstance(result, dict) and "products" in result):
             return {}
-        return {"api": {name: True for name in self.api_resources()}}
+        return {"api": dict.fromkeys(self.api_resources(), True)}
 
     # ── Orders ──
 
