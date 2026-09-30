@@ -30,6 +30,9 @@ as `key[]` fields so PHP rebuilds the array that was signed.
 | `update_product_stock` / `update_product_price` | per offer; price sets `price` and `selling_price` (VAT incl., RON) |
 | `upload_invoice(order_id, pdf, number)` | multipart, PDF ≤ 2 MB, linked to the order lines |
 | `attach_awb(order_id, pdf, number, courier)` | own AWB; courier matched by name in `sales/courier/` |
+| `generate_awb(order_id, courier, sender, ...)` | Altex books the courier (`awb/generate`); returns the AWB number + base64 PDF |
+| `list_locations()` | pickup locations, for `sender['address_id']` |
+| `get_returns(since, until)` (ReturnsCapability) | `GET sales/rma/` (filter `created_at >=`, `until` cut locally); each RMA read in full and joined to its order for SKU/price |
 
 ## Mapping
 
@@ -41,11 +44,18 @@ as `key[]` fields so PHP rebuilds the array that was signed.
 - `extra`: `shipping_tax`, `payment_tax` (COD surcharge), `delivery_mode` (4 = Altex courier, whose shipping is
   invoiced by Altex), `awbs`, `invoices`.
 
+## Returns (RMA)
+
+- Reason codes → unified `ReturnReason` (7 wrong item, 2 defective, 4 damaged, 3 missing parts, 10/9 not
+  delivered, the rest → changed mind / ordered by mistake); status 1-6 (Registered…Visualized).
+- An RMA line has only the product id + action + reason (no SKU/qty/price); the order is fetched to fill SKU
+  and unit price. Refund is estimated (sum of money-back lines' prices), so `refund.estimated = True`.
+- `created_date` is ISO in real answers, a unix int in the doc example — both handled.
+
 ## Not implemented / quirks
 
 - No order webhooks (only product approve/reject) — orders are polled.
-- Product creation (catalog + approval), categories/attributes, RMA (`sales/rma/`) and Altex-generated AWBs
-  (`awb/generate`) are not wired yet.
+- Product creation (catalog + approval), categories/attributes, RMA invoice/return-AWB upload are not wired yet.
 - Invoice / AWB delete work per order, not per document.
 - Envelope `{message, status, data}`; `message` can be a list, a dict keyed by row, or a string. Success codes
   are 200/201/202 — `status == "success"` is checked too.

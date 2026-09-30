@@ -6,6 +6,7 @@ issued by the Altex Marketplace team (marketplace@altex.ro). Staging (mkp-stage.
 is IP-allowlisted.
 """
 
+from bapp_connectors.core.capabilities import ReturnsCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -52,7 +53,7 @@ manifest = ProviderManifest(
             ),
         ],
     ),
-    capabilities=[ShopPort],
+    capabilities=[ShopPort, ReturnsCapability],
     rate_limit=RateLimitConfig(requests_per_second=2, burst=5),
     retry=RetryConfig(
         max_retries=3,

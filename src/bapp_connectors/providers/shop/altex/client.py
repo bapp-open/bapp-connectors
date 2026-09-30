@@ -137,7 +137,40 @@ class AltexApiClient:
                    files={"media": (f"awb_{number}.pdf", pdf, "application/pdf")}, retry=False, log_body=True)
 
     def couriers(self) -> list[dict]:
-        return self._call("GET", "sales/courier/") or []
+        return _items(self._call("GET", "sales/courier/"))
+
+    def locations(self) -> list[dict]:
+        """Pickup locations; the docs say {id, courier_id, ...}, real answers {courier_location_id, address}."""
+        return _items(self._call("GET", "sales/location/"))
+
+    def regions(self) -> list[dict]:
+        return _items(self._call("GET", "sales/region/", params={"page_nr": 1, "items_per_page": 100}))
+
+    def localities(self, region_id: int) -> list[dict]:
+        out, page = [], 1
+        while True:
+            data = self._call("GET", "sales/locality/", params={"region_id": region_id, "page_nr": page,
+                                                                "items_per_page": 500}) or {}
+            out += _items(data)
+            if not isinstance(data, dict) or int(data.get("current_page") or page) >= int(data.get("total_pages") or page):
+                return out
+            page += 1
+
+    def generate_awb(self, order_id: str, form: dict) -> dict:
+        """Altex books the courier; never retried (a retry could book a second AWB)."""
+        return self._call("POST", f"sales/order/{order_id}/awb/generate", form=form, retry=False,
+                          log_body=True) or {}
+
+    # ── Returns (RMA) ──
+
+    def list_rmas(self, created_from: str = "", page: int = 1, per_page: int = 100) -> dict:
+        params: dict = {"page_nr": page, "items_per_page": per_page}
+        if created_from:
+            params["created_at"] = created_from
+        return self._call("GET", "sales/rma/", params=params) or {}
+
+    def get_rma(self, rma_id: str) -> dict:
+        return self._call("GET", f"sales/rma/{rma_id}/") or {}
 
     # ── Offers ──
 
@@ -153,6 +186,13 @@ class AltexApiClient:
     def update_offer_stock(self, offer_id: str, stock: int) -> None:
         self._call("PUT", f"catalog/offer/{offer_id}/stock/", json={"stock": int(stock)}, retry=False,
                    log_body=True)
+
+
+def _items(data) -> list[dict]:
+    """Lists come paginated ({items: [...]}) per the docs, but plain in some real answers."""
+    if isinstance(data, dict):
+        return data.get("items") or []
+    return data if isinstance(data, list) else []
 
 
 def _form_fields(form: dict) -> list[tuple[str, str]]:

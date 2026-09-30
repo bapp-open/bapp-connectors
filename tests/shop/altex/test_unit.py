@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from decimal import Decimal
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, parse_qsl, urlparse
 
 import pytest
 import responses
@@ -192,3 +192,87 @@ class TestDocuments:
         responses.add(responses.GET, API + "sales/courier/", json=_ok([{"id": 7, "name": "Cargus"}]))
         with pytest.raises(ValidationError, match="no courier"):
             AltexShopAdapter(credentials=CREDS).attach_awb("1", b"%PDF", "1", "dhl")
+
+
+class TestReturns:
+
+    RMA = {"rma_id": 258, "order_id": 1473, "rma_status": 4, "customer_name": "Popescu Ion",
+           "customer_phone_number": "0765433321", "created_date": "2026-09-20T12:16:01+00:00",
+           "customer_city": "Bucuresti", "bank_iban": "RO54INGB0000000000001111",
+           "products": [{"name": "Casti", "id": "65f0a1b2c3d4e5f6a7b8c9d0", "action": 2, "reason": 7, "rma_line_id": 272}]}
+
+    @responses.activate
+    def test_returns_joined_to_the_order(self):
+        from bapp_connectors.core.dto import ReturnKind, ReturnReason
+
+        responses.add(responses.GET, API + "sales/rma/", json=_ok({
+            "current_page": 1, "total_pages": 1, "items": [{"rma_id": 258, "order_id": 1473, "rma_status": 4}]}))
+        responses.add(responses.GET, API + "sales/rma/258/", json=_ok(self.RMA))
+        responses.add(responses.GET, API + "sales/order/1473/", json=_ok(ORDER))
+        rets = AltexShopAdapter(credentials=CREDS).get_returns(datetime(2026, 9, 1), datetime(2026, 10, 1))
+        assert len(rets) == 1
+        ret = rets[0]
+        assert (ret.external_id, ret.external_order_id, ret.kind) == ("258", "1473", ReturnKind.RETURN)
+        assert ret.status_label == "Resolved"
+        line = ret.lines[0]
+        assert (line.external_line_id, line.sku, line.reason) == ("272", "SKU-1", ReturnReason.WRONG_ITEM)
+        assert line.unit_price == Decimal("199.90")  # from the order line by product id
+        assert ret.refund.amount == Decimal("199.90") and ret.refund.currency == "RON"
+        q = parse_qs(urlparse(responses.calls[0].request.url).query)
+        assert q["created_at"] == ["2026-09-01"]
+
+    @responses.activate
+    def test_rma_after_until_is_dropped(self):
+        responses.add(responses.GET, API + "sales/rma/", json=_ok({
+            "current_page": 1, "total_pages": 1, "items": [{"rma_id": 258}]}))
+        responses.add(responses.GET, API + "sales/rma/258/", json=_ok(self.RMA))
+        responses.add(responses.GET, API + "sales/order/1473/", json=_ok(ORDER))
+        rets = AltexShopAdapter(credentials=CREDS).get_returns(datetime(2026, 9, 1), datetime(2026, 9, 10))
+        assert rets == []
+
+    @responses.activate
+    def test_unix_created_date(self):
+        from bapp_connectors.providers.shop.altex.returns import rma_date
+
+        assert rma_date(1702383361).year == 2023
+
+
+class TestGenerateAwb:
+
+    @responses.activate
+    def test_altex_books_the_courier_and_returns_the_label(self):
+        import base64
+
+        responses.add(responses.GET, API + "sales/courier/", json=_ok([{"id": 2, "name": "Fan Courier", "forGenerateAwb": True}]))
+        responses.add(responses.POST, API + "sales/order/1/awb/generate", status=201, json=_ok({
+            "awb_number": "1234567890", "document": base64.b64encode(b"%PDF-1.4").decode(), "document_type": "pdf"}))
+        sender = {"address_id": 5, "name": "Depozit", "contact_person": "Ana", "phone": "0722 333 444",
+                  "address": "Str. Fabricii 1", "county": "Iasi", "city": "Iasi", "postal_code": "700001"}
+        label = AltexShopAdapter(credentials=CREDS).generate_awb("1", "fancourier", sender, weight=2.0,
+                                                                 declared_value=199.9)
+        assert label.tracking_number == "1234567890" and label.label_pdf == b"%PDF-1.4"
+        # awb/generate has no file, so the form is url-encoded and signed as-is
+        body = responses.calls[1].request.body
+        form = dict(parse_qsl(body.decode() if isinstance(body, bytes) else body))
+        assert form["courier_id"] == "2" and form["address_id"] == "5"
+        assert form["sender_phone"] == "0722333444"  # 10 digits, no separators
+        assert form["order_awb_format"] == "0"
+
+    @responses.activate
+    def test_courier_without_awb_support_is_refused(self):
+        responses.add(responses.GET, API + "sales/courier/", json=_ok([{"id": 3, "name": "DHL", "forGenerateAwb": False}]))
+        with pytest.raises(ValidationError, match="does not support AWB"):
+            AltexShopAdapter(credentials=CREDS).generate_awb("1", "dhl", {"address_id": 1})
+
+    @responses.activate
+    def test_generate_is_sent_once(self):
+        from bapp_connectors.core.http import NoAuth, ResilientHttpClient, RetryPolicy
+
+        responses.add(responses.GET, API + "sales/courier/", json=_ok([{"id": 2, "name": "Fan Courier", "forGenerateAwb": True}]))
+        responses.add(responses.POST, API + "sales/order/1/awb/generate", status=503, json=_ok())
+        http = ResilientHttpClient(base_url=API, auth=NoAuth())
+        http.retry_policy = RetryPolicy(max_retries=3, base_delay=0, max_delay=0)
+        from bapp_connectors.core.errors import ProviderError
+        with pytest.raises(ProviderError):
+            AltexShopAdapter(credentials=CREDS, http_client=http).generate_awb("1", "fan", {"address_id": 1})
+        assert sum(c.request.url.endswith("awb/generate") for c in responses.calls) == 1
