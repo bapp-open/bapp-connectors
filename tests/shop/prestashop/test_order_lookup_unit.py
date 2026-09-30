@@ -31,4 +31,5 @@ def test_digit_reference_not_found_does_not_fall_back_to_internal_id():
     fake.add("GET", "orders", {"orders": []})
     assert _adapter(fake).find_order_by_reference("1001") is None
     assert len(fake.calls) == 1
-    assert fake.calls[0].path == "orders"
+    # calea e absoluta: adresa magazinului sta in client, nu in base_url-ul injectat
+    assert fake.calls[0].path == "https://shop.test/api/orders"

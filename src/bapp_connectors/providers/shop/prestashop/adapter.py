@@ -115,10 +115,18 @@ class PrestaShopShopAdapter(
                 auth=NoAuth(),
                 provider_name="prestashop",
             )
+        elif self._api_url.startswith(("http://", "https://")):
+            # clientul injectat de registry vine cu hostul placeholder din manifest; il mutam pe
+            # magazinul conexiunii, ca nici o cale relativa scrisa mai tirziu sa nu plece aiurea
+            # (acelasi lucru il fac magento, shopify, matrix si goip)
+            http_client.base_url = self._api_url
 
         self.client = PrestaShopApiClient(
             http_client=http_client,
             token=credentials.get("token", ""),
+            # adresa magazinului trăiește în client: cel injectat de registry are hostul
+            # placeholder din manifest, iar o cale relativă ar pleca acolo
+            api_url=self._api_url,
             use_query_auth=config.get("use_query_auth", False),
         )
 
@@ -146,6 +154,9 @@ class PrestaShopShopAdapter(
         return len(missing) == 0
 
     def test_connection(self) -> ConnectionTestResult:
+        # `test_auth` raises what actually went wrong; „authentication failed" e rezervat
+        # pentru cazul in care cheia chiar e refuzata, ca sa nu mai trimitem omul sa refaca
+        # un token cind de fapt adresa magazinului sau webservice-ul e problema
         try:
             result = self.client.test_auth()
             if not result:

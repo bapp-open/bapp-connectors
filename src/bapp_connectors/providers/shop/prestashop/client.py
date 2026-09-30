@@ -10,8 +10,11 @@ from __future__ import annotations
 import logging
 import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urljoin
 
 from requests.auth import HTTPBasicAuth
+
+from bapp_connectors.core.errors import ConfigurationError
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
@@ -25,14 +28,33 @@ class PrestaShopApiClient:
 
     This class only handles HTTP calls and response parsing.
     Data normalization happens in the adapter via mappers.
+
+    **The shop URL lives here, and every request is absolute.** `registry.create_adapter`
+    always injects an `ResilientHttpClient` built from the manifest's placeholder `base_url`,
+    so a relative path would quietly go to `placeholder.prestashop.com` — no shop of ours has
+    ever answered there. The injected client still contributes retry policy, rate limiting and
+    request logging; only the address is ours.
     """
 
-    def __init__(self, http_client: ResilientHttpClient, token: str, use_query_auth: bool = False):
+    def __init__(self, http_client: ResilientHttpClient, token: str, api_url: str = "",
+                 use_query_auth: bool = False):
         self.http = http_client
         self.token = token
+        self.api_url = api_url or ""
         self._use_query_auth = use_query_auth
         # PrestaShop uses the API key as username with empty password for basic auth
         self._auth = HTTPBasicAuth(self.token, "")
+
+    def _url(self, path: str) -> str:
+        """Absolute URL of a webservice resource, from the shop's own address."""
+        if path.startswith(("http://", "https://")):
+            return path
+        if not self.api_url.startswith(("http://", "https://")):
+            raise ConfigurationError(
+                "PrestaShop connection has no shop address: set the shop URL "
+                "(e.g. https://shop.example.com) on the connection."
+            )
+        return urljoin(self.api_url, path.lstrip("/"))
 
     def _call(self, method: str, path: str, **kwargs) -> dict | list | str:
         """Make an authenticated API call.
@@ -56,8 +78,8 @@ class PrestaShopApiClient:
             params = kwargs.pop("params", {})
             params["ws_key"] = self.token
             params["output_format"] = "JSON"
-            return self.http.call(method, path, headers=headers, params=params, **kwargs)
-        return self.http.call(method, path, headers=headers, auth=self._auth, **kwargs)
+            return self.http.call(method, self._url(path), headers=headers, params=params, **kwargs)
+        return self.http.call(method, self._url(path), headers=headers, auth=self._auth, **kwargs)
 
     @staticmethod
     def _dict_to_xml(data: dict) -> str:
@@ -121,16 +143,17 @@ class PrestaShopApiClient:
     # ── Auth / Connection Test ──
 
     def test_auth(self) -> dict:
-        """Test authentication by fetching products (validates auth + permissions)."""
-        try:
-            result = self._call("GET", "products", params={"limit": "1"})
-            if isinstance(result, dict) and "products" in result:
-                return {"api": {"products": True, "orders": True, "categories": True,
-                               "addresses": True, "countries": True, "customers": True,
-                               "stock_availables": True, "images": True, "taxes": True}}
-            return {}
-        except Exception:
-            return {}
+        """Fetch one product to prove the key works; raises what actually failed.
+
+        Nu inghitim exceptia: un DNS gresit, un webservice oprit sau un 404 raportate ca
+        „authentication failed" trimit omul sa refaca un token bun (s-a intimplat).
+        """
+        result = self._call("GET", "products", params={"limit": "1"})
+        if isinstance(result, dict) and "products" in result:
+            return {"api": {"products": True, "orders": True, "categories": True,
+                            "addresses": True, "countries": True, "customers": True,
+                            "stock_availables": True, "images": True, "taxes": True}}
+        return {}
 
     # ── Orders ──
 
