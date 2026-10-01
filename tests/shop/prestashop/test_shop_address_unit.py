@@ -245,3 +245,25 @@ def test_the_listing_passes_the_shop_url_down():
         f"{SHOP}/img/p/1/2/0/7/6/4/120764.jpg",
         f"{SHOP}/img/p/1/2/0/7/6/3/120763.jpg",
     ]
+
+
+# ── lista de categorii ───────────────────────────────────────────────────────────────────────
+
+def test_the_category_list_asks_only_for_the_fields_it_maps():
+    """`display=full` dura ~30 s pe un magazin cu 311 categorii; cimpurile cerute pe nume, 0,4 s."""
+    from tests.fake_http import FakeHttpClient
+
+    fake = FakeHttpClient()
+    fake.add("GET", "categories", {"categories": [
+        {"id": "2", "name": "Acasa", "id_parent": "0", "active": "1"},
+        {"id": "7", "name": "Scule", "id_parent": "2", "active": "1"},
+    ]})
+    built = PrestaShopShopAdapter(credentials={"domain": SHOP, "token": "cheie"}, http_client=fake)
+
+    categories = built.get_categories()
+
+    assert fake.calls[0].kwargs["params"]["display"] == "[id,name,id_parent,active]"
+    assert [(c.category_id, c.name, c.parent_id) for c in categories] == [
+        ("2", "Acasa", None),      # id_parent 0 inseamna radacina
+        ("7", "Scule", "2"),
+    ]

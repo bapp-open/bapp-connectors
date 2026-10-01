@@ -397,8 +397,13 @@ class PrestaShopShopAdapter(
 
     # ── CategoryManagementCapability ──
 
+    #: Ce cere lista de categorii. NU `display=full`: pe un magazin cu 311 categorii raspunsul
+    #: intreg vine in ~30 s (masurat), peste orice timeout rezonabil, iar din el foloseam patru
+    #: cimpuri. Cu ele cerute pe nume, acelasi raspuns vine in ~0,4 s.
+    CATEGORY_FIELDS = "[id,name,id_parent,active]"
+
     def get_categories(self) -> list[ProductCategory]:
-        results = self.client.get_categories(options={"display": "full"})
+        results = self.client.get_categories(options={"display": self.CATEGORY_FIELDS})
         return categories_from_prestashop(results)
 
     def create_category(self, name: str, parent_id: str | None = None) -> ProductCategory:
