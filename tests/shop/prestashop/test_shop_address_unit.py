@@ -267,3 +267,40 @@ def test_the_category_list_asks_only_for_the_fields_it_maps():
         ("2", "Acasa", None),      # id_parent 0 inseamna radacina
         ("7", "Scule", "2"),
     ]
+
+
+# ── categoriile produsului ───────────────────────────────────────────────────────────────────
+
+def test_the_category_ids_are_filled_so_the_host_can_map_them():
+    """Aplicatia gazda citeste `category_ids`; cu id-ul doar in `categories` se pierdea categoria."""
+    from bapp_connectors.providers.shop.prestashop.mappers import product_from_prestashop
+
+    data = {"id": "5", "reference": "X", "id_category_default": "77",
+            "associations": {"categories": [{"id": "12"}, {"id": "77"}]}}
+    product = product_from_prestashop(data, SHOP)
+    assert product.category_ids == ["77", "12"]          # implicita prima
+    assert product.categories == ["77"]                   # cimpul vechi, neatins
+
+
+def test_a_single_category_comes_back_as_a_dict():
+    from bapp_connectors.providers.shop.prestashop.mappers import product_from_prestashop
+
+    data = {"id": "5", "associations": {"categories": {"id": "9"}}, "id_category_default": ""}
+    assert product_from_prestashop(data, SHOP).category_ids == ["9"]
+
+
+def test_pushing_reads_the_id_the_host_sends():
+    """La trimitere, gazda completeaza `category_ids`; mapper-ul citea doar `categories`."""
+    from bapp_connectors.core.dto import Product as ProductDTO
+    from bapp_connectors.providers.shop.prestashop.mappers import product_to_prestashop
+
+    payload = product_to_prestashop(ProductDTO(product_id="1", name="X", category_ids=["42"]))
+    assert payload["id_category_default"] == "42"
+
+
+def test_pushing_still_honours_the_old_field():
+    from bapp_connectors.core.dto import Product as ProductDTO
+    from bapp_connectors.providers.shop.prestashop.mappers import product_to_prestashop
+
+    payload = product_to_prestashop(ProductDTO(product_id="1", name="X", categories=["7"]))
+    assert payload["id_category_default"] == "7"

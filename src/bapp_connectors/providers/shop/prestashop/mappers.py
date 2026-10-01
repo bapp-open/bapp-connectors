@@ -363,6 +363,23 @@ def product_photos(data: dict, shop_url: str) -> list[ProductPhoto]:
     ]
 
 
+def product_category_ids(data: dict) -> list[str]:
+    """Categoriile produsului, cea implicită prima.
+
+    `display=full` le dă în `associations.categories` (un dict când e una singură, ca la
+    imagini). Ele intră în `category_ids`, câmpul de ID-uri al DTO-ului — `categories` ține
+    NUME la ceilalți provideri, iar aplicația gazdă mapează după id.
+    """
+    assoc = ((data.get("associations") or {}).get("categories")) or []
+    if isinstance(assoc, dict):
+        assoc = [assoc]
+    ids = [str(item.get("id")) for item in assoc if isinstance(item, dict) and item.get("id")]
+    default = str(data.get("id_category_default") or "")
+    if default:
+        ids = [default] + [cid for cid in ids if cid != default]
+    return ids
+
+
 def product_from_prestashop(data: dict, shop_url: str = "") -> Product:
     """Map a PrestaShop product response to a normalized Product DTO."""
     name = _extract_multilang_name(data.get("name", ""))
@@ -377,7 +394,10 @@ def product_from_prestashop(data: dict, shop_url: str = "") -> Product:
         currency="",  # PrestaShop doesn't return currency per product
         stock=int(data["stock_quantity"]) if data.get("stock_quantity") is not None else None,
         active=str(data.get("active", "1")) == "1",
+        # `categories` ramine cum era (id-ul implicit) pentru codul vechi care il citea de acolo;
+        # `category_ids` e cel pe care il asteapta aplicatia gazda cand leaga categoriile
         categories=[str(data.get("id_category_default", ""))] if data.get("id_category_default") else [],
+        category_ids=product_category_ids(data),
         provider_meta=ProviderMeta(
             provider="prestashop",
             raw_id=str(data.get("id", "")),
@@ -532,9 +552,11 @@ def product_to_prestashop(product, price_to_provider=None) -> dict:
     if product.price is not None:
         convert = price_to_provider or (lambda x: x)
         data["price"] = str(convert(product.price))
-    if product.categories:
-        # Use first category as default
-        data["id_category_default"] = product.categories[0]
+    # `category_ids` e ce completeaza aplicatia gazda la trimitere; `categories` ramine ca
+    # rezerva pentru apelantii vechi, care puneau id-ul acolo
+    remote_category = (product.category_ids or product.categories or [None])[0]
+    if remote_category:
+        data["id_category_default"] = remote_category
     return data
 
 
