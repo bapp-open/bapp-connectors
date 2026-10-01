@@ -176,6 +176,11 @@ services:
       timeout: 5s
       retries: 10
 
+  # ⚠️ Imaginea NU mai exista: Bitnami si-a retras catalogul public de pe Docker Hub in 2025
+  # (`bitnami/magento` raspunde "object not found", iar `bitnamilegacy/magento` nu exista).
+  # Singura imagine publica ramasa, `alexcheng/magento2`, e un build din 2019 (Magento 2.1/2.2),
+  # prea vechi ca sa fie referinta pentru 2.4; varianta oficiala cere chei Adobe pentru composer.
+  # Pina gasim un inlocuitor, testele de integrare Magento se sar singure (`skip_unless_magento`).
   magento:
     image: bitnami/magento:2
     ports:

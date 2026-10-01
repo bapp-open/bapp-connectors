@@ -114,11 +114,16 @@ def product_from_magento(data: dict, price_from_provider=None) -> Product:
             if qty is not None:
                 stock = int(float(str(qty)))
 
-    # Categories from extension_attributes.category_links
-    categories = []
+    # Categories from extension_attributes.category_links. Magento da ID-uri, deci ele merg in
+    # `category_ids` — `categories` tine NUME la ceilalti provideri (WooCommerce), iar aplicatia
+    # gazda mapeaza dupa id. `categories` ramine populat la fel ca inainte, pentru apelantii
+    # vechi care citeau id-ul de acolo.
+    category_ids = []
     if ext and isinstance(ext, dict):
         for link in ext.get("category_links", []):
-            categories.append(str(link.get("category_id", "")))
+            if link.get("category_id") is not None:
+                category_ids.append(str(link["category_id"]))
+    categories = list(category_ids)
 
     # Photos from media_gallery_entries
     photos = []
@@ -143,6 +148,7 @@ def product_from_magento(data: dict, price_from_provider=None) -> Product:
         stock=stock,
         active=data.get("status") == 1,
         categories=categories,
+        category_ids=category_ids,
         photos=photos,
         provider_meta=ProviderMeta(
             provider="magento",
@@ -192,9 +198,12 @@ def product_to_magento(product, price_to_provider=None) -> dict:
         data["price"] = float(convert(product.price))
     if product.description:
         data["custom_attributes"] = [{"attribute_code": "description", "value": product.description}]
-    if product.categories:
+    # `category_ids` e ce completeaza aplicatia gazda la trimitere; `categories` ramine rezerva
+    # pentru apelantii vechi, care puneau id-ul acolo
+    remote_categories = product.category_ids or product.categories
+    if remote_categories:
         data.setdefault("extension_attributes", {})["category_links"] = [
-            {"category_id": cat, "position": 0} for cat in product.categories
+            {"category_id": cat, "position": 0} for cat in remote_categories
         ]
     return data
 
