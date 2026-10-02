@@ -34,13 +34,20 @@ def test_previous_month_earnings_net(adapter):
     net = sum((t.net_amount for t in page.items), Decimal("0"))
     print(f"Google Play earnings {last_month:%Y%m}: net {net} ({len(page.items)} randuri)")
     assert all(t.payout_id == f"{last_month:%Y%m}:{t.currency}" for t in page.items)
+    # Antetul CSV-ului de earnings trebuie sa aiba coloana de pachet (verificare pe headerele reale)
+    assert all(t.extra.get("package_id") for t in page.items), [t.extra for t in page.items[:3]]
 
 
 def test_previous_month_sales(adapter):
     first_of_month = date.today().replace(day=1)
     last_month = first_of_month - timedelta(days=1)
     page = adapter.get_sales(last_month.replace(day=1), last_month)
+    if page.items:
+        print(sorted(page.items[0].provider_meta.raw_payload.keys()))
     assert all(s.external_key for s in page.items)
+    # Coloanele reale ale raportului de vanzari trebuie sa umple pachetul si SKU-ul
+    assert all(s.app_id for s in page.items), [s.provider_meta.raw_payload for s in page.items[:3]]
+    assert all(s.sku for s in page.items), [s.provider_meta.raw_payload for s in page.items[:3]]
 
 
 def test_reviews_merge(adapter):
