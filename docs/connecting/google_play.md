@@ -4,6 +4,12 @@
 Rapoartele de venituri (`earnings/`) si vanzari (`sales/`) din bucket-ul Cloud Storage, recenziile (istoric din CSV,
 proaspete din API) cu raspuns, cumparaturile anulate, starea abonamentelor si notificarile RTDN prin Pub/Sub.
 
+## Statistici
+`get_app_stats` citeste cinci familii de rapoarte din folderul `stats/` al bucket-ului: instalari
+(`stats/installs/`, `overview` si `country`), rating (`stats/ratings/`), crash-uri si ANR (`stats/crashes/`) si
+achizitii din magazin (`stats/store_performance/`, pe sursa de trafic si pe tara). Fisierele sunt CSV lunare, UTF-16;
+o luna pe pagina, doar zilele din interval. Alte dimensiuni (device, versiune, limba, operator) nu sunt citite.
+
 ## Credentiale
 1. Google Cloud Console > IAM > Service Accounts > Create > Keys > **JSON**. Lipeste JSON-ul intreg in `service_account_json`.
 2. Play Console > Users and permissions > Invite new user > email-ul service account-ului; permisiuni:

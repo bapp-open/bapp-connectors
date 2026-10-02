@@ -41,6 +41,41 @@ REVIEW_CSV = (
 ).encode("utf-16")
 
 
+def _utf16(header: str, *lines: str) -> bytes:
+    return ("\n".join([header, *lines]) + "\n").encode("utf-16")
+
+
+_INSTALLS_HEAD = (
+    "Daily Device Installs,Daily Device Uninstalls,Daily Device Upgrades,Total User Installs,Daily User Installs,"
+    "Daily User Uninstalls,Active Device Installs,Install events,Update events,Uninstall events"
+)
+INSTALLS_OVERVIEW = _utf16(
+    f"Date,Package name,{_INSTALLS_HEAD}",
+    "2026-09-02,ro.cbsoft.app,12,3,40,900,11,2,500,14,41,4",
+    "2026-09-03,ro.cbsoft.app,5,1,20,905,5,1,505,6,21,1",
+    "2026-09-20,ro.cbsoft.app,9,9,9,9,9,9,9,9,9,9",
+)
+INSTALLS_COUNTRY = _utf16(
+    f"Date,Package name,Country,{_INSTALLS_HEAD}",
+    "2026-09-02,ro.cbsoft.app,RO,10,2,30,800,9,1,400,11,31,3",
+    "2026-09-03,ro.cbsoft.app,DE,2,1,10,100,2,1,100,3,10,1",
+)
+RATINGS_OVERVIEW = _utf16(
+    "Date,Package Name,Daily Average Rating,Total Average Rating",
+    "2026-09-02,ro.cbsoft.app,4.5,4.31",
+    "2026-09-03,ro.cbsoft.app,,4.31",
+)
+CRASHES_OVERVIEW = _utf16(
+    "Date,Package Name,Daily Crashes,Daily ANRs",
+    "2026-09-02,ro.cbsoft.app,2,1",
+    "2026-09-20,ro.cbsoft.app,7,7",
+)
+STORE_TRAFFIC = _utf16(
+    "Date,Package name,Traffic source,Total store acquisitions",
+    "2026-09-02,ro.cbsoft.app,Google Search,7",
+)
+
+
 @pytest.fixture
 def fake_http():
     fake = FakeHttpClient(base_url=manifest.base_url)
@@ -48,6 +83,11 @@ def fake_http():
         "earnings/earnings_202609_1.zip": _zip_csv("earnings.csv", [EARNINGS_BASE, {**EARNINGS_BASE, "Transaction Type": "Google fee", "Amount (Merchant Currency)": "-0.90"}]),
         "sales/salesreport_202609.zip": _zip_csv("salesreport_202609.csv", [SALES_ROW, {**SALES_ROW, "Order Number": "GPA.2", "Financial Status": "Refund"}]),
         "reviews/reviews_ro.cbsoft.app_202609.csv": REVIEW_CSV,
+        "stats/installs/installs_ro.cbsoft.app_202609_overview.csv": INSTALLS_OVERVIEW,
+        "stats/installs/installs_ro.cbsoft.app_202609_country.csv": INSTALLS_COUNTRY,
+        "stats/ratings/ratings_ro.cbsoft.app_202609_overview.csv": RATINGS_OVERVIEW,
+        "stats/crashes/crashes_ro.cbsoft.app_202609_overview.csv": CRASHES_OVERVIEW,
+        "stats/store_performance/total_store_performance_ro.cbsoft.app_202609_traffic_source.csv": STORE_TRAFFIC,
     }
 
     def list_objects(method, path, kwargs):
@@ -97,11 +137,7 @@ class TestGooglePlayContract(AppStoreContractTests):
 
     @pytest.fixture
     def stats_window(self):
-        return date(2026, 9, 1), date(2026, 9, 3)
-
-    @pytest.fixture
-    def unsupported_methods(self):
-        return {"get_app_stats"}  # TODO Task B: Google Play stats
+        return date(2026, 9, 1), date(2026, 9, 30)
 
 
 def test_sales_month_page_marks_refund(adapter):
@@ -109,6 +145,30 @@ def test_sales_month_page_marks_refund(adapter):
     assert page.has_more is False
     assert [s.is_refund for s in page.items] == [False, True]
     assert page.items[0].product_type == AppStoreProductType.SUBSCRIPTION
+
+
+def test_app_stats_month_page(adapter):
+    page = adapter.get_app_stats("ro.cbsoft.app", date(2026, 9, 2), date(2026, 9, 3))
+    assert page.has_more is False
+    assert all(date(2026, 9, 2) <= s.date <= date(2026, 9, 3) for s in page.items)  # 20.09 taiat
+    values = {(s.metric.value, s.date.day, s.country, s.extra.get("traffic_source", "")): s.value for s in page.items}
+    assert values[("installs", 2, "", "")] == Decimal("12")
+    assert values[("active_devices", 3, "", "")] == Decimal("505")
+    assert values[("installs", 2, "RO", "")] == Decimal("10")
+    assert values[("installs", 3, "DE", "")] == Decimal("2")
+    assert values[("rating_daily", 2, "", "")] == Decimal("4.5")
+    assert ("rating_daily", 3, "", "") not in values
+    assert values[("rating_total", 3, "", "")] == Decimal("4.31")
+    assert values[("crashes", 2, "", "")] == Decimal("2")
+    assert values[("anrs", 2, "", "")] == Decimal("1")
+    assert values[("store_acquisitions", 2, "", "Google Search")] == Decimal("7")
+    assert ("crashes", 20, "", "") not in values
+    assert len({s.external_key for s in page.items}) == len(page.items)
+
+
+def test_app_stats_missing_month_is_empty_page(adapter):
+    page = adapter.get_app_stats("ro.cbsoft.app", date(2026, 10, 1), date(2026, 10, 31))
+    assert page.items == [] and page.has_more is False
 
 
 def test_earnings_missing_month_is_empty_page(adapter):

@@ -15,6 +15,8 @@ from bapp_connectors.core.dto import (
     AppStoreRefund,
     AppStoreReview,
     AppStoreSale,
+    AppStoreStat,
+    AppStoreStatMetric,
     FinancialTransaction,
     FinancialTransactionType,
     ProviderMeta,
@@ -366,3 +368,85 @@ def webhook_event_from_pubsub(message: dict) -> WebhookEvent:
         extra={"version": rtdn.get("version", ""), "publish_time": message.get("publishTime", "")},
         provider_meta=_meta({"message": message, "rtdn": rtdn}, message.get("messageId", "")),
     )
+
+
+# ── statistici (stats/ din bucket) ──
+
+_INSTALL_METRICS = (
+    (AppStoreStatMetric.INSTALLS, "Daily Device Installs"),
+    (AppStoreStatMetric.UNINSTALLS, "Daily Device Uninstalls"),
+    (AppStoreStatMetric.ACTIVE_DEVICES, "Active Device Installs"),
+    (AppStoreStatMetric.USER_INSTALLS, "Daily User Installs"),
+)
+_INSTALL_EXTRA = (
+    ("daily_device_upgrades", "Daily Device Upgrades"),
+    ("total_user_installs", "Total User Installs"),
+    ("daily_user_uninstalls", "Daily User Uninstalls"),
+    ("install_events", "Install events"),
+    ("update_events", "Update events"),
+    ("uninstall_events", "Uninstall events"),
+)
+
+
+def _stat(day: date, app_id: str, metric: AppStoreStatMetric, raw: str, country: str = "", extra: dict | None = None) -> AppStoreStat:
+    extra = extra or {}
+    return AppStoreStat(
+        external_key=stable_key(PROVIDER, day, app_id, metric, country, extra.get("traffic_source", "")),
+        date=day,
+        metric=metric,
+        value=to_decimal(raw),
+        app_id=app_id,
+        country=country,
+        extra=extra,
+    )
+
+
+def stats_from_installs_rows(rows: list[dict], app_id: str, country_column: str | None = None) -> list[AppStoreStat]:
+    """`installs_*_overview.csv` (country_column=None) sau `installs_*_country.csv` (country_column="Country")."""
+    stats: list[AppStoreStat] = []
+    for row in rows:
+        day = parse_earnings_date(_col(row, "Date"))
+        if day is None:
+            continue
+        country = _col(row, country_column).strip() if country_column else ""
+        extra = {key: _col(row, column).strip() for key, column in _INSTALL_EXTRA}
+        for metric, column in _INSTALL_METRICS:
+            stats.append(_stat(day, app_id, metric, _col(row, column), country, dict(extra)))
+    return stats
+
+
+def stats_from_ratings_rows(rows: list[dict], app_id: str) -> list[AppStoreStat]:
+    stats: list[AppStoreStat] = []
+    for row in rows:
+        day = parse_earnings_date(_col(row, "Date"))
+        if day is None:
+            continue
+        for metric, column in ((AppStoreStatMetric.RATING_DAILY, "Daily Average Rating"), (AppStoreStatMetric.RATING_TOTAL, "Total Average Rating")):
+            raw = _col(row, column).strip()
+            if raw:  # ziua fara evaluari are celula goala, nu 0
+                stats.append(_stat(day, app_id, metric, raw))
+    return stats
+
+
+def stats_from_crashes_rows(rows: list[dict], app_id: str) -> list[AppStoreStat]:
+    stats: list[AppStoreStat] = []
+    for row in rows:
+        day = parse_earnings_date(_col(row, "Date"))
+        if day is None:
+            continue
+        stats.append(_stat(day, app_id, AppStoreStatMetric.CRASHES, _col(row, "Daily Crashes")))
+        stats.append(_stat(day, app_id, AppStoreStatMetric.ANRS, _col(row, "Daily ANRs")))
+    return stats
+
+
+def stats_from_store_rows(rows: list[dict], app_id: str, by: str = "traffic_source") -> list[AppStoreStat]:
+    """`total_store_performance_*_traffic_source.csv` (by="traffic_source") sau `..._country.csv` (by="country")."""
+    stats: list[AppStoreStat] = []
+    for row in rows:
+        day = parse_earnings_date(_col(row, "Date"))
+        if day is None:
+            continue
+        country = _col(row, "Country").strip() if by == "country" else ""
+        extra = {"traffic_source": _col(row, "Traffic source").strip()} if by == "traffic_source" else {}
+        stats.append(_stat(day, app_id, AppStoreStatMetric.STORE_ACQUISITIONS, _col(row, "Total store acquisitions"), country, extra))
+    return stats

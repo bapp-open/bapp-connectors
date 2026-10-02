@@ -9,13 +9,23 @@ from decimal import Decimal
 
 import pytest
 
-from bapp_connectors.core.dto import AppStoreProductType, FinancialTransactionType, SubscriptionStatus, WebhookEventType
+from bapp_connectors.core.dto import (
+    AppStoreProductType,
+    AppStoreStatMetric,
+    FinancialTransactionType,
+    SubscriptionStatus,
+    WebhookEventType,
+)
 from bapp_connectors.providers.appstore.google_play.errors import GooglePlayWebhookError
 from bapp_connectors.providers.appstore.google_play.mappers import (
     refund_from_voided,
     review_from_api,
     review_from_csv_row,
     sale_from_sales_row,
+    stats_from_crashes_rows,
+    stats_from_installs_rows,
+    stats_from_ratings_rows,
+    stats_from_store_rows,
     subscription_from_v2,
     transactions_from_earnings_rows,
     webhook_event_from_pubsub,
@@ -203,3 +213,66 @@ def test_sales_real_headers():
     assert sale.extra["base_plan"] == "monthly"
     assert sale.extra["postal_code"] == "010101"
     assert sale.extra["featured_product_id"] == "feat1"
+
+
+INSTALLS_ROW = {
+    "Date": "2026-09-01", "Package name": "ro.cbsoft.app", "Daily Device Installs": "12", "Daily Device Uninstalls": "3",
+    "Daily Device Upgrades": "40", "Total User Installs": "900", "Daily User Installs": "11", "Daily User Uninstalls": "2",
+    "Active Device Installs": "500", "Install events": "14", "Update events": "41", "Uninstall events": "4",
+}
+
+
+def test_stats_from_installs_overview_rows():
+    stats = stats_from_installs_rows([INSTALLS_ROW], "ro.cbsoft.app", None)
+    by_metric = {s.metric: s for s in stats}
+    assert set(by_metric) == {AppStoreStatMetric.INSTALLS, AppStoreStatMetric.UNINSTALLS, AppStoreStatMetric.ACTIVE_DEVICES, AppStoreStatMetric.USER_INSTALLS}
+    assert by_metric[AppStoreStatMetric.INSTALLS].value == Decimal("12")
+    assert by_metric[AppStoreStatMetric.UNINSTALLS].value == Decimal("3")
+    assert by_metric[AppStoreStatMetric.ACTIVE_DEVICES].value == Decimal("500")
+    assert by_metric[AppStoreStatMetric.USER_INSTALLS].value == Decimal("11")
+    first = by_metric[AppStoreStatMetric.INSTALLS]
+    assert first.date == date(2026, 9, 1) and first.country == "" and first.app_id == "ro.cbsoft.app"
+    assert first.extra == {
+        "daily_device_upgrades": "40", "total_user_installs": "900", "daily_user_uninstalls": "2",
+        "install_events": "14", "update_events": "41", "uninstall_events": "4",
+    }
+    assert len({s.external_key for s in stats}) == 4
+
+
+def test_stats_from_installs_country_rows():
+    row = {"Date": "2026-09-01", "Package Name": "ro.cbsoft.app", "Country": "RO", **{k: v for k, v in INSTALLS_ROW.items() if k not in {"Date", "Package name"}}}
+    stats = stats_from_installs_rows([row, {**row, "Country": "DE"}], "ro.cbsoft.app", "Country")
+    assert {s.country for s in stats} == {"RO", "DE"}
+    assert len({s.external_key for s in stats}) == 8
+
+
+def test_stats_from_ratings_rows_skips_blank():
+    rows = [
+        {"Date": "2026-09-01", "Package Name": "ro.cbsoft.app", "Daily Average Rating": "4.5", "Total Average Rating": "4.31"},
+        {"Date": "2026-09-02", "Package name": "ro.cbsoft.app", "Daily Average Rating": "", "Total Average Rating": "4.31"},
+    ]
+    stats = stats_from_ratings_rows(rows, "ro.cbsoft.app")
+    assert [(s.date.day, s.metric, s.value) for s in stats] == [
+        (1, AppStoreStatMetric.RATING_DAILY, Decimal("4.5")),
+        (1, AppStoreStatMetric.RATING_TOTAL, Decimal("4.31")),
+        (2, AppStoreStatMetric.RATING_TOTAL, Decimal("4.31")),
+    ]
+
+
+def test_stats_from_crashes_rows():
+    stats = stats_from_crashes_rows([{"Date": "2026-09-01", "Package Name": "ro.cbsoft.app", "Daily Crashes": "2", "Daily ANRs": "1"}], "ro.cbsoft.app")
+    assert {s.metric: s.value for s in stats} == {AppStoreStatMetric.CRASHES: Decimal("2"), AppStoreStatMetric.ANRS: Decimal("1")}
+
+
+def test_stats_from_store_rows_by_traffic_source_and_country():
+    traffic = [
+        {"Date": "2026-09-01", "Package name": "ro.cbsoft.app", "Traffic source": "Google Search", "Total store acquisitions": "7"},
+        {"Date": "2026-09-01", "Package name": "ro.cbsoft.app", "Traffic source": "Third-party referrals", "Total store acquisitions": "2"},
+    ]
+    stats = stats_from_store_rows(traffic, "ro.cbsoft.app", "traffic_source")
+    assert [(s.country, s.extra["traffic_source"], s.value) for s in stats] == [("", "Google Search", Decimal("7")), ("", "Third-party referrals", Decimal("2"))]
+    assert len({s.external_key for s in stats}) == 2
+    by_country = stats_from_store_rows([{"Date": "2026-09-01", "Package Name": "ro.cbsoft.app", "Country": "RO", "Total store acquisitions": "5"}], "ro.cbsoft.app", "country")
+    assert by_country[0].country == "RO" and by_country[0].extra == {} and by_country[0].metric == AppStoreStatMetric.STORE_ACQUISITIONS
+    missing = stats_from_store_rows([{"Date": "2026-09-01", "Total store acquisitions": "5"}], "ro.cbsoft.app", "country")
+    assert missing[0].country == ""

@@ -12,6 +12,7 @@ from bapp_connectors.core.dto import (
     AppStoreRefund,
     AppStoreReview,
     AppStoreSale,
+    AppStoreStat,
     ConnectionTestResult,
     FinancialTransaction,
     PaginatedResult,
@@ -33,11 +34,17 @@ from bapp_connectors.providers.appstore.google_play.client import GooglePlayApiC
 from bapp_connectors.providers.appstore.google_play.errors import GooglePlayWebhookError
 from bapp_connectors.providers.appstore.google_play.manifest import manifest
 from bapp_connectors.providers.appstore.google_play.mappers import (
+    _col,
     app_from_package,
+    parse_earnings_date,
     refund_from_voided,
     review_from_api,
     review_from_csv_row,
     sale_from_sales_row,
+    stats_from_crashes_rows,
+    stats_from_installs_rows,
+    stats_from_ratings_rows,
+    stats_from_store_rows,
     subscription_from_v2,
     transactions_from_earnings_rows,
     webhook_event_from_pubsub,
@@ -176,6 +183,38 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
                 by_id[review.review_id] = review  # API-ul e mai proaspat decat CSV-ul
         items = [r for r in by_id.values() if r.updated_at is None or r.updated_at >= since]
         items.sort(key=lambda r: r.created_at or datetime.min.replace(tzinfo=UTC), reverse=True)
+        return PaginatedResult(items=items, cursor=next_cursor, has_more=next_cursor is not None)
+
+    def _stats_rows(self, prefix: str, suffix: str, year: int, month: int, start: date, end: date) -> list[dict]:
+        """Randurile lunii din fisierele `prefix`+stamp+`suffix`, doar cele cu `Date` in [start, end]."""
+        rows: list[dict] = []
+        for name in self._month_objects(prefix, year, month):
+            if not name.endswith(suffix):
+                continue
+            rows.extend(csv_rows(decode_text(self.client.download_object(name))))
+        kept = []
+        for row in rows:
+            day = parse_earnings_date(_col(row, "Date"))
+            if day is not None and start <= day <= end:
+                kept.append(row)
+        return kept
+
+    def get_app_stats(self, app_id: str, start: date, end: date, cursor: str | None = None) -> PaginatedResult[AppStoreStat]:
+        """Instalari, rating, crash-uri si achizitii din magazin, din CSV-urile lunare `stats/` (o luna pe pagina)."""
+        (year, month), next_cursor = monthly_page(start, end, cursor)
+
+        def rows(prefix: str, suffix: str) -> list[dict]:
+            return self._stats_rows(prefix, suffix, year, month, start, end)
+
+        installs = f"stats/installs/installs_{app_id}_"
+        store = f"stats/store_performance/total_store_performance_{app_id}_"
+        items: list[AppStoreStat] = []
+        items += stats_from_installs_rows(rows(installs, "_overview.csv"), app_id, None)
+        items += stats_from_installs_rows(rows(installs, "_country.csv"), app_id, "Country")
+        items += stats_from_ratings_rows(rows(f"stats/ratings/ratings_{app_id}_", "_overview.csv"), app_id)
+        items += stats_from_crashes_rows(rows(f"stats/crashes/crashes_{app_id}_", "_overview.csv"), app_id)
+        items += stats_from_store_rows(rows(store, "_traffic_source.csv"), app_id, "traffic_source")
+        items += stats_from_store_rows(rows(store, "_country.csv"), app_id, "country")
         return PaginatedResult(items=items, cursor=next_cursor, has_more=next_cursor is not None)
 
     def reply_to_review(self, app_id: str, review_id: str, text: str) -> AppStoreReview:
