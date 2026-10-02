@@ -47,9 +47,17 @@ def _int(row: dict, key: str) -> int:
     return int(row.get(key) or 0)
 
 
+_MONEY_FIELDS = ("gross_sales_usd", "gross_returns_usd", "net_tax_usd", "net_sales_usd")
+
+
 def _has_activity(row: dict) -> bool:
-    """Randurile de activari de chei (Retail) nu au vanzari: se sar."""
-    return bool(_int(row, "gross_units_sold") or _int(row, "gross_units_returned"))
+    """Se sare doar randul fara unitati SI fara bani (activarile de chei Retail).
+
+    Un rand cu 0 unitati poate purta totusi o corectie de taxa sau de vanzare neta; acela ramane.
+    """
+    if _int(row, "gross_units_sold") or _int(row, "gross_units_returned"):
+        return True
+    return any(_money(row.get(field) or 0) for field in _MONEY_FIELDS)
 
 
 def _app_id(row: dict) -> str:

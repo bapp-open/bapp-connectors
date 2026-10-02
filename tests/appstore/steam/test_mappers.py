@@ -102,6 +102,23 @@ def test_activation_only_rows_are_skipped():
     assert transactions_from_detailed(payload, day) == []
 
 
+def test_zero_unit_row_with_money_is_kept():
+    row = {**ROW, "gross_units_sold": 0, "gross_units_returned": 0, "net_units_sold": 0, "gross_sales_usd": "0", "gross_returns_usd": "0", "net_tax_usd": "0.50", "net_sales_usd": "-0.50"}
+    payload = {**PAYLOAD, "results": [row]}
+    day = date(2026, 9, 3)
+    txs = transactions_from_detailed(payload, day)
+    kinds = {t.transaction_type for t in txs}
+    assert FinancialTransactionType.DEDUCTION in kinds
+    assert FinancialTransactionType.COMMISSION in kinds
+    assert next(t for t in txs if t.transaction_type == FinancialTransactionType.DEDUCTION).net_amount == Decimal("-0.50")
+    assert len(sales_from_detailed(payload, day)) == 1
+
+
+def test_row_with_all_money_zero_strings_is_skipped():
+    row = {**RETAIL_ROW, "gross_sales_usd": "0.0000", "gross_returns_usd": "0", "net_tax_usd": "0.0000", "net_sales_usd": "0"}
+    assert transactions_from_detailed({**PAYLOAD, "results": [row]}, date(2026, 9, 3)) == []
+
+
 def test_customer_price_from_cents_in_local_currency():
     sale = sales_from_detailed({**PAYLOAD, "results": [{**ROW, "sale_price": "1999", "currency": "RON"}]}, date(2026, 9, 3))[0]
     assert sale.customer_price == Decimal("19.99")
