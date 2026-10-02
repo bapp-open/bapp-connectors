@@ -131,3 +131,43 @@ class TestOnError:
         with patch.object(ExecutionLog.objects, "create", side_effect=Exception("DB down")):
             # Should not raise
             on_error(ctx, RuntimeError("API timeout"))
+
+
+# ── Steam publisher key redaction ──
+
+
+class TestSteamKeyRedaction:
+    def test_key_param_is_redacted(self, callbacks):
+        on_response, _ = callbacks
+        req = RequestContext(
+            method="GET",
+            url="https://partner.steam-api.com/IPartnerFinancialsService/GetDetailedSales/v001/",
+            provider="steam",
+            kwargs={"params": {"key": "SECRET", "date": "2026/09/03"}},
+        )
+        on_response(ResponseContext(request=req, status_code=403, duration_ms=10))
+        log = ExecutionLog.objects.latest("pk")
+        assert log.request_payload == {"key": "***", "date": "2026/09/03"}
+
+    def test_key_in_error_message_and_url_is_redacted(self, callbacks):
+        _, on_error = callbacks
+        req = RequestContext(
+            method="GET",
+            url="https://partner.steam-api.com/x/v001/?key=SECRET&date=2026",
+            provider="steam",
+            kwargs={"params": {"key": "SECRET"}},
+        )
+        on_error(req, RuntimeError("403 Forbidden for url: https://partner.steam-api.com/x/v001/?key=SECRET&date=2026"))
+        log = ExecutionLog.objects.latest("pk")
+        assert "SECRET" not in log.error
+        assert "key=***&date=2026" in log.error
+        assert "SECRET" not in log.url
+        assert "SECRET" not in log.action
+        assert log.request_payload == {"key": "***"}
+
+    def test_other_words_ending_in_key_are_untouched(self, callbacks):
+        _, on_error = callbacks
+        req = RequestContext(method="GET", url="https://example.com/?monkey=1", provider="steam")
+        on_error(req, RuntimeError("bad monkey=1"))
+        log = ExecutionLog.objects.latest("pk")
+        assert log.error == "bad monkey=1"

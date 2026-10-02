@@ -8,6 +8,7 @@ to persist execution logs and errors to Django models.
 from __future__ import annotations
 
 import logging
+import re
 
 from bapp_connectors.core.http.middleware import RequestContext, ResponseContext
 
@@ -20,7 +21,15 @@ _SENSITIVE_KEYS = {
     "consumer_secret", "consumer_key", "password", "secret", "token", "access_token", "refresh_token", "authorization",
     # payment processors: Netopia puts its POS signature in the body, others their API key
     "possignature", "posid", "api_key", "apikey",
+    # Steam Web API: publisher key in the query string (`?key=...`)
+    "key",
 }
+_KEY_IN_TEXT = re.compile(r"(?i)(\bkey=)[^&\s]+")
+
+
+def _redact_text(text: str) -> str:
+    """`key=<value>` in URLs and error messages (exceptions often echo the request URL)."""
+    return _KEY_IN_TEXT.sub(r"\1***", text)
 
 
 def _redact(value):
@@ -104,9 +113,9 @@ def make_execution_log_callback(execution_log_model, connection):
 
             execution_log_model.objects.create(
                 connection=connection,
-                action=f"{ctx.request.method} {ctx.request.url}",
+                action=_redact_text(f"{ctx.request.method} {ctx.request.url}"),
                 method=ctx.request.method,
-                url=ctx.request.url[:500],
+                url=_redact_text(ctx.request.url)[:500],
                 response_status=ctx.status_code,
                 duration_ms=ctx.duration_ms,
                 request_payload=request_payload,
@@ -119,10 +128,10 @@ def make_execution_log_callback(execution_log_model, connection):
         try:
             execution_log_model.objects.create(
                 connection=connection,
-                action=f"{ctx.method} {ctx.url}",
+                action=_redact_text(f"{ctx.method} {ctx.url}"),
                 method=ctx.method,
-                url=ctx.url[:500],
-                error=str(error)[:2000],
+                url=_redact_text(ctx.url)[:500],
+                error=_redact_text(str(error))[:2000],
                 request_payload=_extract_request_payload(ctx),
             )
         except Exception:
