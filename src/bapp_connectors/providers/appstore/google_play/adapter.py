@@ -179,7 +179,11 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
 
     def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
         """Fara `pubsub_audience` acceptam push-ul (verificarea OIDC e optionala la Pub/Sub)."""
-        from bapp_connectors.providers.appstore.google_play.oidc import fetch_google_jwks, verify_google_id_token
+        from bapp_connectors.providers.appstore.google_play.oidc import (
+            UnknownKeyIdError,
+            fetch_google_jwks,
+            verify_google_id_token,
+        )
 
         audience = secret or self.credentials.get("pubsub_audience") or ""
         if not audience:
@@ -190,9 +194,17 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
         token = authorization.split(" ", 1)[1].strip()
         try:
             jwks = fetch_google_jwks(self.http, self._jwks_cache)
-            verify_google_id_token(token, audience=audience, jwks=jwks)
+            try:
+                verify_google_id_token(token, audience=audience, jwks=jwks)
+            except UnknownKeyIdError:
+                # Google a rotit cheile: o singura reincarcare fortata, apoi inca o verificare.
+                jwks = fetch_google_jwks(self.http, self._jwks_cache, force=True)
+                verify_google_id_token(token, audience=audience, jwks=jwks)
             return True
         except GooglePlayWebhookError:
+            return False
+        except Exception:
+            # Fail closed: stratul HTTP raspunde 401, Pub/Sub reincearca.
             return False
 
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
