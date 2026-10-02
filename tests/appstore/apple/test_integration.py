@@ -40,7 +40,7 @@ def test_last_week_sales(adapter):
         if not page.has_more:
             break
         cursor = page.cursor
-    print(f"Apple proceeds {start}..{end}: {total}")  # noqa: T201 — pentru comparatia manuala cu Sales and Trends
+    print(f"Apple proceeds {start}..{end}: {total}")
 
 
 def test_last_closed_fiscal_month_net(adapter):
@@ -49,7 +49,7 @@ def test_last_closed_fiscal_month_net(adapter):
     by_currency: dict[str, Decimal] = {}
     for t in page.items:
         by_currency[t.currency] = by_currency.get(t.currency, Decimal("0")) + t.net_amount
-    print(f"Apple FINANCE_DETAIL {period}: {by_currency}")  # noqa: T201 — se compara cu Payments and Financial Reports
+    print(f"Apple FINANCE_DETAIL {period}: {by_currency}")
     assert all(t.payout_id.startswith(period) for t in page.items)
 
 

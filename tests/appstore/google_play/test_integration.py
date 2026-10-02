@@ -32,7 +32,7 @@ def test_previous_month_earnings_net(adapter):
         datetime.combine(last_month, datetime.max.time()),
     )
     net = sum((t.net_amount for t in page.items), Decimal("0"))
-    print(f"Google Play earnings {last_month:%Y%m}: net {net} ({len(page.items)} randuri)")  # noqa: T201 — se compara cu payout-ul din Play Console
+    print(f"Google Play earnings {last_month:%Y%m}: net {net} ({len(page.items)} randuri)")
     assert all(t.payout_id == f"{last_month:%Y%m}:{t.currency}" for t in page.items)
 
 

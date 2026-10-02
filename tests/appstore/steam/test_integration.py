@@ -29,7 +29,7 @@ def test_connection_or_ip_whitelist(adapter):
 def test_changed_dates(adapter):
     days, watermark = adapter.changed_dates(0)
     assert watermark >= 0
-    print(f"Steam: {len(days)} zile cu date, highwatermark {watermark}")  # noqa: T201
+    print(f"Steam: {len(days)} zile cu date, highwatermark {watermark}")
 
 
 def test_recent_sales(adapter):
@@ -51,7 +51,7 @@ def test_recent_sales_sign_of_returns(adapter):
         cursor = page.cursor
     returns = [t for t in rows if t.transaction_type == FinancialTransactionType.RETURN]
     for t in returns:
-        print(f"Steam RETURN: {t.model_dump()}")  # noqa: T201
+        print(f"Steam RETURN: {t.model_dump()}")
         assert t.net_amount <= Decimal("0")
     for t in rows:
         if t.transaction_type == FinancialTransactionType.SALE:
