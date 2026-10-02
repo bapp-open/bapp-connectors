@@ -24,16 +24,46 @@ REVENUE_SHARE = Decimal("0.30")
 BONUS_TIERS = {0: Decimal("0"), 1: Decimal("0.05"), 2: Decimal("0.10")}
 CENT = Decimal("0.01")
 
-#: line_item_type (Steamworks): 1 = vanzare pachet, 2 = DLC, 3 = microtranzactie/item, altele = OTHER
+#: line_item_type: documentat ca intreg (1 = pachet, 2 = DLC, 3 = microtranzactie), in realitate vine ca text ("Package")
 LINE_ITEM_TYPES = {1: AppStoreProductType.APP, 2: AppStoreProductType.DLC, 3: AppStoreProductType.IAP}
+LINE_ITEM_TYPE_NAMES = {
+    "package": AppStoreProductType.APP,
+    "bundle": AppStoreProductType.APP,
+    "dlc": AppStoreProductType.DLC,
+    "in-game item": AppStoreProductType.IAP,
+    "microtransaction": AppStoreProductType.IAP,
+}
 
 
 def _meta(raw: dict, raw_id: str = "") -> ProviderMeta:
     return ProviderMeta(provider=PROVIDER, raw_id=raw_id, raw_payload=raw, fetched_at=datetime.now(UTC))
 
 
-def _names(payload: dict, key: str, id_key: str) -> dict[str, str]:
-    return {str(item.get(id_key)): item.get("name", "") for item in payload.get(key, []) or []}
+def _names(payload: dict, key: str, id_key: str, name_key: str) -> dict[str, str]:
+    return {str(item.get(id_key)): item.get(name_key) or item.get("name", "") for item in payload.get(key, []) or []}
+
+
+def _int(row: dict, key: str) -> int:
+    return int(row.get(key) or 0)
+
+
+def _has_activity(row: dict) -> bool:
+    """Randurile de activari de chei (Retail) nu au vanzari: se sar."""
+    return bool(_int(row, "gross_units_sold") or _int(row, "gross_units_returned"))
+
+
+def _app_id(row: dict) -> str:
+    return str(row.get("primary_appid") or row.get("appid") or "")
+
+
+def _product_type(row: dict) -> AppStoreProductType:
+    if _int(row, "bundleid"):
+        return AppStoreProductType.APP
+    value = row.get("line_item_type")
+    try:
+        return LINE_ITEM_TYPES.get(int(value), AppStoreProductType.OTHER)
+    except (TypeError, ValueError):
+        return LINE_ITEM_TYPE_NAMES.get(str(value).strip().lower(), AppStoreProductType.OTHER)
 
 
 def _money(value) -> Decimal:
@@ -41,7 +71,7 @@ def _money(value) -> Decimal:
 
 
 def _row_key(row: dict, day: date) -> str:
-    return stable_key(PROVIDER, day, *(row.get(k) for k in ("line_item_type", "packageid", "bundleid", "appid", "game_item_id", "package_sale_type", "key_request_id", "platform", "country_code", "base_price", "sale_price")))
+    return stable_key(PROVIDER, day, *(row.get(k) for k in ("line_item_type", "packageid", "bundleid", "appid", "primary_appid", "game_item_id", "package_sale_type", "key_request_id", "platform", "country_code", "base_price", "sale_price")))
 
 
 def _at(day: date) -> datetime:
@@ -49,41 +79,47 @@ def _at(day: date) -> datetime:
 
 
 def sales_from_detailed(payload: dict, day: date) -> list[AppStoreSale]:
-    apps = _names(payload, "app_info", "appid")
-    packages = _names(payload, "package_info", "packageid")
+    apps = _names(payload, "app_info", "appid", "app_name")
+    packages = _names(payload, "package_info", "packageid", "package_name")
     sales = []
     for row in payload.get("results", []) or []:
+        if not _has_activity(row):
+            continue
         key = _row_key(row, day)
-        product_type = LINE_ITEM_TYPES.get(int(row.get("line_item_type", 0)), AppStoreProductType.OTHER)
-        if int(row.get("bundleid", 0) or 0):
-            product_type = AppStoreProductType.APP
-        net_units = Decimal(str(row.get("net_units_sold", 0)))
+        product_type = _product_type(row)
+        app_id = _app_id(row)
+        net_units = Decimal(_int(row, "net_units_sold"))
         sales.append(
             AppStoreSale(
                 external_key=key,
                 period_start=day,
                 period_end=day,
-                app_id=str(row.get("appid", "")),
+                app_id=app_id,
                 sku=str(row.get("packageid") or row.get("bundleid") or row.get("game_item_id") or ""),
-                product_name=packages.get(str(row.get("packageid")), "") or apps.get(str(row.get("appid")), ""),
+                product_name=packages.get(str(row.get("packageid")), "") or apps.get(app_id, ""),
                 product_type=product_type,
                 units=net_units,
                 country=row.get("country_code", ""),
-                customer_currency=CURRENCY,
-                customer_price=_money(row.get("avg_sale_price_usd", 0)),
+                customer_currency=row.get("currency", "") or "",
+                customer_price=(to_decimal(str(row.get("sale_price") or 0)) / 100).quantize(CENT, rounding=ROUND_HALF_UP),
                 proceeds_currency=CURRENCY,
                 proceeds_unit=(_money(row.get("net_sales_usd", 0)) / net_units).quantize(CENT) if net_units else Decimal("0"),
                 proceeds_total=_money(row.get("net_sales_usd", 0)),
                 is_refund=False,
                 extra={
-                    "gross_units_sold": int(row.get("gross_units_sold", 0) or 0),
-                    "gross_units_returned": int(row.get("gross_units_returned", 0) or 0),
-                    "gross_sales_usd": str(_money(row.get("gross_sales_usd", 0))),
+                    "gross_units_sold": _int(row, "gross_units_sold"),
+                    "gross_units_returned": _int(row, "gross_units_returned"),
+                    "gross_units_activated": _int(row, "gross_units_activated"),
+                    "package_sale_type": row.get("package_sale_type", ""),
+                    "base_price": str(row.get("base_price") or ""),
+                    "sale_price": str(row.get("sale_price") or ""),
+                    "currency": row.get("currency", "") or "",
+                    "gross_sales_usd": str(_money(row.get("gross_sales_usd") or 0)),
                     "gross_returns_usd": str(_money(row.get("gross_returns_usd", 0))),
                     "net_tax_usd": str(_money(row.get("net_tax_usd", 0))),
                     "platform": row.get("platform", ""),
-                    "app_name": apps.get(str(row.get("appid")), ""),
-                    "revenue_share_tier": int(row.get("additional_revenue_share_tier", 0) or 0),
+                    "app_name": apps.get(app_id, ""),
+                    "revenue_share_tier": _int(row, "additional_revenue_share_tier"),
                 },
                 provider_meta=_meta(row, key),
             )
@@ -105,25 +141,27 @@ def _tx(row: dict, key: str, common: dict, kind: FinancialTransactionType, amoun
 
 
 def transactions_from_detailed(payload: dict, day: date) -> list[FinancialTransaction]:
-    apps = _names(payload, "app_info", "appid")
+    apps = _names(payload, "app_info", "appid", "app_name")
     period = f"{day:%Y-%m}"
     result: list[FinancialTransaction] = []
     for row in payload.get("results", []) or []:
+        if not _has_activity(row):
+            continue
         key = _row_key(row, day)
-        title = apps.get(str(row.get("appid")), "")
+        title = apps.get(_app_id(row), "")
         common = {
             "transaction_date": _at(day),
             "description": title,
             "currency": CURRENCY,
             "payout_id": f"{period}:{CURRENCY}",
-            "extra": {"country": row.get("country_code", ""), "app_id": str(row.get("appid", "")), "sku": str(row.get("packageid", "")), "units": int(row.get("net_units_sold", 0) or 0)},
+            "extra": {"country": row.get("country_code", ""), "app_id": _app_id(row), "sku": str(row.get("packageid", "")), "units": _int(row, "net_units_sold"), "package_sale_type": row.get("package_sale_type", "")},
         }
 
-        gross = _money(row.get("gross_sales_usd", 0))
+        gross = _money(row.get("gross_sales_usd") or 0)
         returns = _money(row.get("gross_returns_usd", 0))
         tax = _money(row.get("net_tax_usd", 0))
         net_sales = _money(row.get("net_sales_usd", 0))
-        tier = BONUS_TIERS.get(int(row.get("additional_revenue_share_tier", 0) or 0), Decimal("0"))
+        tier = BONUS_TIERS.get(_int(row, "additional_revenue_share_tier"), Decimal("0"))
         commission = (net_sales * (REVENUE_SHARE - tier)).quantize(CENT, rounding=ROUND_HALF_UP)
         if gross:
             result.append(_tx(row, key, common, FinancialTransactionType.SALE, gross, "sale", "gross_sales_usd"))
@@ -152,14 +190,14 @@ def transactions_from_detailed(payload: dict, day: date) -> list[FinancialTransa
 def refunds_from_detailed(payload: dict, day: date) -> list[AppStoreRefund]:
     refunds = []
     for row in payload.get("results", []) or []:
-        returned = int(row.get("gross_units_returned", 0) or 0)
+        returned = _int(row, "gross_units_returned")
         if not returned:
             continue
         key = _row_key(row, day)
         refunds.append(
             AppStoreRefund(
                 refund_id=f"{key}:return",
-                app_id=str(row.get("appid", "")),
+                app_id=_app_id(row),
                 sku=str(row.get("packageid", "")),
                 amount=_money(row.get("gross_returns_usd", 0)),
                 currency=CURRENCY,

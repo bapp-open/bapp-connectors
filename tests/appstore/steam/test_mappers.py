@@ -14,13 +14,16 @@ from bapp_connectors.providers.appstore.steam.mappers import (
 )
 
 ROW = {
-    "partnerid": 1, "date": "2026-09-03", "line_item_type": 1, "packageid": 500, "bundleid": 0, "appid": 4000, "game_item_id": 0,
-    "package_sale_type": 0, "key_request_id": 0, "platform": "windows", "country_code": "RO",
-    "gross_units_sold": 10, "gross_units_returned": 1, "gross_sales_usd": "199.9000", "gross_returns_usd": "19.9900",
-    "net_tax_usd": "28.7800", "net_units_sold": 9, "net_sales_usd": "151.1300", "base_price": 1999, "sale_price": 1999,
-    "avg_sale_price_usd": "19.9900", "gross_units_activated": 0, "additional_revenue_share_tier": 0,
+    "partnerid": 1, "date": "2026-09-03", "line_item_type": "Package", "packageid": 500, "package_sale_type": "Steam", "platform": "Windows", "country_code": "RO",
+    "base_price": "1999", "sale_price": "1999", "currency": "RON", "gross_units_sold": 10, "gross_units_returned": 1,
+    "gross_sales_usd": "199.9000", "gross_returns_usd": "19.9900", "net_tax_usd": "28.7800", "primary_appid": 4000,
+    "additional_revenue_share_tier": 0, "net_units_sold": 9, "net_sales_usd": "151.1300",
 }
-PAYLOAD = {"results": [ROW], "max_id": 1, "app_info": [{"appid": 4000, "name": "Dungeon"}], "package_info": [{"packageid": 500, "name": "Dungeon - Standard"}]}
+RETAIL_ROW = {
+    "date": "2026-09-03", "line_item_type": "Package", "packageid": 1800669, "package_sale_type": "Retail", "platform": "Unknown", "country_code": "CA",
+    "additional_revenue_share_tier": 0, "key_request_id": 1007134, "gross_units_activated": 5, "partnerid": 123,
+}
+PAYLOAD = {"results": [ROW], "max_id": 1, "app_info": [{"appid": 4000, "app_name": "Dungeon"}], "package_info": [{"packageid": 500, "package_name": "Dungeon - Standard"}]}
 
 
 def test_sales_from_detailed():
@@ -35,6 +38,7 @@ def test_sales_from_detailed():
     assert sale.proceeds_currency == "USD"
     assert sale.proceeds_total == Decimal("151.13")
     assert sale.country == "RO"
+    assert sale.customer_currency == "RON"
     assert sale.extra["gross_units_returned"] == 1
 
 
@@ -88,3 +92,34 @@ def test_row_key_discriminates_price_points():
     tx_full = transactions_from_detailed(PAYLOAD, date(2026, 9, 3))
     tx_low = transactions_from_detailed(cheap, date(2026, 9, 3))
     assert {t.transaction_id for t in tx_full}.isdisjoint({t.transaction_id for t in tx_low})
+
+
+def test_activation_only_rows_are_skipped():
+    payload = {**PAYLOAD, "results": [RETAIL_ROW]}
+    day = date(2026, 9, 3)
+    assert sales_from_detailed(payload, day) == []
+    assert refunds_from_detailed(payload, day) == []
+    assert transactions_from_detailed(payload, day) == []
+
+
+def test_customer_price_from_cents_in_local_currency():
+    sale = sales_from_detailed({**PAYLOAD, "results": [{**ROW, "sale_price": "1999", "currency": "RON"}]}, date(2026, 9, 3))[0]
+    assert sale.customer_price == Decimal("19.99")
+    assert sale.customer_currency == "RON"
+    assert sale.extra["currency"] == "RON"
+
+
+def test_line_item_type_accepts_int_and_string():
+    day = date(2026, 9, 3)
+
+    def kind(value, **more):
+        return sales_from_detailed({**PAYLOAD, "results": [{**ROW, "line_item_type": value, **more}]}, day)[0].product_type
+
+    assert kind(1) == AppStoreProductType.APP
+    assert kind(2) == AppStoreProductType.DLC
+    assert kind(3) == AppStoreProductType.IAP
+    assert kind("Package") == AppStoreProductType.APP
+    assert kind("DLC") == AppStoreProductType.DLC
+    assert kind("In-Game Item") == AppStoreProductType.IAP
+    assert kind("Something") == AppStoreProductType.OTHER
+    assert kind("DLC", bundleid=9) == AppStoreProductType.APP
