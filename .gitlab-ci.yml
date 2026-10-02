@@ -20,7 +20,7 @@ test:
       - .venv
   before_script:
     - pip install uv --quiet
-    - uv sync --extra dev --extra sftp --extra s3
+    - uv sync --extra dev --extra sftp --extra s3 --extra appstore
   script:
     - uv run pytest tests/ -v --tb=short
     - uv run ruff check src/
