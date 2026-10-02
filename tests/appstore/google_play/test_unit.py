@@ -195,12 +195,12 @@ def test_list_refunds_clamps_end_to_now(adapter, fake_http):
     assert int(params["endTime"]) < int(now * 1000)
 
 
-def test_list_refunds_clamps_start_to_30_days(adapter, fake_http):
+def test_list_refunds_clamps_start_to_lookback(adapter, fake_http):
     now = datetime(2026, 9, 30, 12, tzinfo=UTC).timestamp()
     with patch("time.time", return_value=now):
         adapter.list_refunds(date(2026, 6, 1), date(2026, 9, 29))
     params = _voided_params(fake_http)[0]
-    assert int(params["startTime"]) == int(now * 1000) - 30 * 86400 * 1000
+    assert int(params["startTime"]) == int(now * 1000) - 29 * 86400 * 1000
 
 
 def test_list_refunds_window_entirely_too_old_is_empty(adapter, fake_http):

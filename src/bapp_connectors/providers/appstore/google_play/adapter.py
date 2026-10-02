@@ -44,6 +44,8 @@ from bapp_connectors.providers.appstore.google_play.mappers import (
 )
 
 #: numele fisierului din fiecare folder incepe cu acest prefix, urmat de stamp-ul YYYYMM
+#: Google serveste ~30 de zile, dar respinge exact 30 ("Start time must be within [30] days of data")
+VOIDED_LOOKBACK_DAYS = 29
 _BASENAME_PREFIXES = {"earnings/": "earnings_", "sales/": "salesreport_"}
 
 
@@ -139,7 +141,7 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
         now_ms = int(time.time() * 1000)
         # voidedpurchases respinge endTime >= acum ("End time must be < current time") si serveste doar ultimele 30 de zile
         end_ms = min(int(datetime.combine(end, datetime.max.time(), tzinfo=UTC).timestamp() * 1000), now_ms - 1000)
-        start_ms = max(int(datetime.combine(start, datetime.min.time(), tzinfo=UTC).timestamp() * 1000), now_ms - 30 * 86400 * 1000)
+        start_ms = max(int(datetime.combine(start, datetime.min.time(), tzinfo=UTC).timestamp() * 1000), now_ms - VOIDED_LOOKBACK_DAYS * 86400 * 1000)
         if start_ms >= end_ms:
             return PaginatedResult(items=[], has_more=False)
         page = self.client.list_voided_purchases(package, start_ms, end_ms, token=token)
