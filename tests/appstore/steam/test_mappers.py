@@ -78,3 +78,13 @@ def test_review_from_steam():
     assert review.language == "romanian"
     assert review.body == "Super joc"
     assert review.extra["playtime_minutes"] == 120
+
+
+def test_row_key_discriminates_price_points():
+    cheap = {**PAYLOAD, "results": [{**ROW, "sale_price": 999}]}
+    full = sales_from_detailed(PAYLOAD, date(2026, 9, 3))[0]
+    low = sales_from_detailed(cheap, date(2026, 9, 3))[0]
+    assert full.external_key != low.external_key
+    tx_full = transactions_from_detailed(PAYLOAD, date(2026, 9, 3))
+    tx_low = transactions_from_detailed(cheap, date(2026, 9, 3))
+    assert {t.transaction_id for t in tx_full}.isdisjoint({t.transaction_id for t in tx_low})

@@ -41,7 +41,7 @@ def _money(value) -> Decimal:
 
 
 def _row_key(row: dict, day: date) -> str:
-    return stable_key(PROVIDER, day, *(row.get(k) for k in ("line_item_type", "packageid", "bundleid", "appid", "game_item_id", "package_sale_type", "key_request_id", "platform", "country_code")))
+    return stable_key(PROVIDER, day, *(row.get(k) for k in ("line_item_type", "packageid", "bundleid", "appid", "game_item_id", "package_sale_type", "key_request_id", "platform", "country_code", "base_price", "sale_price")))
 
 
 def _at(day: date) -> datetime:

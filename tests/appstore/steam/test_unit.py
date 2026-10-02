@@ -112,3 +112,21 @@ def test_forbidden_mentions_ip_whitelist(fake_http):
     result = adapter.test_connection()
     assert isinstance(result, ConnectionTestResult)
     assert result.success is False and "IP whitelist" in result.message
+
+
+def test_changed_dates_accepts_slash_and_compact_formats(fake_http):
+    fake_http.responses.insert(0, ("GET", "GetChangedDatesForPartner", {"response": {"dates": ["2026/09/01", "20260903"], "result_highwatermark": "5"}}))
+    adapter = SteamAdapter(credentials=dict(CREDENTIALS), http_client=fake_http)
+    assert adapter.changed_dates(0) == ([date(2026, 9, 1), date(2026, 9, 3)], 5)
+
+
+def test_detailed_sales_page_cap_raises(fake_http):
+    from bapp_connectors.core.errors import PermanentProviderError
+
+    def endless(method, path, kwargs):
+        return {"response": {"results": [ROW], "max_id": int(kwargs["params"]["highwatermark_id"]) + 1}}
+
+    fake_http.responses.insert(0, ("GET", "GetDetailedSales", endless))
+    adapter = SteamAdapter(credentials=dict(CREDENTIALS), http_client=fake_http)
+    with pytest.raises(PermanentProviderError):
+        adapter.get_sales(date(2026, 9, 1), date(2026, 9, 1))

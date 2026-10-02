@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from bapp_connectors.core.errors import PermanentProviderError
 from bapp_connectors.providers.appstore.steam.errors import check_steam_response
 
 if TYPE_CHECKING:
@@ -39,6 +40,8 @@ class SteamApiClient:
             if max_id <= watermark or not page.get("results"):
                 break
             watermark = max_id
+        else:
+            raise PermanentProviderError(f"Steam GetDetailedSales {day}: peste 1000 de pagini, date incomplete")
         return merged
 
     def get_app_details(self, app_id: str) -> dict:

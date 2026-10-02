@@ -30,6 +30,14 @@ from bapp_connectors.providers.appstore.steam.mappers import (
 )
 
 
+def _parse_steam_date(text: str) -> date:
+    """Accepta YYYY-MM-DD, YYYY/MM/DD si YYYYMMDD."""
+    value = str(text).strip().replace("/", "-")
+    if len(value) == 8 and value.isdigit():
+        value = f"{value[:4]}-{value[4:6]}-{value[6:]}"
+    return date.fromisoformat(value)
+
+
 class SteamAdapter(AppStorePort, FinancialCapability):
     manifest = manifest
 
@@ -57,7 +65,7 @@ class SteamAdapter(AppStorePort, FinancialCapability):
     def changed_dates(self, highwatermark: int = 0) -> tuple[list[date], int]:
         """Zilele revizuite de Valve de la ultimul highwatermark; apelantul le re-aduce cu get_sales."""
         response = self.client.get_changed_dates(highwatermark)
-        days = [date.fromisoformat(d[:10]) for d in response.get("dates", []) or []]
+        days = [_parse_steam_date(d) for d in response.get("dates", []) or []]
         return days, int(response.get("result_highwatermark", highwatermark) or highwatermark)
 
     def list_apps(self) -> list[AppStoreApp]:
