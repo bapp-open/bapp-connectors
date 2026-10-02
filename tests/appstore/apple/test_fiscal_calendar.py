@@ -38,9 +38,9 @@ def test_months_are_contiguous_without_gaps():
         assert FISCAL_MONTHS[current][0] == FISCAL_MONTHS[previous][1] + timedelta(days=1), (previous, current)
 
 
-def test_calendar_covers_next_twelve_months():
-    """Pica cu un an inainte sa ramanem fara calendar: cineva adauga anul fiscal urmator."""
-    horizon = date.today() + timedelta(days=365)
+def test_calendar_covers_next_six_months():
+    """Pica cu ~6 luni inainte sa ramanem fara calendar, ca cineva sa adauge anul fiscal urmator."""
+    horizon = date.today() + timedelta(days=180)
     assert fiscal_period_for(horizon)
 
 

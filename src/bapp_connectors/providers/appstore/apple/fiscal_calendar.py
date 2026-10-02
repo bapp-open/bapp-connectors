@@ -6,8 +6,8 @@ iar `GET /v1/financeReports` cere `filter[reportDate]=YYYY-MM` cu luna FISCALA,
 nu cea calendaristica. Cheia de mai jos este exact valoarea trimisa in API.
 
 Sursa: calendarul fiscal din App Store Connect > Payments and Financial Reports.
-Se adauga cate un an fiscal inainte; testul `test_calendar_covers_next_twelve_months`
-pica cu un an inainte sa expire.
+Se adauga cate un an fiscal inainte; testul `test_calendar_covers_next_six_months`
+pica cu ~6 luni inainte sa expire.
 """
 
 from __future__ import annotations
