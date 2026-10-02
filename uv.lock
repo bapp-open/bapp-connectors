@@ -654,7 +654,7 @@ wheels = [
 
 [[package]]
 name = "django-bapp-connectors"
-version = "0.25.2"
+version = "0.26.0"
 source = { editable = "packages/django" }
 dependencies = [
     { name = "bapp-connectors" },

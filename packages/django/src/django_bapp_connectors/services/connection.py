@@ -37,6 +37,9 @@ FAMILY_DEFAULTS: dict[str, dict] = {
     ProviderFamily.SOCIAL:    {"label": _("Social Media"),         "icon": "fad fa-share-nodes",      "color": "#d946ef"},
     ProviderFamily.ADS:       {"label": _("Advertising"),          "icon": "fad fa-bullhorn",         "color": "#f97316"},
     ProviderFamily.NETWORK:   {"label": _("Network"),              "icon": "fad fa-network-wired",    "color": "#0ea5e9"},
+    ProviderFamily.HOSTING:   {"label": _("Hosting"),              "icon": "fad fa-server",           "color": "#14b8a6"},
+    ProviderFamily.DNS:       {"label": _("DNS"),                  "icon": "fad fa-globe",            "color": "#0891b2"},
+    ProviderFamily.APPSTORE:  {"label": _("App Stores"),           "icon": "fad fa-mobile-alt",       "color": "#a855f7"},
 }
 
 
