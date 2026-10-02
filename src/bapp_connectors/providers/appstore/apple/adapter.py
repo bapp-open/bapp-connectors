@@ -29,7 +29,7 @@ from bapp_connectors.providers.appstore.apple.client import (
     AppleServerApiClient,
 )
 from bapp_connectors.providers.appstore.apple.errors import AppleWebhookError
-from bapp_connectors.providers.appstore.apple.fiscal_calendar import fiscal_periods_between
+from bapp_connectors.providers.appstore.apple.fiscal_calendar import apple_report_date, fiscal_periods_between
 from bapp_connectors.providers.appstore.apple.manifest import manifest
 from bapp_connectors.providers.appstore.apple.mappers import (
     app_from_apple,

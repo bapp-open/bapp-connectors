@@ -165,7 +165,7 @@ def fake_http() -> FakeHttpClient:
 
     def finance(method, path, kwargs):
         period = kwargs["params"]["filter[reportDate]"]
-        if period == "2026-09":
+        if period == "2026-12":  # Apple: an fiscal 2026, luna 12 = etichetea noastra "2026-09"
             return FakeResponse(content=_finance_tsv([("3", "4.26", "12.78", "S"), ("-1", "4.26", "-4.26", "R")]))
         return FakeResponse(status_code=404, text="not available")
 

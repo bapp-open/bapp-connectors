@@ -1,8 +1,8 @@
 """
 Calendarul fiscal Apple, calculat din regula, fara tabel de mentinut.
 
-`GET /v1/financeReports` cere `filter[reportDate]=YYYY-MM` cu luna FISCALA, nu cea
-calendaristica. Regula Apple:
+`GET /v1/financeReports` cere `filter[reportDate]=<an fiscal>-<indice lunar>` (01 = octombrie,
+12 = septembrie), nu eticheta noastra; vezi `apple_report_date`. Regula Apple:
 
 - anul fiscal `Y` se incheie in ULTIMA SAMBATA din septembrie a anului calendaristic `Y`
   si incepe a doua zi dupa sfarsitul anului fiscal precedent;
@@ -79,6 +79,32 @@ def _fiscal_year_of_label(period: str) -> int:
     if not 1 <= month <= 12:
         raise ValueError(f"Perioada fiscala Apple invalida: {period!r} (luna {month}).")
     return year + 1 if month >= 10 else year
+
+
+def _parse_label(label: str) -> tuple[int, int]:
+    match = _PERIOD_RE.match(label or "")
+    if not match:
+        raise ValueError(f"Perioada fiscala Apple invalida: {label!r} (se asteapta YYYY-MM).")
+    year, month = int(match.group(1)), int(match.group(2))
+    if not 1 <= month <= 12:
+        raise ValueError(f"Perioada fiscala Apple invalida: {label!r} (luna {month}).")
+    return year, month
+
+
+def apple_report_date(period: str) -> str:
+    """Eticheta noastra `YYYY-MM` -> `filter[reportDate]` Apple: `<an fiscal>-<indice lunar>`, 01 = octombrie."""
+    year, month = _parse_label(period)
+    month_index = (month - 10) % 12 + 1
+    fiscal_year = year + 1 if month >= 10 else year
+    return f"{fiscal_year:04d}-{month_index:02d}"
+
+
+def period_from_apple_report_date(report_date: str) -> str:
+    """Inversa lui `apple_report_date`: `<an fiscal>-<indice lunar>` -> eticheta noastra `YYYY-MM`."""
+    fiscal_year, month_index = _parse_label(report_date)
+    month = (month_index + 8) % 12 + 1
+    label_year = fiscal_year - 1 if month >= 10 else fiscal_year
+    return f"{label_year:04d}-{month:02d}"
 
 
 def fiscal_range(period: str) -> tuple[date, date]:

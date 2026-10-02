@@ -8,11 +8,13 @@ from itertools import pairwise
 import pytest
 
 from bapp_connectors.providers.appstore.apple.fiscal_calendar import (
+    apple_report_date,
     fiscal_months,
     fiscal_period_for,
     fiscal_periods_between,
     fiscal_range,
     payment_date,
+    period_from_apple_report_date,
 )
 
 #: FY2026, verificat pe calendarul din App Store Connect (tabel de regresie)
@@ -108,3 +110,26 @@ def test_payment_date_is_33_days_after_period_end():
     assert payment_date("2026-08") == date(2026, 10, 1)
     assert payment_date("2026-09") == date(2026, 10, 29)
     assert payment_date("garbage") is None
+
+
+@pytest.mark.parametrize(
+    ("label", "report_date"),
+    [
+        ("2024-09", "2024-12"),
+        ("2024-10", "2025-01"),
+        ("2024-11", "2025-02"),
+        ("2025-01", "2025-04"),
+        ("2025-09", "2025-12"),
+        ("2025-10", "2026-01"),
+        ("2026-09", "2026-12"),
+    ],
+)
+def test_apple_report_date_translation(label, report_date):
+    assert apple_report_date(label) == report_date
+    assert period_from_apple_report_date(report_date) == label
+
+
+def test_apple_report_date_round_trips_every_fiscal_month():
+    for fiscal_year in (2024, 2025, 2026):
+        for label in fiscal_months(fiscal_year):
+            assert period_from_apple_report_date(apple_report_date(label)) == label
