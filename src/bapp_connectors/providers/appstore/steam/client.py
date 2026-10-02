@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 STORE_APPDETAILS_URL = "https://store.steampowered.com/api/appdetails"
 STORE_REVIEWS_URL = "https://store.steampowered.com/appreviews/"
+STORE_PLAYERS_URL = "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/"
 
 
 class SteamApiClient:
@@ -49,3 +50,12 @@ class SteamApiClient:
 
     def get_reviews(self, app_id: str, cursor: str = "*", num_per_page: int = 100) -> dict:
         return self.http.call("GET", f"{STORE_REVIEWS_URL}{app_id}", params={"json": "1", "cursor": cursor, "num_per_page": str(num_per_page), "filter": "recent", "language": "all", "purchase_type": "all"})
+
+    def get_wishlist_reporting(self, app_id: str, day: date) -> dict:
+        payload = self.http.call("GET", "IPartnerFinancialsService/GetAppWishlistReporting/v001/", params={"key": self.api_key, "appid": str(app_id), "date": day.isoformat()})
+        return check_steam_response(payload, what=f"GetAppWishlistReporting {day}")
+
+    def get_current_players(self, app_id: str) -> int:
+        """Endpoint public: fara cheie."""
+        payload = self.http.call("GET", STORE_PLAYERS_URL, params={"appid": str(app_id)})
+        return int(((payload or {}).get("response") or {}).get("player_count", 0) or 0)

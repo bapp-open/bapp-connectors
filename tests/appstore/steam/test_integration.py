@@ -7,7 +7,7 @@ from decimal import Decimal
 
 import pytest
 
-from bapp_connectors.core.dto import FinancialTransactionType
+from bapp_connectors.core.dto import AppStoreStat, AppStoreStatMetric, FinancialTransactionType
 from bapp_connectors.core.registry import registry
 from tests.appstore.conftest import STEAM_ENV, skip_unless_steam
 
@@ -89,3 +89,18 @@ def test_public_reviews(adapter):
     app_id = STEAM_ENV["app_ids"].split(",")[0].strip()
     page = adapter.list_reviews(app_id)
     assert all(r.recommended in (True, False) for r in page.items)
+
+
+def test_wishlist_stats_last_30_days(adapter):
+    app_id = STEAM_ENV["app_ids"].split(",")[0].strip()
+    end = date.today()
+    cursor, items = None, []
+    while True:
+        page = adapter.get_app_stats(app_id, end - timedelta(days=30), end, cursor=cursor)
+        items.extend(page.items)
+        if not page.has_more:
+            break
+        cursor = page.cursor
+    assert all(isinstance(s, AppStoreStat) and s.value >= 0 for s in items)
+    adds = sum(s.value for s in items if s.metric == AppStoreStatMetric.WISHLIST_ADDS and s.country == "")
+    print(f"Steam: {adds} wishlist adds in ultimele 30 de zile")

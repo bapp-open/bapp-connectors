@@ -12,6 +12,8 @@ from bapp_connectors.core.dto import (
     AppStoreRefund,
     AppStoreReview,
     AppStoreSale,
+    AppStoreStat,
+    AppStoreStatMetric,
     FinancialTransaction,
     FinancialTransactionType,
     ProviderMeta,
@@ -239,4 +241,55 @@ def review_from_steam(data: dict, app_id: str) -> AppStoreReview:
         updated_at=updated,
         extra={"votes_up": data.get("votes_up"), "playtime_minutes": author.get("playtime_forever"), "steam_purchase": data.get("steam_purchase")},
         provider_meta=_meta(data, str(data.get("recommendationid", ""))),
+    )
+
+
+_WISHLIST_METRICS = (
+    ("wishlist_adds", AppStoreStatMetric.WISHLIST_ADDS),
+    ("wishlist_deletes", AppStoreStatMetric.WISHLIST_DELETES),
+    ("wishlist_purchases", AppStoreStatMetric.WISHLIST_PURCHASES),
+    ("wishlist_gifts", AppStoreStatMetric.WISHLIST_GIFTS),
+)
+
+
+def _stat(day: date, app_id: str, metric: AppStoreStatMetric, value: int, country: str = "", extra: dict | None = None) -> AppStoreStat:
+    return AppStoreStat(
+        external_key=stable_key(PROVIDER, day, app_id, metric, country),
+        date=day,
+        metric=metric,
+        value=Decimal(value),
+        app_id=app_id,
+        country=country,
+        extra=extra or {},
+    )
+
+
+def stats_from_wishlist(payload: dict, day: date, app_id: str) -> list[AppStoreStat]:
+    """Totalurile zilei + cate un rand pe tara (doar valori nenule); o zi fara activitate da lista goala."""
+    summary = payload.get("wishlist_summary")
+    if not summary:
+        return []
+    totals = [(metric, _int(summary, field)) for field, metric in _WISHLIST_METRICS]
+    if not any(value for _, value in totals):
+        return []
+    platforms = {"windows": _int(summary, "wishlist_adds_windows"), "mac": _int(summary, "wishlist_adds_mac"), "linux": _int(summary, "wishlist_adds_linux")}
+    stats = [_stat(day, app_id, metric, value, extra=platforms if metric == AppStoreStatMetric.WISHLIST_ADDS else None) for metric, value in totals]
+    for row in payload.get("country_summary", []) or []:
+        code = row.get("country_code", "") or ""
+        actions = row.get("summary_actions") or {}
+        extra = {"country_name": row.get("country_name", ""), "region": row.get("region", "")}
+        for field, metric in _WISHLIST_METRICS:
+            value = _int(actions, field)
+            if value:
+                stats.append(_stat(day, app_id, metric, value, country=code, extra=extra))
+    return stats
+
+
+def stat_current_players(app_id: str, day: date, count: int) -> AppStoreStat:
+    return AppStoreStat(
+        external_key=stable_key(PROVIDER, day, app_id, "current_players"),
+        date=day,
+        metric=AppStoreStatMetric.CURRENT_PLAYERS,
+        value=Decimal(count),
+        app_id=app_id,
     )

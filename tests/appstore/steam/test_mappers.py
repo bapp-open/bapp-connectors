@@ -5,11 +5,13 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from bapp_connectors.core.dto import AppStoreProductType, FinancialTransactionType
+from bapp_connectors.core.dto import AppStoreProductType, AppStoreStatMetric, FinancialTransactionType
 from bapp_connectors.providers.appstore.steam.mappers import (
     refunds_from_detailed,
     review_from_steam,
     sales_from_detailed,
+    stat_current_players,
+    stats_from_wishlist,
     transactions_from_detailed,
 )
 
@@ -24,6 +26,33 @@ RETAIL_ROW = {
     "additional_revenue_share_tier": 0, "key_request_id": 1007134, "gross_units_activated": 5, "partnerid": 123,
 }
 PAYLOAD = {"results": [ROW], "max_id": 1, "app_info": [{"appid": 4000, "app_name": "Dungeon"}], "package_info": [{"packageid": 500, "package_name": "Dungeon - Standard"}]}
+ZERO = {"wishlist_adds": 0, "wishlist_deletes": 0, "wishlist_purchases": 0, "wishlist_gifts": 0}
+WISHLIST_PAYLOAD = {
+    "appid": 4000, "date": "2026-09-01", "app_min_date": "2023-05-30",
+    "wishlist_summary": {**ZERO, "wishlist_adds": 1, "wishlist_adds_windows": 1, "wishlist_adds_mac": 0, "wishlist_adds_linux": 0},
+    "country_summary": [{"country_code": "MX", "country_name": "Mexico", "region": "Latin America", "summary_actions": {**ZERO, "wishlist_adds": 1}}],
+}
+
+
+def test_stats_from_wishlist():
+    stats = stats_from_wishlist(WISHLIST_PAYLOAD, date(2026, 9, 1), "4000")
+    assert len(stats) == 5
+    totals = [s for s in stats if s.country == ""]
+    assert {s.metric for s in totals} == {AppStoreStatMetric.WISHLIST_ADDS, AppStoreStatMetric.WISHLIST_DELETES, AppStoreStatMetric.WISHLIST_PURCHASES, AppStoreStatMetric.WISHLIST_GIFTS}
+    adds = next(s for s in totals if s.metric == AppStoreStatMetric.WISHLIST_ADDS)
+    assert adds.value == Decimal("1") and adds.extra == {"windows": 1, "mac": 0, "linux": 0}
+    mx = next(s for s in stats if s.country == "MX")
+    assert mx.metric == AppStoreStatMetric.WISHLIST_ADDS and mx.extra == {"country_name": "Mexico", "region": "Latin America"}
+    assert len({s.external_key for s in stats}) == 5
+
+
+def test_stats_from_wishlist_empty_day():
+    assert stats_from_wishlist({"app_min_date": "2023-05-30"}, date(2026, 9, 2), "4000") == []
+
+
+def test_stat_current_players():
+    stat = stat_current_players("4000", date(2026, 9, 1), 17)
+    assert stat.metric == AppStoreStatMetric.CURRENT_PLAYERS and stat.value == Decimal("17") and stat.country == ""
 
 
 def test_sales_from_detailed():

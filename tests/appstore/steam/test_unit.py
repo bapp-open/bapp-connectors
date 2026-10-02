@@ -7,11 +7,11 @@ from decimal import Decimal
 
 import pytest
 
-from bapp_connectors.core.dto import ConnectionTestResult
+from bapp_connectors.core.dto import AppStoreStatMetric, ConnectionTestResult
 from bapp_connectors.providers.appstore.steam.adapter import SteamAdapter
 from bapp_connectors.providers.appstore.steam.manifest import manifest
 from tests.appstore.contract import AppStoreContractTests
-from tests.appstore.steam.test_mappers import PAYLOAD, ROW
+from tests.appstore.steam.test_mappers import PAYLOAD, ROW, WISHLIST_PAYLOAD
 from tests.fake_http import FakeHttpClient
 
 CREDENTIALS = {"financial_api_key": "ABCDEF0123456789", "app_ids": "4000, 4001"}
@@ -31,6 +31,18 @@ def fake_http():
         return {"response": {"results": [{**ROW, "country_code": "DE"}], "max_id": 7, "app_info": PAYLOAD["app_info"], "package_info": PAYLOAD["package_info"]}}
 
     fake.add("GET", "GetDetailedSales", detailed)
+    def wishlist(method, path, kwargs):
+        params = kwargs["params"]
+        assert params["key"] == "ABCDEF0123456789"
+        assert params["appid"] == "4000"
+        return {"response": WISHLIST_PAYLOAD if params["date"] == "2026-09-01" else {"app_min_date": "2023-05-30"}}
+
+    def players(method, path, kwargs):
+        assert "key" not in kwargs["params"]
+        return {"response": {"player_count": 42, "result": 1}}
+
+    fake.add("GET", "GetAppWishlistReporting", wishlist)
+    fake.add("GET", "api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers", players)
     fake.add("GET", "GetChangedDatesForPartner", {"response": {"dates": ["2026-09-01", "2026-09-03"], "result_highwatermark": "99"}})
     fake.add("GET", "store.steampowered.com/api/appdetails", lambda m, p, k: {k["params"]["appids"]: {"success": True, "data": {"name": f"Game {k['params']['appids']}", "type": "game"}}})
     fake.add("GET", "store.steampowered.com/appreviews/4000", {"success": 1, "reviews": [{"recommendationid": "1", "author": {"steamid": "7"}, "language": "english", "review": "Nice", "timestamp_created": 1789120800, "voted_up": True}], "cursor": "AoJ4"})
@@ -66,7 +78,7 @@ class TestSteamContract(AppStoreContractTests):
 
     @pytest.fixture
     def unsupported_methods(self):
-        return {"reply_to_review", "get_subscription", "get_app_stats"}  # TODO Task C: Steam stats
+        return {"reply_to_review", "get_subscription"}
 
 
 def test_detailed_sales_drains_highwatermark(adapter):
@@ -134,3 +146,28 @@ def test_detailed_sales_page_cap_raises(fake_http):
     adapter = SteamAdapter(credentials=dict(CREDENTIALS), http_client=fake_http)
     with pytest.raises(PermanentProviderError):
         adapter.get_sales(date(2026, 9, 1), date(2026, 9, 1))
+
+
+def test_app_stats_one_day_per_page(adapter):
+    page = adapter.get_app_stats("4000", date(2026, 9, 1), date(2026, 9, 3))
+    assert len(page.items) == 5 and page.cursor == "2026-09-02" and page.has_more is True
+    page = adapter.get_app_stats("4000", date(2026, 9, 1), date(2026, 9, 3), cursor=page.cursor)
+    assert page.items == [] and page.cursor == "2026-09-03"
+
+
+def test_app_stats_today_includes_current_players(adapter, monkeypatch):
+    monkeypatch.setattr("bapp_connectors.providers.appstore.steam.adapter._today", lambda: date(2026, 9, 1))
+    page = adapter.get_app_stats("4000", date(2026, 9, 1), date(2026, 9, 1))
+    players = [s for s in page.items if s.metric == AppStoreStatMetric.CURRENT_PLAYERS]
+    assert len(players) == 1 and players[0].value == Decimal("42")
+
+
+def test_app_stats_current_players_failure_is_skipped(adapter, fake_http, monkeypatch):
+    monkeypatch.setattr("bapp_connectors.providers.appstore.steam.adapter._today", lambda: date(2026, 9, 1))
+
+    def boom(method, path, kwargs):
+        raise RuntimeError("down")
+
+    fake_http.responses.insert(0, ("GET", "GetNumberOfCurrentPlayers", boom))
+    page = adapter.get_app_stats("4000", date(2026, 9, 1), date(2026, 9, 1))
+    assert len(page.items) == 5

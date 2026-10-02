@@ -10,6 +10,7 @@ from bapp_connectors.core.dto import (
     AppStoreRefund,
     AppStoreReview,
     AppStoreSale,
+    AppStoreStat,
     ConnectionTestResult,
     FinancialTransaction,
     PaginatedResult,
@@ -26,6 +27,8 @@ from bapp_connectors.providers.appstore.steam.mappers import (
     refunds_from_detailed,
     review_from_steam,
     sales_from_detailed,
+    stat_current_players,
+    stats_from_wishlist,
     transactions_from_detailed,
 )
 
@@ -36,6 +39,10 @@ def _parse_steam_date(text: str) -> date:
     if len(value) == 8 and value.isdigit():
         value = f"{value[:4]}-{value[4:6]}-{value[6:]}"
     return date.fromisoformat(value)
+
+
+def _today() -> date:
+    return date.today()
 
 
 class SteamAdapter(AppStorePort, FinancialCapability):
@@ -98,6 +105,16 @@ class SteamAdapter(AppStorePort, FinancialCapability):
         next_cursor = page.get("cursor")
         has_more = bool(items) and bool(next_cursor) and next_cursor != cursor
         return PaginatedResult(items=items, cursor=next_cursor if has_more else None, has_more=has_more)
+
+    def get_app_stats(self, app_id: str, start: date, end: date, cursor: str | None = None) -> PaginatedResult[AppStoreStat]:
+        day, next_cursor = daily_page(start, end, cursor)
+        items = stats_from_wishlist(self.client.get_wishlist_reporting(app_id, day), day, app_id)
+        if day == _today():
+            try:
+                items.append(stat_current_players(app_id, day, self.client.get_current_players(app_id)))
+            except Exception:  # endpoint public, fara garantii: jucatorii curenti nu opresc raportul de wishlist
+                pass
+        return PaginatedResult(items=items, cursor=next_cursor, has_more=next_cursor is not None)
 
     def get_financial_transactions(self, start_date: datetime, end_date: datetime, transaction_type: str | None = None, cursor: str | None = None) -> PaginatedResult[FinancialTransaction]:
         day, next_cursor = daily_page(start_date.date(), end_date.date(), cursor)
