@@ -235,9 +235,22 @@ class AppleAppStoreAdapter(AppStorePort, FinancialCapability, WebhookCapability)
         if not signed:
             raise AppleWebhookError("Lipseste signedPayload")
         decoded = decode_signed_payload(signed)
-        data = decoded.get("data") or {}
-        transaction = decode_signed_payload(data["signedTransactionInfo"]) if data.get("signedTransactionInfo") else {}
-        renewal = decode_signed_payload(data["signedRenewalInfo"]) if data.get("signedRenewalInfo") else {}
+        data = decoded.get("data")
+        if not isinstance(data, dict):
+            raise AppleWebhookError("Campul data lipseste sau e invalid")
+        bundle_id = self.credentials.get("bundle_id")
+        if bundle_id and data.get("bundleId") != bundle_id:
+            raise AppleWebhookError("Notificare pentru alt bundle id")
+        expected_env = "Sandbox" if self.config.get("server_api_environment") == "sandbox" else "Production"
+        if data.get("environment") != expected_env:
+            raise AppleWebhookError("Notificare din alt mediu")
+        signed_parts = []
+        for key in ("signedTransactionInfo", "signedRenewalInfo"):
+            value = data.get(key)
+            if value is not None and not isinstance(value, str):
+                raise AppleWebhookError(f"{key} invalid")
+            signed_parts.append(decode_signed_payload(value) if value else {})
+        transaction, renewal = signed_parts
         return decoded, transaction, renewal
 
     def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
@@ -245,6 +258,9 @@ class AppleAppStoreAdapter(AppStorePort, FinancialCapability, WebhookCapability)
             self._decode_notification(body)
             return True
         except AppleWebhookError:
+            return False
+        except Exception:
+            # verify_webhook nu are voie sa ridice niciodata: orice corp neasteptat inseamna "neverificat"
             return False
 
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
