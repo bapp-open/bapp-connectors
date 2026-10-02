@@ -60,6 +60,7 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
         elif self.auth is not None:
             http_client.auth = self.auth
         self.http = http_client
+        self._jwks_cache: dict = {}
         self.client = GooglePlayApiClient(http_client=http_client, bucket=self.bucket)
 
     # ── BasePort ──
@@ -177,7 +178,22 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
     # ── WebhookCapability (Pub/Sub push) — completat in Task 10 ──
 
     def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
-        raise NotImplementedError("Task 10")
+        """Fara `pubsub_audience` acceptam push-ul (verificarea OIDC e optionala la Pub/Sub)."""
+        from bapp_connectors.providers.appstore.google_play.oidc import fetch_google_jwks, verify_google_id_token
+
+        audience = secret or self.credentials.get("pubsub_audience") or ""
+        if not audience:
+            return True
+        authorization = headers.get("Authorization") or headers.get("authorization") or ""
+        if not authorization.lower().startswith("bearer "):
+            return False
+        token = authorization.split(" ", 1)[1].strip()
+        try:
+            jwks = fetch_google_jwks(self.http, self._jwks_cache)
+            verify_google_id_token(token, audience=audience, jwks=jwks)
+            return True
+        except GooglePlayWebhookError:
+            return False
 
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
         try:
