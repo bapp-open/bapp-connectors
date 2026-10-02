@@ -6,8 +6,9 @@ import json
 import time
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.errors import ConfigurationError
+from bapp_connectors.core.errors import AuthenticationError, ConfigurationError, ProviderError
 from bapp_connectors.core.http.auth import BaseAuthStrategy
+from bapp_connectors.providers.appstore.google_play.errors import raise_for_response
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -37,12 +38,21 @@ def bucket_name_from_uri(uri: str) -> str:
 def _default_token_fetcher(token_uri: str, assertion: str) -> dict:
     import requests
 
-    response = requests.post(
-        token_uri,
-        data={"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": assertion},
-        timeout=15,
-    )
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            token_uri,
+            data={"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": assertion},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise ProviderError(f"Google token exchange: {exc}") from exc
+    if not response.ok:
+        if response.status_code == 400 and "invalid_grant" in response.text:
+            raise AuthenticationError(
+                f"Google service account respins (invalid_grant): {response.text[:200]}", status_code=400
+            )
+        raise_for_response(response, what="token exchange")
+        raise ProviderError(f"Google token exchange: {response.status_code}")
     return response.json()
 
 
@@ -68,7 +78,7 @@ class GoogleServiceAccountAuth(BaseAuthStrategy):
         claims = {
             "iss": self.service_account["client_email"],
             "scope": " ".join(self.scopes),
-            "aud": self.service_account["token_uri"],
+            "aud": self.service_account.get("token_uri", TOKEN_URI),
             "iat": int(now),
             "exp": int(now) + 3600,
         }
@@ -78,7 +88,7 @@ class GoogleServiceAccountAuth(BaseAuthStrategy):
         now = self._clock()
         if self._token and now < self._expires_at - 60:
             return self._token
-        payload = self._fetch(self.service_account["token_uri"], self._assertion(now))
+        payload = self._fetch(self.service_account.get("token_uri", TOKEN_URI), self._assertion(now))
         self._token = payload["access_token"]
         self._expires_at = now + float(payload.get("expires_in", 3600))
         return self._token

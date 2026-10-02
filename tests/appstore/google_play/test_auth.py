@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import jwt
 import pytest
+import requests
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from bapp_connectors.core.errors import ConfigurationError
+from bapp_connectors.core.errors import AuthenticationError, ConfigurationError, ProviderError
 from bapp_connectors.providers.appstore.google_play.auth import (
+    TOKEN_URI,
     GoogleServiceAccountAuth,
+    _default_token_fetcher,
     bucket_name_from_uri,
     parse_service_account,
 )
@@ -81,3 +86,14 @@ def test_parse_service_account_missing_fields():
 def test_bucket_name_from_uri():
     assert bucket_name_from_uri("gs://pubsite_prod_rev_123/") == "pubsite_prod_rev_123"
     assert bucket_name_from_uri("pubsite_prod_rev_123") == "pubsite_prod_rev_123"
+
+
+def test_default_fetcher_maps_invalid_grant_to_authentication_error():
+    fake = SimpleNamespace(ok=False, status_code=400, text='{"error":"invalid_grant"}')
+    with patch("requests.post", return_value=fake), pytest.raises(AuthenticationError):
+        _default_token_fetcher(TOKEN_URI, "assertion")
+
+
+def test_default_fetcher_wraps_connection_error():
+    with patch("requests.post", side_effect=requests.ConnectionError("boom")), pytest.raises(ProviderError):
+        _default_token_fetcher(TOKEN_URI, "assertion")
