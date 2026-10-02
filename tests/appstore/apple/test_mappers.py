@@ -175,3 +175,13 @@ def test_parsers():
     parsed = parse_iso_datetime("2026-09-11T08:00:00Z")
     assert parsed.tzinfo is not None
     assert parse_iso_datetime(None) is None
+
+
+def test_finance_row_falls_back_to_preamble_start_date():
+    row = {"Extended Partner Share": "5.00", "Partner Share Currency": "EUR", "Sale or Return": "S", "Quantity": "1"}
+    preamble = {"Start Date": "09/29/2024", "End Date": "11/02/2024"}
+    tx = transaction_from_finance_row(row, "2024-10", preamble)
+    assert tx.transaction_date.date().isoformat() == "2024-09-29"
+    assert tx.extra["period_start"] == "2024-09-29"
+    assert tx.extra["period_end"] == "2024-11-02"
+    assert transaction_from_finance_row(row, "2024-10").extra["period_start"] == ""

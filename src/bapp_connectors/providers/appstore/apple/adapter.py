@@ -20,7 +20,7 @@ from bapp_connectors.core.dto import (
 from bapp_connectors.core.errors import AuthenticationError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import AppStorePort
-from bapp_connectors.core.reports import daily_page, gunzip_tsv_rows
+from bapp_connectors.core.reports import daily_page, gunzip_tsv_rows, parse_apple_finance_detail
 from bapp_connectors.providers.appstore.apple.auth import AppleJwtAuth
 from bapp_connectors.providers.appstore.apple.client import (
     SERVER_API_BASE_URL,
@@ -215,9 +215,9 @@ class AppleAppStoreAdapter(AppStorePort, FinancialCapability, WebhookCapability)
         period = cursor or periods[0]
         index = periods.index(period)
         next_cursor = periods[index + 1] if index + 1 < len(periods) else None
-        content = self.client.download_finance_report(period)
-        rows = gunzip_tsv_rows(content) if content else []
-        items = [transaction_from_finance_row(row, period) for row in rows]
+        content = self.client.download_finance_report(apple_report_date(period))
+        preamble, rows = parse_apple_finance_detail(content) if content else ({}, [])
+        items = [transaction_from_finance_row(row, period, preamble) for row in rows]
         if transaction_type:
             items = [t for t in items if t.transaction_type == transaction_type]
         return PaginatedResult(items=items, cursor=next_cursor, has_more=next_cursor is not None)

@@ -94,9 +94,6 @@ def _sales_tsv(day: str, units: str, proceeds: str) -> bytes:
 
 FINANCE_HEADER = "\t".join(
     [
-        "Vendor Name",
-        "Start Date",
-        "End Date",
         "Transaction Date",
         "Settlement Date",
         "Apple Identifier",
@@ -120,14 +117,11 @@ FINANCE_HEADER = "\t".join(
 
 
 def _finance_tsv(rows: list[tuple[str, str, str, str]]) -> bytes:
-    lines = [FINANCE_HEADER]
+    lines = ["Vendor Name\tCBSoft", "Start Date\t08/30/2026", "End Date\t09/26/2026", FINANCE_HEADER]
     for qty, share, ext, sale_or_return in rows:
         lines.append(
             "\t".join(
                 [
-                    "CBSoft",
-                    "08/30/2026",
-                    "09/26/2026",
                     "09/03/2026",
                     "09/26/2026",
                     "645",
@@ -146,9 +140,11 @@ def _finance_tsv(rows: list[tuple[str, str, str, str]]) -> bytes:
                     "",
                     "",
                     "",
+                    "",  # celula goala de la coada, ca in fisierul real
                 ]
             )
         )
+    lines += ["Country Of Sale\tPartner Share Currency\tQuantity\tExtended Partner Share", "RO\tEUR\t2\t8.52"]
     return gzip.compress("\n".join(lines).encode())
 
 
@@ -269,6 +265,9 @@ def test_financial_transactions_use_fiscal_months(adapter):
     page = adapter.get_financial_transactions(datetime(2026, 9, 20), datetime(2026, 10, 5))
     assert page.cursor == "2026-10"  # a doua luna fiscala
     assert {t.payout_id for t in page.items} == {"2026-09:EUR"}
+    assert len(page.items) == 2
+    assert {t.extra["period_start"] for t in page.items} == {"2026-08-30"}
+    assert {t.extra["period_end"] for t in page.items} == {"2026-09-26"}
     page2 = adapter.get_financial_transactions(datetime(2026, 9, 20), datetime(2026, 10, 5), cursor="2026-10")
     assert page2.items == [] and page2.has_more is False
 

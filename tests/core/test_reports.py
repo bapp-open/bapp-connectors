@@ -14,6 +14,7 @@ from bapp_connectors.core.reports import (
     decode_text,
     gunzip_tsv_rows,
     monthly_page,
+    parse_apple_finance_detail,
     stable_key,
     to_decimal,
     unzip_csv_rows,
@@ -79,3 +80,27 @@ def test_monthly_page_walks_months_then_stops():
     assert monthly_page(start, end, None) == ((2026, 8), "2026-09")
     assert monthly_page(start, end, "2026-09") == ((2026, 9), "2026-10")
     assert monthly_page(start, end, "2026-10") == ((2026, 10), None)
+
+
+_FD_HEAD = ["Vendor Name\tAcme SRL", "Start Date\t09/29/2024", "End Date\t11/02/2024"]
+_FD_COLS = "\t".join(f"Col{i}" for i in range(18))
+_FD_SUMMARY = ["Country Of Sale\tPartner Share Currency\tQuantity\tExtended Partner Share", "RO\tRON\t1\t17.64"]
+
+
+def _fd_row(tag: str) -> str:
+    return "\t".join([tag] + [f"v{i}" for i in range(1, 18)]) + "\t"  # celula goala la coada
+
+
+def test_parse_apple_finance_detail_real_structure():
+    lines = [*_FD_HEAD, _FD_COLS, _fd_row("a"), _fd_row("b"), *_FD_SUMMARY]
+    preamble, rows = parse_apple_finance_detail(gzip.compress("\n".join(lines).encode()))
+    assert preamble == {"Vendor Name": "Acme SRL", "Start Date": "09/29/2024", "End Date": "11/02/2024"}
+    assert [r["Col0"] for r in rows] == ["a", "b"]
+    assert len(rows[0]) == 18 and rows[0]["Col17"] == "v17"
+
+
+def test_parse_apple_finance_detail_without_rows():
+    lines = [*_FD_HEAD, _FD_COLS, *_FD_SUMMARY]
+    preamble, rows = parse_apple_finance_detail(gzip.compress("\n".join(lines).encode()))
+    assert preamble["Start Date"] == "09/29/2024"
+    assert rows == []

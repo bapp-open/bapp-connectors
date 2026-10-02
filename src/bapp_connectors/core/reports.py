@@ -41,6 +41,36 @@ def gunzip_tsv_rows(content: bytes) -> list[dict[str, str]]:
     return [row for row in rows if not next(iter(row.values()), "").startswith("Total")]
 
 
+_FINANCE_PREAMBLE_KEYS = {"Vendor Name", "Start Date", "End Date"}
+_FINANCE_MIN_HEADER_CELLS = 10
+
+
+def parse_apple_finance_detail(content: bytes) -> tuple[dict[str, str], list[dict[str, str]]]:
+    """
+    FINANCE_DETAIL Apple: gzip cu TSV de forma preambul (`Vendor Name`/`Start Date`/`End Date`),
+    antet, randuri de date (cu o celula goala la coada), apoi o sectiune de totaluri care incepe
+    cu `Country Of Sale`. Intoarce `(preambul, randuri)`; totalurile sunt ignorate.
+    """
+    text = decode_text(gzip.decompress(content))
+    preamble: dict[str, str] = {}
+    header: list[str] | None = None
+    rows: list[dict[str, str]] = []
+    for cells in csv.reader(io.StringIO(text), delimiter="\t"):
+        if not any(c.strip() for c in cells):
+            continue
+        cells = [c.strip() for c in cells]
+        if header is None:
+            if len(cells) == 2 and cells[0] in _FINANCE_PREAMBLE_KEYS:
+                preamble[cells[0]] = cells[1]
+            elif len(cells) >= _FINANCE_MIN_HEADER_CELLS:
+                header = cells
+            continue
+        if cells[0].lower() == "country of sale" or len(cells) < _FINANCE_MIN_HEADER_CELLS:
+            break
+        rows.append(dict(zip(header, cells, strict=False)))
+    return preamble, rows
+
+
 def unzip_csv_rows(content: bytes, member_suffix: str = ".csv") -> list[dict[str, str]]:
     """Raport Google Play: ZIP cu un CSV (UTF-8 sau UTF-16, dupa BOM)."""
     with zipfile.ZipFile(io.BytesIO(content)) as archive:

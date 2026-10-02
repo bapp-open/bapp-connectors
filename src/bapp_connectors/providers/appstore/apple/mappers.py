@@ -40,6 +40,10 @@ def parse_apple_date(text: str) -> date:
     return datetime.strptime(text.strip(), "%m/%d/%Y").date()
 
 
+def _iso_date(text: str | None) -> str:
+    return parse_apple_date(text).isoformat() if text else ""
+
+
 def parse_iso_datetime(text: str | None) -> datetime | None:
     if not text:
         return None
@@ -119,11 +123,12 @@ def refund_from_sale(sale: AppStoreSale) -> AppStoreRefund:
     )
 
 
-def transaction_from_finance_row(row: dict, fiscal_period: str) -> FinancialTransaction:
+def transaction_from_finance_row(row: dict, fiscal_period: str, preamble: dict | None = None) -> FinancialTransaction:
+    preamble = preamble or {}
     amount = to_decimal(row.get("Extended Partner Share"))
     is_return = row.get("Sale or Return", "S").upper() == "R" or amount < 0
     currency = row.get("Partner Share Currency", "")
-    tx_date = row.get("Transaction Date") or row.get("Start Date") or ""
+    tx_date = row.get("Transaction Date") or preamble.get("Start Date") or row.get("Start Date") or ""
     settlement = row.get("Settlement Date") or ""
     key = stable_key(
         PROVIDER, fiscal_period, row.get("SKU"), row.get("Country of Sale"), row.get("Product Type Identifier"),
@@ -155,6 +160,8 @@ def transaction_from_finance_row(row: dict, fiscal_period: str) -> FinancialTran
             "customer_price": str(to_decimal(row.get("Customer Price"))),
             "customer_currency": row.get("Customer Currency", ""),
             "order_type": row.get("Order Type", ""),
+            "period_start": _iso_date(preamble.get("Start Date")),
+            "period_end": _iso_date(preamble.get("End Date")),
         },
         provider_meta=_meta(row, key),
     )
