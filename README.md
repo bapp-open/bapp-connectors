@@ -37,11 +37,12 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **LLM** | Anthropic, Google Gemini, Ollama, OpenAI | 4 |
 | **Feed** | Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro | 4 |
 | **Network** | pfSense | 1 |
+| **App Stores** | Apple App Store, Google Play, Steam | 3 |
 | **Hosting** | cPanel | 1 |
 | **Ads** | Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads | 6 |
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
 | **Social** | Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts | 7 |
-| | **Total** | **69** |
+| | **Total** | **72** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -248,6 +249,7 @@ packages/connectors/
 │       ├── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
 │       ├── feed/          # Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro
 │       ├── network/       # pfSense
+│       ├── appstore/      # Apple App Store, Google Play, Steam
 │       ├── hosting/       # cPanel
 │       ├── ads/           # Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads
 │       ├── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
