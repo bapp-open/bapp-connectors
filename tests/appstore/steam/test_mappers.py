@@ -15,8 +15,8 @@ from bapp_connectors.providers.appstore.steam.mappers import (
 
 ROW = {
     "partnerid": 1, "date": "2026-09-03", "line_item_type": "Package", "packageid": 500, "package_sale_type": "Steam", "platform": "Windows", "country_code": "RO",
-    "base_price": "1999", "sale_price": "1999", "currency": "RON", "gross_units_sold": 10, "gross_units_returned": 1,
-    "gross_sales_usd": "199.9000", "gross_returns_usd": "19.9900", "net_tax_usd": "28.7800", "primary_appid": 4000,
+    "base_price": "1999", "sale_price": "1999", "currency": "RON", "gross_units_sold": 10, "gross_units_returned": -1,
+    "gross_sales_usd": "199.9000", "gross_returns_usd": "-19.9900", "net_tax_usd": "28.7800", "primary_appid": 4000,
     "additional_revenue_share_tier": 0, "net_units_sold": 9, "net_sales_usd": "151.1300",
 }
 RETAIL_ROW = {
@@ -39,7 +39,8 @@ def test_sales_from_detailed():
     assert sale.proceeds_total == Decimal("151.13")
     assert sale.country == "RO"
     assert sale.customer_currency == "RON"
-    assert sale.extra["gross_units_returned"] == 1
+    assert sale.extra["gross_units_returned"] == -1
+    assert sale.is_refund is False
 
 
 def test_transactions_sale_return_tax_commission():
@@ -53,6 +54,26 @@ def test_transactions_sale_return_tax_commission():
     assert txs[3].extra["estimated"] is True
     assert {t.payout_id for t in txs} == {"2026-09:USD"}
     assert sum(t.net_amount for t in txs) == Decimal("105.79")
+
+
+def test_pure_return_row():
+    row = {
+        **ROW, "gross_units_sold": 0, "gross_units_returned": -1, "gross_sales_usd": "0.0000", "gross_returns_usd": "-4.8900",
+        "net_tax_usd": "-0.3600", "net_units_sold": -1, "net_sales_usd": "-4.5300",
+    }
+    payload = {**PAYLOAD, "results": [row]}
+    day = date(2026, 9, 3)
+    txs = transactions_from_detailed(payload, day)
+    assert [t.transaction_type for t in txs] == [FinancialTransactionType.RETURN, FinancialTransactionType.DEDUCTION, FinancialTransactionType.COMMISSION]
+    assert [t.net_amount for t in txs] == [Decimal("-4.89"), Decimal("0.36"), Decimal("1.36")]
+    assert sum(t.net_amount for t in txs) == Decimal("-3.17")
+    refund = refunds_from_detailed(payload, day)[0]
+    assert refund.amount == Decimal("4.89")
+    assert refund.extra["units"] == 1
+    sale = sales_from_detailed(payload, day)[0]
+    assert sale.is_refund is True
+    assert sale.units == Decimal("-1")
+    assert sale.proceeds_total == Decimal("-4.53")
 
 
 def test_commission_uses_bonus_tier():

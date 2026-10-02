@@ -12,5 +12,6 @@ Comisionul Valve (30%, minus bonusul de tier) e **estimat** din `net_sales_usd`;
 
 ## Capcane
 - Valve **revizuieste zile deja raportate**; `SteamAdapter.changed_dates(highwatermark)` da zilele de re-adus.
+- Retururile vin de la Steam cu **semn negativ** pe unitati (`gross_units_returned`), suma (`gross_returns_usd`) si taxa (`net_tax_usd`, taxa inversata); conectorul normalizeaza: RETURN <= 0, `AppStoreRefund.amount` >= 0, iar `net_sales = gross + returns - tax` cu semnele originale.
 - Fara raspuns la recenzii, abonamente sau webhooks.
 - `payout_id = "YYYY-MM:USD"`.

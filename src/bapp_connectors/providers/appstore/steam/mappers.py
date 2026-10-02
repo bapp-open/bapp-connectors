@@ -55,7 +55,8 @@ def _has_activity(row: dict) -> bool:
 
     Un rand cu 0 unitati poate purta totusi o corectie de taxa sau de vanzare neta; acela ramane.
     """
-    if _int(row, "gross_units_sold") or _int(row, "gross_units_returned"):
+    # unitatile pot fi negative (retururi): conteaza orice valoare != 0
+    if _int(row, "gross_units_sold") != 0 or _int(row, "gross_units_returned") != 0:
         return True
     return any(_money(row.get(field) or 0) for field in _MONEY_FIELDS)
 
@@ -113,7 +114,7 @@ def sales_from_detailed(payload: dict, day: date) -> list[AppStoreSale]:
                 proceeds_currency=CURRENCY,
                 proceeds_unit=(_money(row.get("net_sales_usd", 0)) / net_units).quantize(CENT) if net_units else Decimal("0"),
                 proceeds_total=_money(row.get("net_sales_usd", 0)),
-                is_refund=False,
+                is_refund=_int(row, "gross_units_sold") == 0 and _int(row, "gross_units_returned") != 0,
                 extra={
                     "gross_units_sold": _int(row, "gross_units_sold"),
                     "gross_units_returned": _int(row, "gross_units_returned"),
@@ -174,7 +175,8 @@ def transactions_from_detailed(payload: dict, day: date) -> list[FinancialTransa
         if gross:
             result.append(_tx(row, key, common, FinancialTransactionType.SALE, gross, "sale", "gross_sales_usd"))
         if returns:
-            result.append(_tx(row, key, common, FinancialTransactionType.RETURN, -returns, "return", "gross_returns_usd"))
+            # Steam trimite gross_returns_usd deja negativ pe randurile de retur
+            result.append(_tx(row, key, common, FinancialTransactionType.RETURN, returns, "return", "gross_returns_usd"))
         if tax:
             result.append(_tx(row, key, common, FinancialTransactionType.DEDUCTION, -tax, "tax", "net_tax_usd"))
         if net_sales:
@@ -198,7 +200,7 @@ def transactions_from_detailed(payload: dict, day: date) -> list[FinancialTransa
 def refunds_from_detailed(payload: dict, day: date) -> list[AppStoreRefund]:
     refunds = []
     for row in payload.get("results", []) or []:
-        returned = _int(row, "gross_units_returned")
+        returned = abs(_int(row, "gross_units_returned"))  # vine negativ la Steam
         if not returned:
             continue
         key = _row_key(row, day)
@@ -207,7 +209,7 @@ def refunds_from_detailed(payload: dict, day: date) -> list[AppStoreRefund]:
                 refund_id=f"{key}:return",
                 app_id=_app_id(row),
                 sku=str(row.get("packageid", "")),
-                amount=_money(row.get("gross_returns_usd", 0)),
+                amount=abs(_money(row.get("gross_returns_usd", 0))),
                 currency=CURRENCY,
                 refunded_at=_at(day),
                 extra={"units": returned, "country": row.get("country_code", "")},

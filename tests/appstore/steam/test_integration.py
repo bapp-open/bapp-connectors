@@ -39,9 +39,9 @@ def test_recent_sales(adapter):
 
 
 def test_recent_sales_sign_of_returns(adapter):
-    """Verificare live a semnului retururilor (RETURN <= 0, SALE >= 0)."""
+    """Verificare live a semnului retururilor (RETURN <= 0, SALE >= 0, refund >= 0)."""
     end = datetime.now()
-    start = end - timedelta(days=30)
+    start = end - timedelta(days=400)
     cursor, rows = None, []
     while True:
         page = adapter.get_financial_transactions(start, end, cursor=cursor)
@@ -57,20 +57,32 @@ def test_recent_sales_sign_of_returns(adapter):
         if t.transaction_type == FinancialTransactionType.SALE:
             assert t.net_amount >= Decimal("0")
 
-    # Invariantul pe fiecare rand sursa: gross - returns - tax == net (in limita unui cent)
+    # Invariantul pe fiecare rand sursa, cu semne Steam: gross + returns - tax == net (in limita unui cent)
     sale_cursor = None
     while True:
         sales_page = adapter.get_sales(start.date(), end.date(), cursor=sale_cursor)
         for sale in sales_page.items:
             computed = (
                 Decimal(sale.extra["gross_sales_usd"])
-                - Decimal(sale.extra["gross_returns_usd"])
+                + Decimal(sale.extra["gross_returns_usd"])
                 - Decimal(sale.extra["net_tax_usd"])
             )
             assert abs(computed - sale.proceeds_total) <= Decimal("0.01"), (sale.external_key, sale.extra, sale.proceeds_total)
         if not sales_page.has_more:
             break
         sale_cursor = sales_page.cursor
+
+
+def test_recent_refunds_are_positive(adapter):
+    end = datetime.now()
+    start = end - timedelta(days=400)
+    cursor = None
+    while True:
+        page = adapter.list_refunds(start.date(), end.date(), cursor=cursor)
+        assert all(r.amount >= Decimal("0") for r in page.items)
+        if not page.has_more:
+            break
+        cursor = page.cursor
 
 
 def test_public_reviews(adapter):
