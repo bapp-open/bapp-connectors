@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date
 from decimal import Decimal
 
-from bapp_connectors.core.dto import AppStoreProductType, FinancialTransactionType
+from bapp_connectors.core.dto import AppStoreProductType, FinancialTransactionType, SubscriptionStatus
 from bapp_connectors.providers.appstore.apple.mappers import (
+    app_from_apple,
+    parse_apple_date,
+    parse_iso_datetime,
     refund_from_sale,
     review_from_apple,
     sale_from_sales_row,
+    subscription_from_server_status,
     transaction_from_finance_row,
 )
 
@@ -116,3 +120,58 @@ def test_review_from_apple_with_response():
     assert review.developer_response == "Multumim"
     assert review.developer_response_at is not None
     assert review.app_id == "645"
+
+
+def test_external_key_discriminates_version_and_sign():
+    base = sale_from_sales_row(SALES_ROW, date(2026, 9, 1))
+    other_version = sale_from_sales_row({**SALES_ROW, "Version": "2.2"}, date(2026, 9, 1))
+    refund = sale_from_sales_row({**SALES_ROW, "Units": "-1"}, date(2026, 9, 1))
+    assert base.external_key != other_version.external_key
+    assert base.external_key != refund.external_key
+    # valoarea Units nu intra in cheie, doar semnul
+    assert base.external_key == sale_from_sales_row({**SALES_ROW, "Units": "7"}, date(2026, 9, 1)).external_key
+
+
+def test_refund_reason_comes_from_extra():
+    sale = sale_from_sales_row({**SALES_ROW, "Units": "-1", "Proceeds Reason": "Rate Before Tax"}, date(2026, 9, 1))
+    assert sale.extra["version"] == "2.1"
+    assert refund_from_sale(sale).reason == "Rate Before Tax"
+
+
+def test_subscription_from_server_status():
+    tx = {"originalTransactionId": "1000", "productId": "pro.monthly", "price": 5990, "currency": "EUR",
+          "expiresDate": 1788000000000, "originalPurchaseDate": 1785000000000, "environment": "Production", "bundleId": "ro.cbsoft"}
+    sub = subscription_from_server_status(1, tx, {"autoRenewStatus": 0, "autoRenewProductId": "pro.yearly"})
+    assert sub.status == SubscriptionStatus.ACTIVE
+    assert sub.amount == Decimal("5.99")
+    assert sub.current_period_end.utcoffset() == UTC.utcoffset(None)
+    assert sub.current_period_end.timestamp() == 1788000000
+    assert sub.cancel_at_period_end is True
+    assert sub.extra["original_transaction_id"] == "1000"
+    assert subscription_from_server_status(2, tx, {}).status == SubscriptionStatus.CANCELLED
+    assert subscription_from_server_status(99, tx, {}).status == SubscriptionStatus.PENDING
+    assert subscription_from_server_status(1, tx, {"autoRenewStatus": 1}).cancel_at_period_end is False
+
+
+def test_app_from_apple():
+    app = app_from_apple({"id": 645, "attributes": {"name": "BAPP", "bundleId": "ro.cbsoft.app", "sku": "SKU1"}})
+    assert (app.app_id, app.name, app.bundle_id, app.extra["sku"]) == ("645", "BAPP", "ro.cbsoft.app", "SKU1")
+
+
+def test_review_without_response():
+    attrs = {"rating": 5, "createdDate": "2026-09-10T10:00:00-07:00"}
+    for data in (
+        {"id": "r1", "attributes": attrs, "relationships": {"response": {"data": None}}},
+        {"id": "r2", "attributes": attrs},
+    ):
+        review = review_from_apple(data, {}, app_id="645")
+        assert review.developer_response == ""
+        assert review.developer_response_at is None
+        assert review.rating == 5
+
+
+def test_parsers():
+    assert parse_apple_date("09/03/2026") == date(2026, 9, 3)
+    parsed = parse_iso_datetime("2026-09-11T08:00:00Z")
+    assert parsed.tzinfo is not None
+    assert parse_iso_datetime(None) is None

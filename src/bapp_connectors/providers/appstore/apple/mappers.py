@@ -66,8 +66,11 @@ def sale_from_sales_row(row: dict, report_date: date) -> AppStoreSale | None:
     end = parse_apple_date(row["End Date"]) if row.get("End Date") else report_date
     key = stable_key(
         PROVIDER, begin, end, row.get("SKU"), row.get("Country Code"), identifier, row.get("Subscription"),
-        row.get("Customer Currency"), row.get("Customer Price"), row.get("Promo Code"), row.get("Order Type"),
-        row.get("Device"), row.get("Proceeds Reason"),
+        row.get("Customer Currency"), row.get("Customer Price"), row.get("Currency of Proceeds"),
+        row.get("Developer Proceeds"), row.get("Promo Code"), row.get("Order Type"), row.get("Device"),
+        row.get("Proceeds Reason"), row.get("Version"), row.get("Client"), row.get("Preserved Pricing"),
+        row.get("Period"), row.get("Supported Platforms"), row.get("Apple Identifier"),
+        row.get("Parent Identifier"), "refund" if units < 0 else "sale",
     )
     return AppStoreSale(
         external_key=key,
@@ -93,6 +96,8 @@ def sale_from_sales_row(row: dict, report_date: date) -> AppStoreSale | None:
             "device": row.get("Device", ""),
             "promo_code": row.get("Promo Code", ""),
             "order_type": row.get("Order Type", ""),
+            "proceeds_reason": row.get("Proceeds Reason", ""),
+            "version": row.get("Version", ""),
         },
         provider_meta=_meta(row, key),
     )
