@@ -35,6 +35,7 @@ from bapp_connectors.providers.appstore.apple.mappers import (
     refund_from_sale,
     review_from_apple,
     sale_from_sales_row,
+    subscription_from_server_status,
     transaction_from_finance_row,
 )
 
@@ -175,7 +176,6 @@ class AppleAppStoreAdapter(AppStorePort, FinancialCapability, WebhookCapability)
     def get_subscription(self, reference: str) -> Subscription:
         payload = self._server_api().get_subscription_statuses(reference)
         from bapp_connectors.providers.appstore.apple.jws import decode_signed_payload
-        from bapp_connectors.providers.appstore.apple.mappers import subscription_from_server_status
 
         for group in payload.get("data", []):
             for last in group.get("lastTransactions", []):
@@ -204,8 +204,12 @@ class AppleAppStoreAdapter(AppStorePort, FinancialCapability, WebhookCapability)
         periods = fiscal_periods_between(start_date.date(), end_date.date())
         if not periods:
             return PaginatedResult(items=[], has_more=False)
+        if cursor and cursor not in periods:
+            raise ValueError(
+                f"Apple: cursor fiscal necunoscut {cursor!r} pentru intervalul {start_date.date()}..{end_date.date()}"
+            )
         period = cursor or periods[0]
-        index = periods.index(period) if period in periods else 0
+        index = periods.index(period)
         next_cursor = periods[index + 1] if index + 1 < len(periods) else None
         content = self.client.download_finance_report(period)
         rows = gunzip_tsv_rows(content) if content else []

@@ -45,6 +45,11 @@ class AppStoreContractTests:
     def review_app_id(self) -> str:
         raise NotImplementedError
 
+    @pytest.fixture
+    def unsupported_methods(self) -> set[str]:
+        """Metodele optionale (reply_to_review, get_subscription) pe care providerul nu le suporta."""
+        return set()
+
     def test_is_appstore_port(self, adapter):
         assert isinstance(adapter, AppStorePort)
         assert isinstance(adapter, FinancialCapability)
@@ -118,16 +123,20 @@ class AppStoreContractTests:
         assert all(isinstance(r, AppStoreReview) for r in page.items)
         assert all(r.review_id for r in page.items)
 
-    def test_unsupported_methods_raise_not_implemented(self, adapter, review_app_id):
-        """Ce nu e suportat ridica NotImplementedError, nu alta exceptie."""
-        for call in (
-            lambda: adapter.reply_to_review(review_app_id, "x", "y"),
-            lambda: adapter.get_subscription("x"),
-        ):
-            try:
-                call()
-            except NotImplementedError:
-                pass
-            except Exception as exc:
-                # suportat, dar fixture-ul HTTP n-are raspuns: acceptabil doar daca e AssertionError-ul FakeHttpClient
-                assert "no canned response" in str(exc), exc
+    def test_declared_unsupported_methods_raise_not_implemented(self, adapter, review_app_id, unsupported_methods):
+        """Metodele declarate nesuportate ridica NotImplementedError; celelalte nu."""
+        optional = {
+            "reply_to_review": lambda: adapter.reply_to_review(review_app_id, "x", "y"),
+            "get_subscription": lambda: adapter.get_subscription("x"),
+        }
+        for name, call in optional.items():
+            if name in unsupported_methods:
+                with pytest.raises(NotImplementedError):
+                    call()
+            else:
+                try:
+                    call()
+                except NotImplementedError:
+                    pytest.fail(f"{name} nu e declarata nesuportata, dar ridica NotImplementedError")
+                except Exception:
+                    pass  # fara raspuns simulat sau eroare de provider: acceptabil

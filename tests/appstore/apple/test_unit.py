@@ -158,7 +158,7 @@ def fake_http() -> FakeHttpClient:
 
     def sales(method, path, kwargs):
         day = kwargs["params"]["filter[reportDate]"]
-        if day == "09/02/2026" or day == "2026-09-02":
+        if day == "2026-09-02":
             return FakeResponse(status_code=404, text="no sales")
         mdy = f"{day[5:7]}/{day[8:10]}/{day[0:4]}"
         return FakeResponse(content=_sales_tsv(mdy, "-1" if day == "2026-09-03" else "3", "4.26"))
@@ -240,6 +240,10 @@ class TestAppleContract(AppStoreContractTests):
     def review_app_id(self):
         return "645"
 
+    @pytest.fixture
+    def unsupported_methods(self):
+        return {"get_subscription"}  # fixture-ul n-are cheie In-App Purchase
+
 
 def test_sales_missing_report_is_empty_page(adapter):
     page = adapter.get_sales(date(2026, 9, 1), date(2026, 9, 3), cursor="2026-09-02")
@@ -282,3 +286,8 @@ def test_get_subscription_without_iap_key_is_not_implemented(adapter):
 
 def test_missing_credentials_fails_validation():
     assert AppleAppStoreAdapter(credentials={}).validate_credentials() is False
+
+
+def test_unknown_fiscal_cursor_raises(adapter):
+    with pytest.raises(ValueError, match="cursor fiscal necunoscut"):
+        adapter.get_financial_transactions(datetime(2026, 9, 20), datetime(2026, 10, 5), cursor="2025-01")
