@@ -14,7 +14,7 @@ starea abonamentelor si notificarile App Store Server (cu cheia In-App Purchase)
    (Production si Sandbox), versiunea 2.
 
 ## Capcane
-- Raportul financiar se cere pe **luna fiscala Apple** (4-4-5 saptamani), nu calendaristica; adapterul traduce singur.
+- Raportul financiar se cere pe **luna fiscala Apple**, nu calendaristica; adapterul traduce singur. Calendarul e calculat din regula Apple: anul fiscal se incheie in ultima sambata din septembrie, luni de 5-4-4 saptamani (in anii de 53 de saptamani decembrie are 5).
 - Apple plateste la ~33 de zile dupa inchiderea lunii fiscale, **per moneda**; `payout_id = "<luna fiscala>:<moneda>"`.
 - Cheia `.p8` lipita cu `\n` literal e normalizata automat.
 - `Partner Share` e deja net de comision si taxe: la Apple brut = net.

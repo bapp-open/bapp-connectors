@@ -205,7 +205,9 @@ class AppleAppStoreAdapter(AppStorePort, FinancialCapability, WebhookCapability)
     ) -> PaginatedResult[FinancialTransaction]:
         periods = fiscal_periods_between(start_date.date(), end_date.date())
         if not periods:
-            return PaginatedResult(items=[], has_more=False)
+            raise ValueError(
+                f"Apple: intervalul {start_date.date()}..{end_date.date()} nu acopera nicio luna fiscala"
+            )
         if cursor and cursor not in periods:
             raise ValueError(
                 f"Apple: cursor fiscal necunoscut {cursor!r} pentru intervalul {start_date.date()}..{end_date.date()}"

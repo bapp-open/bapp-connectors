@@ -291,3 +291,8 @@ def test_missing_credentials_fails_validation():
 def test_unknown_fiscal_cursor_raises(adapter):
     with pytest.raises(ValueError, match="cursor fiscal necunoscut"):
         adapter.get_financial_transactions(datetime(2026, 9, 20), datetime(2026, 10, 5), cursor="2025-01")
+
+
+def test_range_without_fiscal_months_raises(adapter):
+    with pytest.raises(ValueError, match="nicio luna fiscala"):
+        adapter.get_financial_transactions(datetime(2026, 10, 5), datetime(2026, 9, 20))
