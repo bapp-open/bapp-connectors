@@ -57,6 +57,21 @@ def test_recent_sales_sign_of_returns(adapter):
         if t.transaction_type == FinancialTransactionType.SALE:
             assert t.net_amount >= Decimal("0")
 
+    # Invariantul pe fiecare rand sursa: gross - returns - tax == net (in limita unui cent)
+    sale_cursor = None
+    while True:
+        sales_page = adapter.get_sales(start.date(), end.date(), cursor=sale_cursor)
+        for sale in sales_page.items:
+            computed = (
+                Decimal(sale.extra["gross_sales_usd"])
+                - Decimal(sale.extra["gross_returns_usd"])
+                - Decimal(sale.extra["net_tax_usd"])
+            )
+            assert abs(computed - sale.proceeds_total) <= Decimal("0.01"), (sale.external_key, sale.extra, sale.proceeds_total)
+        if not sales_page.has_more:
+            break
+        sale_cursor = sales_page.cursor
+
 
 def test_public_reviews(adapter):
     app_id = STEAM_ENV["app_ids"].split(",")[0].strip()

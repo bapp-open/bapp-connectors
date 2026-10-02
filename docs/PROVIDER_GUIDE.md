@@ -683,7 +683,7 @@ filed under `hosting` and also implements `DnsPort`, so a DNS UI finds it with
 Apple, Google Play and Steam deliver sales as daily/monthly files, not as per-order endpoints.
 Use `bapp_connectors.core.reports` (`gunzip_tsv_rows`, `unzip_csv_rows`, `daily_page`, `monthly_page`)
 and encode "the next period not yet fetched" in `PaginatedResult.cursor`; one page = one file.
-Dependencies beyond `requests`/`pydantic` go in an extra (`appstore = ["PyJWT[crypto]>=2.8"]`) and the
+Dependencies beyond `requests`/`pydantic` go in an extra (`appstore = ["PyJWT[crypto]>=2.8", "cryptography>=42"]`) and the
 provider's `__init__.py` registers only if the import succeeds (see `providers/storage/s3/__init__.py`).
 
 ---
