@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import UTC, date, datetime, timedelta
 
 from bapp_connectors.core.capabilities import FinancialCapability, WebhookCapability
@@ -18,6 +17,7 @@ from bapp_connectors.core.dto import (
     Subscription,
     WebhookEvent,
 )
+from bapp_connectors.core.errors import PermanentProviderError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import AppStorePort
 from bapp_connectors.core.reports import csv_rows, decode_text, monthly_page, unzip_csv_rows
@@ -42,7 +42,22 @@ from bapp_connectors.providers.appstore.google_play.mappers import (
     webhook_event_from_pubsub,
 )
 
-_MONTH_IN_NAME = re.compile(r"_(\d{6})(?:_\d+)?\.(?:zip|csv)$", re.IGNORECASE)
+#: numele fisierului din fiecare folder incepe cu acest prefix, urmat de stamp-ul YYYYMM
+_BASENAME_PREFIXES = {"earnings/": "earnings_", "sales/": "salesreport_"}
+
+
+def _stamp_for(name: str, prefix: str) -> str | None:
+    """Stamp-ul YYYYMM aflat imediat dupa prefixul cunoscut al fisierului, sau None.
+
+    `earnings/` -> `earnings/earnings_YYYYMM...`, `sales/` -> `sales/salesreport_YYYYMM...`, iar un prefix
+    complet (`reviews/reviews_{package}_`) e urmat direct de stamp. Pozitional, ca cifrele din numele
+    pachetului sa nu poata fi luate drept luna.
+    """
+    full_prefix = prefix + _BASENAME_PREFIXES.get(prefix, "")
+    if not name.startswith(full_prefix):
+        return None
+    stamp = name[len(full_prefix) : len(full_prefix) + 6]
+    return stamp if len(stamp) == 6 and stamp.isdigit() else None
 
 
 class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
@@ -84,12 +99,13 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
 
     def _month_objects(self, prefix: str, year: int, month: int) -> list[str]:
         stamp = f"{year:04d}{month:02d}"
-        names = []
-        for obj in self.client.list_objects(prefix):
-            found = _MONTH_IN_NAME.search(obj["name"])
-            if found and found.group(1) == stamp:
-                names.append(obj["name"])
-        return names
+        all_names = [obj["name"] for obj in self.client.list_objects(prefix)]
+        stamps = {name: _stamp_for(name, prefix) for name in all_names}
+        if all_names and not any(stamps.values()):
+            raise PermanentProviderError(
+                f"Google Play: niciun obiect sub {prefix} nu are stamp YYYYMM recunoscut: {all_names[:3]}"
+            )
+        return [name for name in all_names if stamps[name] == stamp]
 
     def _month_rows(self, prefix: str, year: int, month: int) -> list[dict]:
         rows: list[dict] = []

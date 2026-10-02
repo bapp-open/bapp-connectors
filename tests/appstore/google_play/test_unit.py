@@ -10,6 +10,7 @@ from decimal import Decimal
 import pytest
 
 from bapp_connectors.core.dto import AppStoreProductType
+from bapp_connectors.core.errors import PermanentProviderError
 from bapp_connectors.providers.appstore.google_play.adapter import GooglePlayAdapter
 from bapp_connectors.providers.appstore.google_play.manifest import manifest
 from tests.appstore.conftest import FakeResponse
@@ -125,24 +126,46 @@ def test_reviews_merge_csv_history_with_live_api(adapter):
     assert csv_review.body == "Excelent"
 
 
-def test_month_objects_with_digits_in_package_name(fake_http):
-    extra = {
-        "reviews/reviews_com.foo_123456.app_202609.csv": b"x",
-        "earnings/earnings_202609_1.zip": b"x",
-    }
-
+def _month_objects_adapter(names):
     def list_objects(method, path, kwargs):
         prefix = kwargs["params"].get("prefix", "")
-        return {"items": [{"name": n} for n in extra if n.startswith(prefix)]}
+        return {"items": [{"name": n} for n in names if n.startswith(prefix)]}
 
     fake = FakeHttpClient(base_url=manifest.base_url)
     fake.add("GET", "b/pubsite_prod_rev_123/o", list_objects)
     a = GooglePlayAdapter(credentials=dict(CREDENTIALS), http_client=fake)
     a.auth._fetch = lambda uri, assertion: {"access_token": "t", "expires_in": 3600}
-    assert a._month_objects("reviews/", 2026, 9) == ["reviews/reviews_com.foo_123456.app_202609.csv"]
-    assert a._month_objects("earnings/", 2026, 9) == ["earnings/earnings_202609_1.zip"]
-    assert a._month_objects("reviews/", 2026, 12) == []
-    assert a._month_objects("reviews/", 2026, 12) == []
+    return a
+
+
+def test_month_objects_with_digits_in_package_name():
+    a = _month_objects_adapter(
+        [
+            "reviews/reviews_com.foo_123456.app_202609.csv",
+            "reviews/reviews_com.foo_202512_202609.csv",
+            "earnings/earnings_202609_1.zip",
+            "earnings/earnings_202609_abc-1.zip",
+            "earnings/earnings_202608_1.zip",
+            "sales/salesreport_202609.zip",
+            "sales/salesreport_202608.zip",
+        ]
+    )
+    assert a._month_objects("reviews/reviews_com.foo_123456.app_", 2026, 9) == ["reviews/reviews_com.foo_123456.app_202609.csv"]
+    # Pachetul `com.foo_202512` nu e luat drept luna decembrie: stamp-ul e cel de dupa prefixul pachetului.
+    assert a._month_objects("reviews/reviews_com.foo_202512_", 2026, 9) == ["reviews/reviews_com.foo_202512_202609.csv"]
+    assert a._month_objects("reviews/reviews_com.foo_123456.app_", 2026, 12) == []
+    assert a._month_objects("earnings/", 2026, 9) == ["earnings/earnings_202609_1.zip", "earnings/earnings_202609_abc-1.zip"]
+    assert a._month_objects("sales/", 2026, 9) == ["sales/salesreport_202609.zip"]
+
+
+def test_month_objects_empty_prefix_is_empty():
+    assert _month_objects_adapter([])._month_objects("sales/", 2026, 9) == []
+
+
+def test_month_objects_without_any_recognizable_stamp_raises():
+    a = _month_objects_adapter(["sales/sales_report_sept.zip", "sales/README.txt"])
+    with pytest.raises(PermanentProviderError, match="stamp YYYYMM"):
+        a._month_objects("sales/", 2026, 9)
 
 
 def test_reply_and_refunds_and_subscription(adapter):
