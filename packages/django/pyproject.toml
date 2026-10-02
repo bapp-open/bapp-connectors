@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 license = "MIT"
 dependencies = [
     "django>=4.2",
-    "bapp-connectors",
+    "bapp-connectors>=0.41.0",
     "cryptography>=41.0",
 ]
 
