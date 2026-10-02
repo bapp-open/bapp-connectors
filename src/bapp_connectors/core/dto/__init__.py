@@ -16,6 +16,14 @@ from .ads import (
     AdTargeting,
     UploadedAdMedia,
 )
+from .appstore import (
+    AppStoreApp,
+    AppStorePlatform,
+    AppStoreProductType,
+    AppStoreRefund,
+    AppStoreReview,
+    AppStoreSale,
+)
 from .base import (
     BaseDTO,
     BulkItemResult,
@@ -110,6 +118,12 @@ __all__ = [
     "AdObjective",
     "AdTargeting",
     "Address",
+    "AppStoreApp",
+    "AppStorePlatform",
+    "AppStoreProductType",
+    "AppStoreRefund",
+    "AppStoreReview",
+    "AppStoreSale",
     "AttributeDefinition",
     "AttributeValue",
     "BaseDTO",

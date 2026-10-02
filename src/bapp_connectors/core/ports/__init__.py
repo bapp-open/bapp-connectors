@@ -1,6 +1,7 @@
 """Port interfaces (contracts) for each provider family."""
 
 from .ads import AdsPort
+from .appstore import AppStorePort
 from .base import BasePort
 from .courier import CourierPort
 from .dns import DnsPort
@@ -17,6 +18,7 @@ from .storage import FileInfo, StoragePort
 
 __all__ = [
     "AdsPort",
+    "AppStorePort",
     "BasePort",
     "CourierPort",
     "DnsPort",

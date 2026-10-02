@@ -38,6 +38,11 @@ class WebhookEventType(StrEnum):
     SUBSCRIPTION_CANCELLED = "subscription.cancelled"
     SUBSCRIPTION_PAYMENT_SUCCEEDED = "subscription.payment_succeeded"
     SUBSCRIPTION_PAYMENT_FAILED = "subscription.payment_failed"
+    SUBSCRIPTION_RENEWED = "subscription.renewed"
+    SUBSCRIPTION_EXPIRED = "subscription.expired"
+
+    # In-app purchases (app stores)
+    PURCHASE_REFUNDED = "purchase.refunded"
 
     # Products
     PRODUCT_CREATED = "product.created"

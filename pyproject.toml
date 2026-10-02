@@ -17,6 +17,7 @@ s3 = ["boto3>=1.28"]
 ses = ["boto3>=1.28"]
 mobilpay = ["pyOpenSSL>=23.0", "cryptography>=41.0"]
 netopia = ["cryptography>=41.0"]
+appstore = ["PyJWT[crypto]>=2.8", "cryptography>=42"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
