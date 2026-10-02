@@ -23,7 +23,7 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 | network | `NetworkPort` | pfSense |
 | hosting | `HostingPort` | cPanel |
 | dns | `DnsPort` | cPanel (through its hosting connection) |
-| appstore | `AppStorePort` | Apple App Store, Google Play, Steam |
+| appstore | `AppStorePort` (sales, refunds, reviews, stats) | Apple App Store, Google Play, Steam |
 
 ### Provider File Structure (7 files each)
 

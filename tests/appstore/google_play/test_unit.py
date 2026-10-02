@@ -96,8 +96,12 @@ class TestGooglePlayContract(AppStoreContractTests):
         return "ro.cbsoft.app"
 
     @pytest.fixture
+    def stats_window(self):
+        return date(2026, 9, 1), date(2026, 9, 3)
+
+    @pytest.fixture
     def unsupported_methods(self):
-        return set()
+        return {"get_app_stats"}  # TODO Task B: Google Play stats
 
 
 def test_sales_month_page_marks_refund(adapter):

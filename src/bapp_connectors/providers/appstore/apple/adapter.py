@@ -11,6 +11,7 @@ from bapp_connectors.core.dto import (
     AppStoreRefund,
     AppStoreReview,
     AppStoreSale,
+    AppStoreStat,
     ConnectionTestResult,
     FinancialTransaction,
     PaginatedResult,
@@ -36,6 +37,7 @@ from bapp_connectors.providers.appstore.apple.mappers import (
     refund_from_sale,
     review_from_apple,
     sale_from_sales_row,
+    stats_from_sales_rows,
     subscription_from_server_status,
     transaction_from_finance_row,
     webhook_event_from_apple,
@@ -110,6 +112,14 @@ class AppleAppStoreAdapter(AppStorePort, FinancialCapability, WebhookCapability)
             if not include_free and sale.proceeds_total == 0 and not sale.is_refund:
                 continue
             items.append(sale)
+        return PaginatedResult(items=items, cursor=next_cursor, has_more=next_cursor is not None)
+
+    def get_app_stats(
+        self, app_id: str, start: date, end: date, cursor: str | None = None
+    ) -> PaginatedResult[AppStoreStat]:
+        """Descarcari / update-uri / re-descarcari din raportul SALES zilnic (o zi pe pagina)."""
+        day, next_cursor = daily_page(start, end, cursor)
+        items = stats_from_sales_rows(self._sales_rows(day), day, app_id)
         return PaginatedResult(items=items, cursor=next_cursor, has_more=next_cursor is not None)
 
     def list_refunds(self, start: date, end: date, cursor: str | None = None) -> PaginatedResult[AppStoreRefund]:

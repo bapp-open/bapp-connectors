@@ -13,6 +13,7 @@ from bapp_connectors.providers.appstore.apple.mappers import (
     refund_from_sale,
     review_from_apple,
     sale_from_sales_row,
+    stats_from_sales_rows,
     subscription_from_server_status,
     transaction_from_finance_row,
 )
@@ -185,3 +186,35 @@ def test_finance_row_falls_back_to_preamble_start_date():
     assert tx.extra["period_start"] == "2024-09-29"
     assert tx.extra["period_end"] == "2024-11-02"
     assert transaction_from_finance_row(row, "2024-10").extra["period_start"] == ""
+
+
+def _stat_row(identifier, units, country="RO", app="645"):
+    return {"Apple Identifier": app, "Product Type Identifier": identifier, "Units": units, "Country Code": country}
+
+
+def test_stats_from_sales_rows():
+    rows = [
+        _stat_row("1F", "2"),
+        _stat_row("1", "3"),
+        _stat_row("1F", "4", country="DE"),
+        _stat_row("7F", "10"),
+        _stat_row("3", "1"),
+        _stat_row("1F", "99", app="999"),  # alta aplicatie
+        _stat_row("1F", "-5"),  # unitati negative: nu sunt descarcari
+        _stat_row("IAY", "7"),  # nu e tip de aplicatie
+    ]
+    stats = stats_from_sales_rows(rows, date(2026, 9, 1), "645")
+    by_key = {(s.metric.value, s.country): s.value for s in stats}
+    assert by_key == {
+        ("downloads", "DE"): Decimal("4"),
+        ("downloads", "RO"): Decimal("5"),
+        ("downloads", ""): Decimal("9"),
+        ("updates", "RO"): Decimal("10"),
+        ("updates", ""): Decimal("10"),
+        ("redownloads", "RO"): Decimal("1"),
+        ("redownloads", ""): Decimal("1"),
+    }
+    total = next(s for s in stats if s.metric.value == "downloads" and s.country == "")
+    assert total.extra == {"product_type_identifiers": ["1", "1F"]}
+    assert total.date == date(2026, 9, 1) and total.app_id == "645"
+    assert len({s.external_key for s in stats}) == len(stats)

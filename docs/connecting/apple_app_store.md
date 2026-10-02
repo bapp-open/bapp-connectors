@@ -15,6 +15,10 @@ starea abonamentelor si notificarile App Store Server (cu cheia In-App Purchase)
    la Production) si una cu `server_api_environment=sandbox` (URL-ul ei la Sandbox), pentru ca adapterul respinge
    notificarile din celalalt mediu.
 
+## Statistici
+`get_app_stats` ofera descarcarile, update-urile si re-descarcarile unei aplicatii, pe zi si pe tara (plus total), din
+acelasi raport **SALES zilnic** (365 de zile in urma). API-ul App Store Connect Analytics nu e folosit in v1.
+
 ## Capcane
 - Rapoartele **SALES zilnice** exista doar 365 de zile in urma (Apple raspunde `410 GONE`, tratat ca "fara raport"); cele financiare 10 ani. Istoricul de vanzari mai vechi se reconstruieste din FINANCE_DETAIL.
 - Raportul financiar se cere pe **luna fiscala Apple**, nu calendaristica; adapterul traduce singur. `filter[reportDate]` al Apple este `<an fiscal>-<indice lunar>`, cu 01 = octombrie ... 12 = septembrie (octombrie 2024 = `2025-01`, septembrie 2025 = `2025-12`); eticheta noastra `YYYY-MM` (octombrie 2024 = `2024-10`) ramane in `payout_id` si in cursor. Calendarul e calculat din regula Apple: anul fiscal se incheie in ultima sambata din septembrie, luni de 5-4-4 saptamani (in anii de 53 de saptamani decembrie are 5).

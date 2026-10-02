@@ -88,3 +88,40 @@ class AppStoreReview(BaseDTO):
     developer_response: str = ""
     developer_response_at: datetime | None = None
     extra: dict = {}
+
+
+class AppStoreStatMetric(StrEnum):
+    # Descarcari / instalari
+    DOWNLOADS = "downloads"
+    UPDATES = "updates"
+    REDOWNLOADS = "redownloads"
+    INSTALLS = "installs"
+    UNINSTALLS = "uninstalls"
+    ACTIVE_DEVICES = "active_devices"
+    USER_INSTALLS = "user_installs"
+    # Calitate
+    RATING_DAILY = "rating_daily"
+    RATING_TOTAL = "rating_total"
+    CRASHES = "crashes"
+    ANRS = "anrs"
+    # Vizibilitate in magazin
+    STORE_ACQUISITIONS = "store_acquisitions"
+    # Wishlist (Steam)
+    WISHLIST_ADDS = "wishlist_adds"
+    WISHLIST_DELETES = "wishlist_deletes"
+    WISHLIST_PURCHASES = "wishlist_purchases"
+    WISHLIST_GIFTS = "wishlist_gifts"
+    # Jucatori (Steam)
+    CURRENT_PLAYERS = "current_players"
+
+
+class AppStoreStat(BaseDTO):
+    """O valoare zilnica a unei metrici, pe aplicatie si optional pe tara ("" = total)."""
+
+    external_key: str
+    date: date
+    metric: AppStoreStatMetric
+    value: Decimal = Decimal("0")
+    app_id: str = ""
+    country: str = ""
+    extra: dict = {}

@@ -61,8 +61,12 @@ class TestSteamContract(AppStoreContractTests):
         return "4000"
 
     @pytest.fixture
+    def stats_window(self):
+        return date(2026, 9, 1), date(2026, 9, 3)
+
+    @pytest.fixture
     def unsupported_methods(self):
-        return {"reply_to_review", "get_subscription"}
+        return {"reply_to_review", "get_subscription", "get_app_stats"}  # TODO Task C: Steam stats
 
 
 def test_detailed_sales_drains_highwatermark(adapter):

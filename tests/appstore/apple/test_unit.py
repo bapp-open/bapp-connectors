@@ -56,7 +56,12 @@ SALES_HEADER = "\t".join(
 )
 
 
-def _sales_tsv(day: str, units: str, proceeds: str) -> bytes:
+def _sales_tsv(day: str, units: str, proceeds: str, with_app_rows: bool = False) -> bytes:
+    def app_row(identifier: str, count: str) -> str:
+        cells = ["APPLE", "US", "ro.cbsoft.app", "CBSoft", "BAPP", "2.1", identifier, count, "0", day, day, "EUR", "RO"]
+        cells += ["EUR", "645", "0", "", "", "", "", "Business", "", "iPhone", "iOS", "", "", "", ""]
+        return "\t".join(cells)
+
     row = "\t".join(
         [
             "APPLE",
@@ -89,7 +94,9 @@ def _sales_tsv(day: str, units: str, proceeds: str) -> bytes:
             "",
         ]
     )
-    return gzip.compress(f"{SALES_HEADER}\n{row}\nTotal_Rows\t1\n".encode())
+    rows = [row] + ([app_row("1F", "2"), app_row("7F", "5")] if with_app_rows else [])
+    body = "\n".join(rows)
+    return gzip.compress(f"{SALES_HEADER}\n{body}\nTotal_Rows\t{len(rows)}\n".encode())
 
 
 FINANCE_HEADER = "\t".join(
@@ -157,7 +164,7 @@ def fake_http() -> FakeHttpClient:
         if day == "2026-09-02":
             return FakeResponse(status_code=404, text="no sales")
         mdy = f"{day[5:7]}/{day[8:10]}/{day[0:4]}"
-        return FakeResponse(content=_sales_tsv(mdy, "-1" if day == "2026-09-03" else "3", "4.26"))
+        return FakeResponse(content=_sales_tsv(mdy, "-1" if day == "2026-09-03" else "3", "4.26", day == "2026-09-01"))
 
     def finance(method, path, kwargs):
         period = kwargs["params"]["filter[reportDate]"]
@@ -237,6 +244,10 @@ class TestAppleContract(AppStoreContractTests):
         return "645"
 
     @pytest.fixture
+    def stats_window(self):
+        return date(2026, 9, 1), date(2026, 9, 3)
+
+    @pytest.fixture
     def unsupported_methods(self):
         return {"get_subscription"}  # fixture-ul n-are cheie In-App Purchase
 
@@ -250,9 +261,21 @@ def test_sales_missing_report_is_empty_page(adapter):
 
 def test_sales_one_day_per_page(adapter):
     page = adapter.get_sales(date(2026, 9, 1), date(2026, 9, 3))
-    assert len(page.items) == 1
-    assert page.items[0].product_type == AppStoreProductType.SUBSCRIPTION_RENEWAL
+    assert len(page.items) == 2  # reinnoirea + descarcarea gratuita (1F, proceeds 0); update-ul 7F e sarit
+    assert {s.product_type for s in page.items} == {AppStoreProductType.SUBSCRIPTION_RENEWAL, AppStoreProductType.APP}
     assert page.cursor == "2026-09-02"
+
+
+def test_app_stats_one_day_per_page(adapter):
+    page = adapter.get_app_stats("645", date(2026, 9, 1), date(2026, 9, 3))
+    by_key = {(s.metric.value, s.country): s.value for s in page.items}
+    assert by_key == {
+        ("downloads", "RO"): Decimal("2"),
+        ("downloads", ""): Decimal("2"),
+        ("updates", "RO"): Decimal("5"),
+        ("updates", ""): Decimal("5"),
+    }
+    assert page.cursor == "2026-09-02" and page.has_more is True
 
 
 def test_refunds_come_from_negative_units(adapter):

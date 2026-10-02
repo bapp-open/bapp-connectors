@@ -17,6 +17,7 @@ from bapp_connectors.core.dto import (
     AppStoreRefund,
     AppStoreReview,
     AppStoreSale,
+    AppStoreStat,
     ConnectionTestResult,
     FinancialTransaction,
     FinancialTransactionType,
@@ -46,8 +47,12 @@ class AppStoreContractTests:
         raise NotImplementedError
 
     @pytest.fixture
+    def stats_window(self) -> tuple[date, date]:
+        raise NotImplementedError
+
+    @pytest.fixture
     def unsupported_methods(self) -> set[str]:
-        """Metodele optionale (reply_to_review, get_subscription) pe care providerul nu le suporta."""
+        """Metodele optionale (reply_to_review, get_subscription, get_app_stats) pe care providerul nu le suporta."""
         return set()
 
     def test_is_appstore_port(self, adapter):
@@ -123,11 +128,24 @@ class AppStoreContractTests:
         assert all(isinstance(r, AppStoreReview) for r in page.items)
         assert all(r.review_id for r in page.items)
 
+    def test_app_stats_paginate(self, adapter, review_app_id, stats_window, unsupported_methods):
+        start, end = stats_window
+        if "get_app_stats" in unsupported_methods:
+            with pytest.raises(NotImplementedError):
+                adapter.get_app_stats(review_app_id, start, end)
+            return
+        items, _ = self._drain(lambda s, e, c: adapter.get_app_stats(review_app_id, s, e, c), start, end)
+        assert items and all(isinstance(i, AppStoreStat) for i in items)
+        assert all(isinstance(i.value, Decimal) for i in items)
+        assert all(i.external_key for i in items)
+        assert all(start <= i.date <= end for i in items)
+
     def test_declared_unsupported_methods_raise_not_implemented(self, adapter, review_app_id, unsupported_methods):
         """Metodele declarate nesuportate ridica NotImplementedError; celelalte nu."""
         optional = {
             "reply_to_review": lambda: adapter.reply_to_review(review_app_id, "x", "y"),
             "get_subscription": lambda: adapter.get_subscription("x"),
+            "get_app_stats": lambda: adapter.get_app_stats(review_app_id, date(2026, 9, 1), date(2026, 9, 1)),
         }
         for name, call in optional.items():
             if name in unsupported_methods:

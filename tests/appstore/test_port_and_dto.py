@@ -15,6 +15,8 @@ from bapp_connectors.core.dto import (
     AppStoreRefund,
     AppStoreReview,
     AppStoreSale,
+    AppStoreStat,
+    AppStoreStatMetric,
     PaginatedResult,
     WebhookEventType,
 )
@@ -98,3 +100,13 @@ def test_port_optional_methods_raise_not_implemented():
         port.reply_to_review("a", "r", "text")
     with pytest.raises(NotImplementedError):
         port.get_subscription("ref")
+    with pytest.raises(NotImplementedError, match="statisticile"):
+        port.get_app_stats("a", date(2026, 9, 1), date(2026, 9, 2))
+
+
+def test_stat_dto_is_frozen_and_decimal():
+    stat = AppStoreStat(external_key="k", date=date(2026, 9, 1), metric=AppStoreStatMetric.DOWNLOADS, value=Decimal("4"))
+    assert stat.value == Decimal("4")
+    assert stat.country == "" and stat.app_id == "" and stat.extra == {}
+    with pytest.raises(ValidationError):
+        stat.value = Decimal("5")  # frozen

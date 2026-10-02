@@ -12,6 +12,8 @@ from bapp_connectors.core.dto import (
     AppStoreRefund,
     AppStoreReview,
     AppStoreSale,
+    AppStoreStat,
+    AppStoreStatMetric,
     FinancialTransaction,
     FinancialTransactionType,
     ProviderMeta,
@@ -34,6 +36,10 @@ PRODUCT_TYPE_MAP: dict[str, AppStoreProductType] = {
 #: Re-descarcari si update-uri: unitati fara bani, nu sunt vanzari.
 SKIP_PRODUCT_TYPES = frozenset({"3", "3F", "7", "7F", "7T", "F7"})
 SUBSCRIPTION_TYPES = frozenset({"IAY", "IAY-M"})
+#: Statistici de aplicatie: descarcari / update-uri / re-descarcari, din aceleasi randuri SALES.
+APP_DOWNLOAD_TYPES = frozenset({"1", "1F", "1T", "1E", "1EP", "1EU", "F1", "1-B", "F1-B"})
+APP_UPDATE_TYPES = frozenset({"7", "7F", "7T", "F7"})
+APP_REDOWNLOAD_TYPES = frozenset({"3", "3F"})
 
 
 def parse_apple_date(text: str) -> date:
@@ -280,3 +286,53 @@ def webhook_event_from_apple(decoded: dict, transaction: dict, renewal: dict) ->
         extra={"notification_type": kind, "subtype": subtype, "version": decoded.get("version", "")},
         provider_meta=_meta({"decoded": decoded, "transaction": transaction, "renewal": renewal}, decoded.get("notificationUUID", "")),
     )
+
+
+def _stat_metric(identifier: str) -> AppStoreStatMetric | None:
+    if identifier in APP_DOWNLOAD_TYPES:
+        return AppStoreStatMetric.DOWNLOADS
+    if identifier in APP_UPDATE_TYPES:
+        return AppStoreStatMetric.UPDATES
+    if identifier in APP_REDOWNLOAD_TYPES:
+        return AppStoreStatMetric.REDOWNLOADS
+    return None
+
+
+def stats_from_sales_rows(rows: list[dict], day: date, app_id: str) -> list[AppStoreStat]:
+    """Descarcari / update-uri / re-descarcari ale unei aplicatii dintr-un raport SALES zilnic (pe tara + total)."""
+    per_country: dict[tuple[AppStoreStatMetric, str], Decimal] = {}
+    identifiers: dict[AppStoreStatMetric, set[str]] = {}
+    for row in rows:
+        if row.get("Apple Identifier", "") != app_id:
+            continue
+        identifier = row.get("Product Type Identifier", "")
+        metric = _stat_metric(identifier)
+        units = to_decimal(row.get("Units"))
+        if metric is None or units <= 0:
+            continue
+        key = (metric, row.get("Country Code", "") or "")
+        per_country[key] = per_country.get(key, Decimal("0")) + units
+        identifiers.setdefault(metric, set()).add(identifier)
+    totals: dict[AppStoreStatMetric, Decimal] = {}
+    for (metric, _country), value in per_country.items():
+        totals[metric] = totals.get(metric, Decimal("0")) + value
+    stats = []
+    for metric in AppStoreStatMetric:
+        if metric not in totals:
+            continue
+        extra = {"product_type_identifiers": sorted(identifiers[metric])}
+        entries = [(country, value) for (m, country), value in sorted(per_country.items()) if m == metric]
+        entries.append(("", totals[metric]))
+        for country, value in entries:
+            stats.append(
+                AppStoreStat(
+                    external_key=stable_key(PROVIDER, day, app_id, metric, country),
+                    date=day,
+                    metric=metric,
+                    value=value,
+                    app_id=app_id,
+                    country=country,
+                    extra=extra,
+                )
+            )
+    return stats

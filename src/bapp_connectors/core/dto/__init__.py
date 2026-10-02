@@ -23,6 +23,8 @@ from .appstore import (
     AppStoreRefund,
     AppStoreReview,
     AppStoreSale,
+    AppStoreStat,
+    AppStoreStatMetric,
 )
 from .base import (
     BaseDTO,
@@ -124,6 +126,8 @@ __all__ = [
     "AppStoreRefund",
     "AppStoreReview",
     "AppStoreSale",
+    "AppStoreStat",
+    "AppStoreStatMetric",
     "AttributeDefinition",
     "AttributeValue",
     "BaseDTO",

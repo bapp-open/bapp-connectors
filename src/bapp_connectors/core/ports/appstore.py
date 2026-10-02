@@ -1,4 +1,4 @@
-"""App store port — vanzari, rambursari, recenzii si abonamente din magazinele de aplicatii."""
+"""App store port — vanzari, rambursari, recenzii, statistici si abonamente din magazinele de aplicatii."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
         AppStoreRefund,
         AppStoreReview,
         AppStoreSale,
+        AppStoreStat,
         PaginatedResult,
         Subscription,
     )
@@ -60,3 +61,9 @@ class AppStorePort(BasePort):
     def get_subscription(self, reference: str) -> Subscription:
         """Starea unui abonament dupa referinta platformei (original transaction id / purchase token)."""
         raise NotImplementedError(f"{type(self).__name__} nu suporta interogarea abonamentelor")
+
+    def get_app_stats(
+        self, app_id: str, start: date, end: date, cursor: str | None = None
+    ) -> PaginatedResult[AppStoreStat]:
+        """Metrici zilnice (descarcari, instalari, rating, wishlist...) ale unei aplicatii in [start, end]; cursor = urmatoarea perioada."""
+        raise NotImplementedError(f"{type(self).__name__} nu suporta statisticile de aplicatie")
