@@ -168,3 +168,38 @@ def test_webhook_rejects_bad_base64_and_missing_message_id():
         webhook_event_from_pubsub({"data": base64.b64encode(b"[1]").decode(), "messageId": "m1"})
     with pytest.raises(GooglePlayWebhookError, match="messageId"):
         webhook_event_from_pubsub(_push({"packageName": "x"}, message_id=""))
+
+
+def test_earnings_real_headers():
+    row = {
+        "Description": "GPA.1", "Transaction Date": "Sep 3, 2026", "Transaction Time": "10:15:00 PDT", "Tax Type": "",
+        "Transaction Type": "Charge", "Refund Type": "", "Product Title": "App", "Product id": "com.example.app",
+        "Product Type": "subscription", "Sku Id": "private_vpn", "Hardware": "", "Buyer Country": "RO", "Buyer State": "",
+        "Buyer Postal Code": "010101", "Buyer Currency": "RON", "Amount (Buyer Currency)": "10.00",
+        "Currency Conversion Rate": "0.2", "Merchant Currency": "EUR", "Amount (Merchant Currency)": "2.00",
+        "Base Plan ID": "monthly", "Offer ID": "", "Group ID": "", "First USD 1M Eligible": "Yes", "Service Fee %": "15",
+        "Fee Description": "", "Promotion ID": "",
+    }
+    (tx,) = transactions_from_earnings_rows([row], 2026, 9)
+    assert tx.extra["package_id"] == "com.example.app"
+    assert tx.extra["sku"] == "private_vpn"
+    assert tx.extra["base_plan"] == "monthly"
+    assert tx.extra["postal_code"] == "010101"
+
+
+def test_sales_real_headers():
+    row = {
+        "Order Number": "GPA.2", "Order Charged Date": "2026-09-03", "Order Charged Timestamp": "1", "Financial Status": "Charged",
+        "Device Model": "", "Product Title": "App", "Product ID": "com.example.app", "Product Type": "subscription",
+        "SKU ID": "private_vpn", "Currency of Sale": "RON", "Item Price": "10.00", "Taxes Collected": "0", "Charged Amount": "10.00",
+        "City of Buyer": "", "State of Buyer": "", "Postal Code of Buyer": "010101", "Country of Buyer": "RO",
+        "Base Plan ID": "monthly", "Offer ID": "", "Group ID": "", "First USD 1M Eligible": "Yes", "Promotion ID": "",
+        "Coupon Value": "", "Discount Rate": "", "Featured Product ID": "feat1", "Price Experiment ID": "",
+    }
+    sale = sale_from_sales_row(row, 2026, 9)
+    assert sale.app_id == "com.example.app"
+    assert sale.sku == "private_vpn"
+    assert sale.product_type == AppStoreProductType.SUBSCRIPTION
+    assert sale.extra["base_plan"] == "monthly"
+    assert sale.extra["postal_code"] == "010101"
+    assert sale.extra["featured_product_id"] == "feat1"

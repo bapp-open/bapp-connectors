@@ -18,6 +18,7 @@ proaspete din API) cu raspuns, cumparaturile anulate, starea abonamentelor si no
 ## Capcane
 - Raportul lunii apare in jurul datei de 5 a lunii urmatoare; pana atunci pagina e goala, nu eroare.
 - `reviews.list` din API da **doar ultimele 7 zile**; istoricul vine din CSV-urile lunare (UTF-16).
+- Antetele CSV difera intre documentatia Google si fisierele reale (`Product id` / `Sku Id` in earnings, `Product ID` in sales); mapper-ul le accepta pe amandoua.
 - `voidedpurchases` tine **30 de zile** inapoi.
 - `payout_id = "YYYYMM:<moneda comerciantului>"`, o plata pe luna.
 - **Fara `pubsub_audience` push-ul e acceptat NEVERIFICAT**: oricine stie URL-ul webhook-ului poate trimite notificari.

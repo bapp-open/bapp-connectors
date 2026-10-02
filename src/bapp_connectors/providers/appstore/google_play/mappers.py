@@ -52,6 +52,20 @@ EARNINGS_TYPE_MAP: dict[str, FinancialTransactionType] = {
 VOIDED_REASONS = {0: "other", 1: "remorse", 2: "not_received", 3: "defective", 4: "accidental_purchase", 5: "fraud", 6: "friendly_fraud", 7: "chargeback", 8: "unacknowledged_purchase"}
 
 
+def _col(row: dict, *names: str, default: str = "") -> str:
+    """Prima coloana prezenta (non-None) dintre `names`: exact, apoi fara diferente de majuscule."""
+    for name in names:
+        value = row.get(name)
+        if value is not None:
+            return value
+    lowered = {str(key).lower(): value for key, value in row.items()}
+    for name in names:
+        value = lowered.get(name.lower())
+        if value is not None:
+            return value
+    return default
+
+
 def _meta(raw: dict, raw_id: str = "") -> ProviderMeta:
     return ProviderMeta(provider=PROVIDER, raw_id=raw_id, raw_payload=raw, fetched_at=datetime.now(UTC))
 
@@ -94,14 +108,15 @@ def sale_from_sales_row(row: dict, year: int, month: int) -> AppStoreSale:
     status = row.get("Financial Status", "").strip().lower()
     is_refund = bool(status) and status != "charged"
     charged = parse_earnings_date(row.get("Order Charged Date", "")) or date(year, month, 1)
-    key = stable_key(PROVIDER, row.get("Order Number"), row.get("SKU ID"), status, row.get("Charged Amount"))
+    sku = _col(row, "SKU ID", "Sku Id")
+    key = stable_key(PROVIDER, row.get("Order Number"), sku, status, row.get("Charged Amount"))
     units = Decimal("-1") if is_refund else Decimal("1")
     return AppStoreSale(
         external_key=key,
         period_start=charged,
         period_end=charged,
-        app_id=row.get("Package ID", ""),
-        sku=row.get("SKU ID", ""),
+        app_id=_col(row, "Product ID", "Product id", "Package ID"),
+        sku=sku,
         product_name=row.get("Product Title", ""),
         product_type=PRODUCT_TYPE_MAP.get(row.get("Product Type", "").strip().lower(), AppStoreProductType.OTHER),
         units=units,
@@ -117,8 +132,10 @@ def sale_from_sales_row(row: dict, year: int, month: int) -> AppStoreSale:
             "financial_status": row.get("Financial Status", ""),
             "taxes_collected": str(to_decimal(row.get("Taxes Collected"))),
             "charged_amount": str(to_decimal(row.get("Charged Amount"))),
-            "base_plan": row.get("Base Plan or Purchase Option ID", ""),
+            "base_plan": _col(row, "Base Plan ID", "Base Plan or Purchase Option ID"),
             "offer_id": row.get("Offer ID", ""),
+            "postal_code": _col(row, "Postal Code of Buyer", "Postcode of Buyer"),
+            "featured_product_id": _col(row, "Featured Product ID", "Featured Products ID"),
             "device": row.get("Device Model", ""),
         },
         provider_meta=_meta(row, key),
@@ -155,8 +172,8 @@ def transactions_from_earnings_rows(rows: list[dict], year: int, month: int) -> 
                 order_id=row.get("Description", ""),
                 payout_id=f"{period}:{currency}",
                 extra={
-                    "package_id": row.get("Package ID", ""),
-                    "sku": row.get("SKU ID", ""),
+                    "package_id": _col(row, "Product id", "Product ID", "Package ID"),
+                    "sku": _col(row, "Sku Id", "SKU ID", "Sku ID"),
                     "product_type": row.get("Product Type", ""),
                     "country": row.get("Buyer Country", ""),
                     "buyer_currency": row.get("Buyer Currency", ""),
@@ -164,7 +181,8 @@ def transactions_from_earnings_rows(rows: list[dict], year: int, month: int) -> 
                     "conversion_rate": row.get("Currency Conversion Rate", ""),
                     "refund_type": row.get("Refund Type", ""),
                     "tax_type": row.get("Tax Type", ""),
-                    "base_plan": row.get("Base Plan or Purchase Option ID", ""),
+                    "base_plan": _col(row, "Base Plan ID", "Base Plan or Purchase Option ID"),
+                    "postal_code": _col(row, "Buyer Postal Code", "Buyer Postcode"),
                 },
                 provider_meta=_meta(row, tx_id),
             )
