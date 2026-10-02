@@ -42,7 +42,7 @@ from bapp_connectors.providers.appstore.google_play.mappers import (
     webhook_event_from_pubsub,
 )
 
-_MONTH_IN_NAME = re.compile(r"_(\d{6})")
+_MONTH_IN_NAME = re.compile(r"_(\d{6})(?:_\d+)?\.(?:zip|csv)$", re.IGNORECASE)
 
 
 class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
@@ -132,7 +132,11 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
         return PaginatedResult(items=items, cursor=next_cursor, has_more=next_cursor is not None)
 
     def list_reviews(self, app_id: str, since: datetime | None = None, cursor: str | None = None) -> PaginatedResult[AppStoreReview]:
-        """Istoricul din CSV-urile lunare + (pe prima pagina) recenziile live din API (ultimele 7 zile)."""
+        """Istoricul din CSV-urile lunare + recenziile live din API (ultimele 7 zile) pe pagina lunii curente.
+
+        Consumatorii fac upsert dupa `review_id`, deci o recenzie prezenta si intr-un CSV lunar si in API
+        se reconciliaza dupa id.
+        """
         since = since or datetime.now(UTC) - timedelta(days=92)
         if since.tzinfo is None:
             since = since.replace(tzinfo=UTC)
@@ -142,7 +146,7 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
         for row in self._month_rows(f"reviews/reviews_{app_id}_", year, month):
             review = review_from_csv_row(row, app_id)
             by_id[review.review_id] = review
-        if cursor is None and self.package_names:
+        if (year, month) == (date.today().year, date.today().month) and self.package_names:
             for data in self.client.list_reviews(app_id).get("reviews", []):
                 review = review_from_api(data, app_id)
                 by_id[review.review_id] = review  # API-ul e mai proaspat decat CSV-ul

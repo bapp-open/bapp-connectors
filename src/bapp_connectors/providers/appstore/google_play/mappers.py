@@ -24,6 +24,7 @@ from bapp_connectors.core.dto import (
     WebhookEventType,
 )
 from bapp_connectors.core.reports import stable_key, to_decimal
+from bapp_connectors.providers.appstore.google_play.errors import GooglePlayWebhookError
 
 PROVIDER = "google_play"
 
@@ -296,14 +297,28 @@ RTDN_SUBSCRIPTION_MAP = {
 }
 
 
+def _notification_type(value) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
+
+
 def webhook_event_from_pubsub(message: dict) -> WebhookEvent:
     """`message` = corpul `message` din push-ul Pub/Sub; `data` e base64 cu JSON-ul RTDN."""
-    raw = base64.b64decode(message.get("data", "") or "").decode("utf-8") if message.get("data") else "{}"
-    rtdn = json.loads(raw) if raw else {}
+    if not message.get("messageId"):
+        raise GooglePlayWebhookError("Mesaj Pub/Sub fara messageId")
+    try:
+        raw = base64.b64decode(message.get("data") or "").decode("utf-8") if message.get("data") else "{}"
+        rtdn = json.loads(raw) if raw else {}
+    except (ValueError, TypeError) as exc:
+        raise GooglePlayWebhookError(f"RTDN invalid: {exc}") from exc
+    if not isinstance(rtdn, dict):
+        raise GooglePlayWebhookError("RTDN invalid: corpul nu este un obiect JSON")
     package_name = rtdn.get("packageName", "")
     if "subscriptionNotification" in rtdn:
         sub = rtdn["subscriptionNotification"]
-        kind = int(sub.get("notificationType", 0))
+        kind = _notification_type(sub.get("notificationType"))
         event_type = RTDN_SUBSCRIPTION_MAP.get(kind, WebhookEventType.UNKNOWN)
         provider_type = f"subscriptionNotification/{kind}"
         payload = {"purchase_token": sub.get("purchaseToken", ""), "product_id": sub.get("subscriptionId", ""), "package_name": package_name}
@@ -314,7 +329,7 @@ def webhook_event_from_pubsub(message: dict) -> WebhookEvent:
         payload = {"purchase_token": voided.get("purchaseToken", ""), "order_id": voided.get("orderId", ""), "product_type": voided.get("productType"), "refund_type": voided.get("refundType"), "package_name": package_name}
     elif "oneTimeProductNotification" in rtdn:
         one = rtdn["oneTimeProductNotification"]
-        event_type = WebhookEventType.PAYMENT_COMPLETED if int(one.get("notificationType", 0)) == 1 else WebhookEventType.UNKNOWN
+        event_type = WebhookEventType.PAYMENT_COMPLETED if _notification_type(one.get("notificationType")) == 1 else WebhookEventType.UNKNOWN
         provider_type = f"oneTimeProductNotification/{one.get('notificationType')}"
         payload = {"purchase_token": one.get("purchaseToken", ""), "product_id": one.get("sku", ""), "package_name": package_name}
     else:

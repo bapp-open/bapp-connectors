@@ -111,11 +111,38 @@ def test_earnings_missing_month_is_empty_page(adapter):
 
 
 def test_reviews_merge_csv_history_with_live_api(adapter):
-    page = adapter.list_reviews("ro.cbsoft.app", since=datetime(2026, 9, 1))
-    ids = {r.review_id for r in page.items}
-    assert ids == {"gp:AOqpTOE", "gp:NEW"}
-    csv_review = next(r for r in page.items if r.review_id == "gp:AOqpTOE")
+    ids: list[str] = []
+    cursor = None
+    while True:
+        page = adapter.list_reviews("ro.cbsoft.app", since=datetime(2026, 9, 1), cursor=cursor)
+        ids.extend(r.review_id for r in page.items)
+        cursor = page.cursor
+        if not page.has_more:
+            break
+    assert sorted(ids) == ["gp:AOqpTOE", "gp:NEW"]  # fiecare exact o data
+    first = adapter.list_reviews("ro.cbsoft.app", since=datetime(2026, 9, 1))
+    csv_review = next(r for r in first.items if r.review_id == "gp:AOqpTOE")
     assert csv_review.body == "Excelent"
+
+
+def test_month_objects_with_digits_in_package_name(fake_http):
+    extra = {
+        "reviews/reviews_com.foo_123456.app_202609.csv": b"x",
+        "earnings/earnings_202609_1.zip": b"x",
+    }
+
+    def list_objects(method, path, kwargs):
+        prefix = kwargs["params"].get("prefix", "")
+        return {"items": [{"name": n} for n in extra if n.startswith(prefix)]}
+
+    fake = FakeHttpClient(base_url=manifest.base_url)
+    fake.add("GET", "b/pubsite_prod_rev_123/o", list_objects)
+    a = GooglePlayAdapter(credentials=dict(CREDENTIALS), http_client=fake)
+    a.auth._fetch = lambda uri, assertion: {"access_token": "t", "expires_in": 3600}
+    assert a._month_objects("reviews/", 2026, 9) == ["reviews/reviews_com.foo_123456.app_202609.csv"]
+    assert a._month_objects("earnings/", 2026, 9) == ["earnings/earnings_202609_1.zip"]
+    assert a._month_objects("reviews/", 2026, 12) == []
+    assert a._month_objects("reviews/", 2026, 12) == []
 
 
 def test_reply_and_refunds_and_subscription(adapter):

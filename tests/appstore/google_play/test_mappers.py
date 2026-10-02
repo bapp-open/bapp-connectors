@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import base64
+import json
 from datetime import date
 from decimal import Decimal
 
-from bapp_connectors.core.dto import AppStoreProductType, FinancialTransactionType, SubscriptionStatus
+import pytest
+
+from bapp_connectors.core.dto import AppStoreProductType, FinancialTransactionType, SubscriptionStatus, WebhookEventType
+from bapp_connectors.providers.appstore.google_play.errors import GooglePlayWebhookError
 from bapp_connectors.providers.appstore.google_play.mappers import (
     refund_from_voided,
     review_from_api,
@@ -13,6 +18,7 @@ from bapp_connectors.providers.appstore.google_play.mappers import (
     sale_from_sales_row,
     subscription_from_v2,
     transactions_from_earnings_rows,
+    webhook_event_from_pubsub,
 )
 
 EARNINGS_BASE = {
@@ -132,3 +138,33 @@ def test_subscription_from_v2():
     assert sub.price_id == "pro_monthly"
     assert sub.cancel_at_period_end is False
     assert sub.extra["purchase_token"] == "tok"
+
+
+def _push(rtdn: dict, message_id: str = "m1") -> dict:
+    return {"data": base64.b64encode(json.dumps(rtdn).encode()).decode(), "messageId": message_id}
+
+
+def test_webhook_subscription_renewed():
+    event = webhook_event_from_pubsub(_push({"packageName": "ro.cbsoft.app", "eventTimeMillis": "1789120800000", "subscriptionNotification": {"notificationType": 2, "purchaseToken": "tok", "subscriptionId": "pro_monthly"}}))
+    assert event.event_type == WebhookEventType.SUBSCRIPTION_RENEWED
+    assert event.payload == {"purchase_token": "tok", "product_id": "pro_monthly", "package_name": "ro.cbsoft.app"}
+    assert event.idempotency_key == "m1" and event.event_id == "m1"
+    unknown = webhook_event_from_pubsub(_push({"subscriptionNotification": {"notificationType": "abc"}}))
+    assert unknown.event_type == WebhookEventType.UNKNOWN
+
+
+def test_webhook_voided():
+    event = webhook_event_from_pubsub(_push({"packageName": "ro.cbsoft.app", "voidedPurchaseNotification": {"purchaseToken": "tok", "orderId": "GPA.1", "productType": 1, "refundType": 1}}))
+    assert event.event_type == WebhookEventType.PURCHASE_REFUNDED
+    assert event.payload["order_id"] == "GPA.1"
+
+
+def test_webhook_rejects_bad_base64_and_missing_message_id():
+    with pytest.raises(GooglePlayWebhookError):
+        webhook_event_from_pubsub({"data": "!!!not-base64", "messageId": "m1"})
+    with pytest.raises(GooglePlayWebhookError):
+        webhook_event_from_pubsub({"data": base64.b64encode(b"\xff\xfe").decode(), "messageId": "m1"})
+    with pytest.raises(GooglePlayWebhookError):
+        webhook_event_from_pubsub({"data": base64.b64encode(b"[1]").decode(), "messageId": "m1"})
+    with pytest.raises(GooglePlayWebhookError, match="messageId"):
+        webhook_event_from_pubsub(_push({"packageName": "x"}, message_id=""))
