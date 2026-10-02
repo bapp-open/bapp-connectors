@@ -4,6 +4,10 @@
 Vanzari detaliate pe zi (unitati, brut, retururi, taxe, net in USD), rambursari si recenziile publice ale aplicatiilor.
 Comisionul Valve (30%, minus bonusul de tier) e **estimat** din `net_sales_usd`; se confirma cu raportul lunar din partner site.
 
+## Statistici
+- **Wishlist**: `get_app_stats` aduce cate o zi pe pagina, prin cheia financiara (`GetAppWishlistReporting`), incepand de la `app_min_date` a aplicatiei: adaugari, stergeri, achizitii si cadouri, ca total pe zi si pe tara (randurile pe tara nule se omit; o zi fara activitate da lista goala). Totalul adaugarilor poarta in `extra` platformele (windows/mac/linux). Valve poate revizui zilele recente, deci re-adu ultimele zile.
+- **Jucatori curenti** (`CURRENT_PLAYERS`): endpoint public, fara cheie, doar pentru ziua de azi; daca nu raspunde, raportul de wishlist iese oricum.
+
 ## Credentiale
 1. Steamworks > Users & Permissions > Manage Groups > **Create new group** de tip Financial API Group.
 2. Pe pagina grupului: **Web API Key** (cheia financiara, `financial_api_key`) si **Manage WebAPI Key > Whitelisted IPs**: adauga IP-ul de iesire al
