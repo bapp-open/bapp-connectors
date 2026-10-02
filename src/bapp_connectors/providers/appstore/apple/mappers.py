@@ -17,6 +17,8 @@ from bapp_connectors.core.dto import (
     ProviderMeta,
     Subscription,
     SubscriptionStatus,
+    WebhookEvent,
+    WebhookEventType,
 )
 from bapp_connectors.core.reports import stable_key, to_decimal
 from bapp_connectors.providers.appstore.apple.fiscal_calendar import payment_date
@@ -223,4 +225,51 @@ def subscription_from_server_status(status: int, transaction: dict, renewal: dic
             "auto_renew_product_id": renewal.get("autoRenewProductId", ""),
         },
         provider_meta=_meta({"transaction": transaction, "renewal": renewal, "status": status}, str(transaction.get("originalTransactionId", ""))),
+    )
+
+
+#: (notificationType, subtype) -> tip normalizat; subtype gol = orice subtype.
+APPLE_NOTIFICATION_MAP: dict[tuple[str, str], WebhookEventType] = {
+    ("SUBSCRIBED", ""): WebhookEventType.SUBSCRIPTION_CREATED,
+    ("DID_RENEW", ""): WebhookEventType.SUBSCRIPTION_RENEWED,
+    ("DID_FAIL_TO_RENEW", ""): WebhookEventType.SUBSCRIPTION_PAYMENT_FAILED,
+    ("GRACE_PERIOD_INITIATED", ""): WebhookEventType.SUBSCRIPTION_PAYMENT_FAILED,
+    ("EXPIRED", ""): WebhookEventType.SUBSCRIPTION_EXPIRED,
+    ("DID_CHANGE_RENEWAL_STATUS", "AUTO_RENEW_DISABLED"): WebhookEventType.SUBSCRIPTION_CANCELLED,
+    ("DID_CHANGE_RENEWAL_STATUS", ""): WebhookEventType.SUBSCRIPTION_UPDATED,
+    ("DID_CHANGE_RENEWAL_PREF", ""): WebhookEventType.SUBSCRIPTION_UPDATED,
+    ("PRICE_INCREASE", ""): WebhookEventType.SUBSCRIPTION_UPDATED,
+    ("RENEWAL_EXTENDED", ""): WebhookEventType.SUBSCRIPTION_UPDATED,
+    ("REFUND", ""): WebhookEventType.PURCHASE_REFUNDED,
+    ("REVOKE", ""): WebhookEventType.PURCHASE_REFUNDED,
+}
+
+
+def webhook_event_from_apple(decoded: dict, transaction: dict, renewal: dict) -> WebhookEvent:
+    kind = decoded.get("notificationType", "")
+    subtype = decoded.get("subtype", "") or ""
+    event_type = APPLE_NOTIFICATION_MAP.get((kind, subtype)) or APPLE_NOTIFICATION_MAP.get((kind, "")) or WebhookEventType.UNKNOWN
+    data = decoded.get("data") or {}
+    expires_ms = transaction.get("expiresDate")
+    signed_ms = decoded.get("signedDate")
+    return WebhookEvent(
+        event_id=decoded.get("notificationUUID", ""),
+        event_type=event_type,
+        provider=PROVIDER,
+        provider_event_type=f"{kind}/{subtype}" if subtype else kind,
+        payload={
+            "original_transaction_id": str(transaction.get("originalTransactionId", "")),
+            "transaction_id": str(transaction.get("transactionId", "")),
+            "product_id": transaction.get("productId", ""),
+            "bundle_id": data.get("bundleId", "") or transaction.get("bundleId", ""),
+            "environment": data.get("environment", ""),
+            "expires_at": datetime.fromtimestamp(expires_ms / 1000, tz=UTC).isoformat() if expires_ms else None,
+            "auto_renew": renewal.get("autoRenewStatus") == 1 if "autoRenewStatus" in renewal else None,
+            "status": data.get("status"),
+            "revocation_reason": transaction.get("revocationReason"),
+        },
+        idempotency_key=decoded.get("notificationUUID", ""),
+        received_at=datetime.fromtimestamp(signed_ms / 1000, tz=UTC) if signed_ms else datetime.now(UTC),
+        extra={"notification_type": kind, "subtype": subtype, "version": decoded.get("version", "")},
+        provider_meta=_meta({"decoded": decoded, "transaction": transaction, "renewal": renewal}, decoded.get("notificationUUID", "")),
     )

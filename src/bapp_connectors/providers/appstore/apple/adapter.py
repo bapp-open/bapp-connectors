@@ -28,6 +28,7 @@ from bapp_connectors.providers.appstore.apple.client import (
     AppleApiClient,
     AppleServerApiClient,
 )
+from bapp_connectors.providers.appstore.apple.errors import AppleWebhookError
 from bapp_connectors.providers.appstore.apple.fiscal_calendar import fiscal_periods_between
 from bapp_connectors.providers.appstore.apple.manifest import manifest
 from bapp_connectors.providers.appstore.apple.mappers import (
@@ -37,6 +38,7 @@ from bapp_connectors.providers.appstore.apple.mappers import (
     sale_from_sales_row,
     subscription_from_server_status,
     transaction_from_finance_row,
+    webhook_event_from_apple,
 )
 
 
@@ -218,10 +220,33 @@ class AppleAppStoreAdapter(AppStorePort, FinancialCapability, WebhookCapability)
             items = [t for t in items if t.transaction_type == transaction_type]
         return PaginatedResult(items=items, cursor=next_cursor, has_more=next_cursor is not None)
 
-    # ── WebhookCapability (implementat in Task 7) ──
+    # ── WebhookCapability (App Store Server Notifications V2) ──
+
+    def _decode_notification(self, body: bytes) -> tuple[dict, dict, dict]:
+        import json
+
+        from bapp_connectors.providers.appstore.apple.jws import decode_signed_payload
+
+        try:
+            envelope = json.loads(body)
+        except (ValueError, TypeError) as exc:
+            raise AppleWebhookError(f"Corp invalid: {exc}") from exc
+        signed = envelope.get("signedPayload") if isinstance(envelope, dict) else None
+        if not signed:
+            raise AppleWebhookError("Lipseste signedPayload")
+        decoded = decode_signed_payload(signed)
+        data = decoded.get("data") or {}
+        transaction = decode_signed_payload(data["signedTransactionInfo"]) if data.get("signedTransactionInfo") else {}
+        renewal = decode_signed_payload(data["signedRenewalInfo"]) if data.get("signedRenewalInfo") else {}
+        return decoded, transaction, renewal
 
     def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
-        raise NotImplementedError("Task 7")
+        try:
+            self._decode_notification(body)
+            return True
+        except AppleWebhookError:
+            return False
 
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
-        raise NotImplementedError("Task 7")
+        decoded, transaction, renewal = self._decode_notification(body)
+        return webhook_event_from_apple(decoded, transaction, renewal)
