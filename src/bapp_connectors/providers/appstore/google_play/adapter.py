@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import UTC, date, datetime, timedelta
 
 from bapp_connectors.core.capabilities import FinancialCapability, WebhookCapability
@@ -135,8 +136,12 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
         packages = self._require_packages("cumparaturile anulate")
         index, token = (int(cursor.split(":", 1)[0]), cursor.split(":", 1)[1] or None) if cursor else (0, None)
         package = packages[index]
-        start_ms = int(datetime.combine(start, datetime.min.time(), tzinfo=UTC).timestamp() * 1000)
-        end_ms = int(datetime.combine(end, datetime.max.time(), tzinfo=UTC).timestamp() * 1000)
+        now_ms = int(time.time() * 1000)
+        # voidedpurchases respinge endTime >= acum ("End time must be < current time") si serveste doar ultimele 30 de zile
+        end_ms = min(int(datetime.combine(end, datetime.max.time(), tzinfo=UTC).timestamp() * 1000), now_ms - 1000)
+        start_ms = max(int(datetime.combine(start, datetime.min.time(), tzinfo=UTC).timestamp() * 1000), now_ms - 30 * 86400 * 1000)
+        if start_ms >= end_ms:
+            return PaginatedResult(items=[], has_more=False)
         page = self.client.list_voided_purchases(package, start_ms, end_ms, token=token)
         items = [refund_from_voided(v, package) for v in page.get("voidedPurchases", [])]
         next_token = (page.get("tokenPagination") or {}).get("nextPageToken")

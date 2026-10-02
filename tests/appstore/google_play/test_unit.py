@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import io
 import zipfile
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
 
@@ -170,7 +171,8 @@ def test_month_objects_without_any_recognizable_stamp_raises():
 
 def test_reply_and_refunds_and_subscription(adapter):
     assert adapter.reply_to_review("ro.cbsoft.app", "gp:NEW", "Mersi").developer_response == "Mersi"
-    refunds = adapter.list_refunds(date(2026, 9, 1), date(2026, 9, 30))
+    with patch("time.time", return_value=datetime(2026, 9, 30, 12, tzinfo=UTC).timestamp()):
+        refunds = adapter.list_refunds(date(2026, 9, 1), date(2026, 9, 30))
     assert refunds.items[0].refund_id == "GPA.9"
     assert adapter.get_subscription("ro.cbsoft.app:tok").price_id == "pro_monthly"
 
@@ -179,3 +181,32 @@ def test_without_package_names_publisher_calls_are_not_implemented(fake_http):
     a = GooglePlayAdapter(credentials={"service_account_json": SERVICE_ACCOUNT, "bucket_uri": "gs://pubsite_prod_rev_123"}, http_client=fake_http)
     with pytest.raises(NotImplementedError, match="package_names"):
         a.reply_to_review("ro.cbsoft.app", "x", "y")
+
+
+def _voided_params(fake_http):
+    return [c.kwargs["params"] for c in fake_http.calls if "voidedpurchases" in c.path]
+
+
+def test_list_refunds_clamps_end_to_now(adapter, fake_http):
+    now = datetime(2026, 9, 30, 12, tzinfo=UTC).timestamp()
+    with patch("time.time", return_value=now):
+        adapter.list_refunds(date(2026, 9, 25), date(2026, 9, 30))
+    params = _voided_params(fake_http)[0]
+    assert int(params["endTime"]) < int(now * 1000)
+
+
+def test_list_refunds_clamps_start_to_30_days(adapter, fake_http):
+    now = datetime(2026, 9, 30, 12, tzinfo=UTC).timestamp()
+    with patch("time.time", return_value=now):
+        adapter.list_refunds(date(2026, 6, 1), date(2026, 9, 29))
+    params = _voided_params(fake_http)[0]
+    assert int(params["startTime"]) == int(now * 1000) - 30 * 86400 * 1000
+
+
+def test_list_refunds_window_entirely_too_old_is_empty(adapter, fake_http):
+    now = datetime(2026, 9, 30, 12, tzinfo=UTC)
+    old = (now - timedelta(days=60)).date()
+    with patch("time.time", return_value=now.timestamp()):
+        page = adapter.list_refunds(old, old)
+    assert page.items == [] and page.has_more is False
+    assert _voided_params(fake_http) == []
