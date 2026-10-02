@@ -39,7 +39,10 @@ class FakeHttpClient:
         self.responses.append((method, path_substring, response))
 
     def call(self, method: str, path: str, direct_response: bool = False, headers: dict | None = None, **kwargs):
-        self.calls.append(RecordedCall(method=method, path=path, kwargs={"headers": headers, **kwargs}))
+        recorded = {"headers": headers, **kwargs}
+        if direct_response:
+            recorded["direct_response"] = True
+        self.calls.append(RecordedCall(method=method, path=path, kwargs=recorded))
         for rule_method, substring, response in self.responses:
             if (rule_method is None or rule_method == method) and substring in path:
                 if callable(response):
