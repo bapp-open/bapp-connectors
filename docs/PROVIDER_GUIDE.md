@@ -588,6 +588,7 @@ class ProviderFamily(StrEnum):
     MESSAGING = "messaging"
     STORAGE = "storage"
     LLM = "llm"
+    APPSTORE = "appstore"
     ACCOUNTING = "accounting"   # <-- new family
 ```
 
@@ -676,6 +677,14 @@ providers/accounting/
 implement. List every port in `capabilities` and implement them all. cPanel is
 filed under `hosting` and also implements `DnsPort`, so a DNS UI finds it with
 `registry.list_providers(capability=DnsPort)` without knowing about hosting.
+
+### Providers whose data comes as report files
+
+Apple, Google Play and Steam deliver sales as daily/monthly files, not as per-order endpoints.
+Use `bapp_connectors.core.reports` (`gunzip_tsv_rows`, `unzip_csv_rows`, `daily_page`, `monthly_page`)
+and encode "the next period not yet fetched" in `PaginatedResult.cursor`; one page = one file.
+Dependencies beyond `requests`/`pydantic` go in an extra (`appstore = ["PyJWT[crypto]>=2.8"]`) and the
+provider's `__init__.py` registers only if the import succeeds (see `providers/storage/s3/__init__.py`).
 
 ---
 

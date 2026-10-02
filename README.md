@@ -37,9 +37,9 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **LLM** | Anthropic, Google Gemini, Ollama, OpenAI | 4 |
 | **Feed** | Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro | 4 |
 | **Network** | pfSense | 1 |
+| **Hosting** | cPanel | 1 |
 | **Ads** | Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads | 6 |
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
-| **Hosting** | cPanel | 1 |
 | **Social** | Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts | 7 |
 | | **Total** | **69** |
 <!-- PROVIDERS:END -->
@@ -248,9 +248,9 @@ packages/connectors/
 │       ├── llm/           # Anthropic, Google Gemini, Ollama, OpenAI
 │       ├── feed/          # Compari.ro, Facebook Commerce, Google Merchant Center, Okazii.ro
 │       ├── network/       # pfSense
+│       ├── hosting/       # cPanel
 │       ├── ads/           # Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads
 │       ├── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
-│       ├── hosting/       # cPanel
 │       └── social/        # Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts
 <!-- STRUCTURE:END -->
 ├── packages/django/        # Django integration (separate uv workspace)

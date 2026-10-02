@@ -6,7 +6,7 @@ This file provides context for Claude Code when working in this repository.
 
 Ports-and-adapters integration framework. Zero Django dependencies in the core package.
 
-### Provider Families (13)
+### Provider Families (14)
 
 | Family | Port | Providers |
 |--------|------|-----------|
@@ -23,6 +23,7 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 | network | `NetworkPort` | pfSense |
 | hosting | `HostingPort` | cPanel |
 | dns | `DnsPort` | cPanel (through its hosting connection) |
+| appstore | `AppStorePort` | Apple App Store, Google Play, Steam |
 
 ### Provider File Structure (7 files each)
 
@@ -50,6 +51,7 @@ providers/{family}/{provider}/
   capabilities alike, and the registry only checks `issubclass`. cPanel is filed under `hosting`
   but also satisfies `DnsPort`, so `registry.list_providers(capability=DnsPort)` finds it.
   Family says what a provider *is*; ports say what it *can do*.
+- **Report-file providers (appstore):** data arrives as daily/monthly files; `core/reports.py` helpers; `PaginatedResult.cursor` = next period; one page = one file.
 - **Universal ads insights:** `AdsPort.get_insights(level, ...)` returns normalized `AdInsights` on the campaign → ad group → ad hierarchy (Meta "ad set" = TikTok "adgroup" = Google "ad group"); status changes go through `set_*_status`
 
 ### Optional Capabilities

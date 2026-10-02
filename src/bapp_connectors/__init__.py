@@ -7,4 +7,4 @@ Usage:
     from bapp_connectors.core.dto import Order, Product, Shipment
 """
 
-__version__ = "0.1.0"
+__version__ = "0.41.0"
