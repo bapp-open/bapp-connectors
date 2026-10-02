@@ -52,6 +52,12 @@ def test_missing_report_returns_none(fake_http, client):
     assert client.download_sales_report("2026-09-01") is None
 
 
+def test_gone_report_returns_none(fake_http, client):
+    """410 GONE: rapoartele zilnice de vanzari exista doar 365 de zile."""
+    fake_http.add("GET", "salesReports", FakeResponse(status_code=410, text="GONE_ERROR Report is no longer available"))
+    assert client.download_sales_report("2024-09-29") is None
+
+
 def test_auth_failure_raises(fake_http, client):
     fake_http.add("GET", "financeReports", FakeResponse(status_code=401, text="NOT_AUTHORIZED"))
     with pytest.raises(AuthenticationError):

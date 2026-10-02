@@ -48,8 +48,11 @@ class AppleApiClient:
             headers={"Accept": "application/a-gzip"},
             direct_response=True,
         )
-        if getattr(response, "status_code", 0) == 404:
-            return None  # raport inca nepublicat / fara vanzari in ziua respectiva
+        # 404 = raport inca nepublicat / fara vanzari in ziua respectiva.
+        # 410 = retentie depasita; Apple: "Report is no longer available. Daily reports are available for
+        # 365 days, weekly reports for 52 weeks, monthly reports for 12 months, and yearly reports indefinitely."
+        if getattr(response, "status_code", 0) in (404, 410):
+            return None
         if not getattr(response, "ok", False):
             raise_for_report_response(response, what=what)
         return response.content
