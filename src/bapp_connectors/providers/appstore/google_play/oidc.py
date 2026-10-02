@@ -28,7 +28,12 @@ def fetch_google_jwks(http_client, cache: dict | None = None, *, force: bool = F
     return jwks
 
 
-def verify_google_id_token(token: str, *, audience: str, jwks: dict) -> dict:
+def verify_google_id_token(token: str, *, audience: str, jwks: dict, service_account_email: str) -> dict:
+    """Semnatura, `aud`, `iss`, `exp` si contul de serviciu (`email` + `email_verified`) cu care semneaza Pub/Sub.
+
+    Fara legatura pe `email`, orice token Google valid emis pentru acelasi audience (de exemplu de alt proiect GCP
+    care trimite push la acelasi URL) ar trece.
+    """
     import jwt
     from jwt.algorithms import RSAAlgorithm
 
@@ -51,4 +56,8 @@ def verify_google_id_token(token: str, *, audience: str, jwks: dict) -> dict:
         raise GooglePlayWebhookError(f"Token OIDC respins: {exc}") from exc
     if claims.get("iss") not in GOOGLE_ISSUERS:
         raise GooglePlayWebhookError(f"Issuer neasteptat: {claims.get('iss')}")
+    if not service_account_email or claims.get("email") != service_account_email:
+        raise GooglePlayWebhookError(f"Token OIDC emis pentru alt cont de serviciu: {claims.get('email')!r}")
+    if claims.get("email_verified") is not True:
+        raise GooglePlayWebhookError("Token OIDC fara email_verified=true")
     return claims

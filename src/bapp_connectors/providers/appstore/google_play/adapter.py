@@ -178,7 +178,10 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
     # ── WebhookCapability (Pub/Sub push) — completat in Task 10 ──
 
     def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
-        """Fara `pubsub_audience` acceptam push-ul (verificarea OIDC e optionala la Pub/Sub)."""
+        """Fara `pubsub_audience` acceptam push-ul (verificarea OIDC e optionala la Pub/Sub).
+
+        Cu `pubsub_audience` dar fara `pubsub_service_account_email` respingem tot: configurare incompleta = fail closed.
+        """
         from bapp_connectors.providers.appstore.google_play.oidc import (
             UnknownKeyIdError,
             fetch_google_jwks,
@@ -188,6 +191,9 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
         audience = secret or self.credentials.get("pubsub_audience") or ""
         if not audience:
             return True
+        service_account_email = (self.credentials.get("pubsub_service_account_email") or "").strip()
+        if not service_account_email:
+            return False
         authorization = headers.get("Authorization") or headers.get("authorization") or ""
         if not authorization.lower().startswith("bearer "):
             return False
@@ -195,11 +201,15 @@ class GooglePlayAdapter(AppStorePort, FinancialCapability, WebhookCapability):
         try:
             jwks = fetch_google_jwks(self.http, self._jwks_cache)
             try:
-                verify_google_id_token(token, audience=audience, jwks=jwks)
+                verify_google_id_token(
+                    token, audience=audience, jwks=jwks, service_account_email=service_account_email
+                )
             except UnknownKeyIdError:
                 # Google a rotit cheile: o singura reincarcare fortata, apoi inca o verificare.
                 jwks = fetch_google_jwks(self.http, self._jwks_cache, force=True)
-                verify_google_id_token(token, audience=audience, jwks=jwks)
+                verify_google_id_token(
+                    token, audience=audience, jwks=jwks, service_account_email=service_account_email
+                )
             return True
         except GooglePlayWebhookError:
             return False

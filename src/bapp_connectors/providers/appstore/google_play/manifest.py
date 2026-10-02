@@ -7,12 +7,10 @@ from bapp_connectors.core.manifest import (
     ProviderManifest,
     RateLimitConfig,
     RetryConfig,
-    SettingsConfig,
-    SettingsField,
     WebhookConfig,
 )
 from bapp_connectors.core.ports import AppStorePort
-from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
+from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
 
 manifest = ProviderManifest(
     name="google_play",
@@ -28,13 +26,9 @@ manifest = ProviderManifest(
             CredentialField(name="service_account_json", label="Service account (JSON)", sensitive=True, help_text="Cheia JSON a service account-ului; contul trebuie invitat in Play Console cu „View financial data” si „Reply to reviews”."),
             CredentialField(name="bucket_uri", label="Cloud Storage URI", role="endpoint", help_text="Play Console > Download reports > „Copy Cloud Storage URI” (gs://pubsite_prod_rev_...)."),
             CredentialField(name="package_names", label="Pachete (package names)", required=False, help_text="Separate prin virgula. Necesare pentru recenzii live, cumparaturi anulate si abonamente."),
-            CredentialField(name="pubsub_audience", label="Audience OIDC Pub/Sub", required=False, help_text="Daca push-ul Pub/Sub trimite token OIDC, audience-ul configurat; gol = fara verificare."),
+            CredentialField(name="pubsub_audience", label="Audience OIDC Pub/Sub", required=False, help_text="Daca push-ul Pub/Sub trimite token OIDC, audience-ul configurat; gol = push-ul e acceptat FARA verificare. Setat fara pubsub_service_account_email = toate notificarile sunt respinse."),
+            CredentialField(name="pubsub_service_account_email", label="Cont de serviciu OIDC Pub/Sub", required=False, help_text="Contul de serviciu cu care subscriptia push semneaza tokenul OIDC; obligatoriu cand pubsub_audience e setat."),
         ],
-    ),
-    settings=SettingsConfig(
-        fields=[
-            SettingsField(name="include_free_apps", label="Include aplicatiile gratuite", field_type=FieldType.BOOL, default=True),
-        ]
     ),
     capabilities=[AppStorePort, FinancialCapability, WebhookCapability],
     rate_limit=RateLimitConfig(requests_per_second=2.0, burst=10),

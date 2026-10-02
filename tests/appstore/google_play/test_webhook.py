@@ -36,8 +36,11 @@ def rsa_key():
     return key, jwks
 
 
-def _adapter(fake_http, audience: str = ""):
-    creds = {**CREDENTIALS, "pubsub_audience": audience}
+SA_EMAIL = "push@p.iam.gserviceaccount.com"
+
+
+def _adapter(fake_http, audience: str = "", email: str = SA_EMAIL):
+    creds = {**CREDENTIALS, "pubsub_audience": audience, "pubsub_service_account_email": email}
     a = GooglePlayAdapter(credentials=creds, http_client=fake_http)
     a.auth._fetch = lambda uri, assertion: {"access_token": "t", "expires_in": 3600}
     return a
@@ -74,7 +77,7 @@ def test_verify_with_audience_checks_oidc_token(rsa_key):
     fake = FakeHttpClient()
     fake.add("GET", "oauth2/v3/certs", jwks)
     adapter = _adapter(fake, audience="https://bapp.example/hook/1")
-    good = jwt.encode({"iss": "https://accounts.google.com", "aud": "https://bapp.example/hook/1", "email": "sa@p.iam.gserviceaccount.com", "exp": 4_000_000_000}, key, algorithm="RS256", headers={"kid": "k1"})
+    good = jwt.encode({"iss": "https://accounts.google.com", "aud": "https://bapp.example/hook/1", "email": SA_EMAIL, "email_verified": True, "exp": 4_000_000_000}, key, algorithm="RS256", headers={"kid": "k1"})
     assert adapter.verify_webhook({"Authorization": f"Bearer {good}"}, _body({"packageName": "x"})) is True
     bad_aud = jwt.encode({"iss": "https://accounts.google.com", "aud": "https://other", "exp": 4_000_000_000}, key, algorithm="RS256", headers={"kid": "k1"})
     assert adapter.verify_webhook({"Authorization": f"Bearer {bad_aud}"}, _body({"packageName": "x"})) is False
@@ -85,7 +88,7 @@ AUD = "https://bapp.example/hook/1"
 
 
 def _claims(**over) -> dict:
-    return {"iss": "https://accounts.google.com", "aud": AUD, "exp": 4_000_000_000, **over}
+    return {"iss": "https://accounts.google.com", "aud": AUD, "email": SA_EMAIL, "email_verified": True, "exp": 4_000_000_000, **over}
 
 
 def _verify(fake, token: str) -> bool:
@@ -193,3 +196,32 @@ def test_jwks_fetch_does_not_send_service_account_auth(rsa_key):
     token = jwt.encode(_claims(), key, algorithm="RS256", headers={"kid": "k1"})
     assert _verify(fake, token) is True
     assert fake.calls[0].kwargs["headers"] == {"Authorization": None}
+
+
+def test_verify_rejects_token_for_other_service_account(rsa_key):
+    key, jwks = rsa_key
+    token = jwt.encode(_claims(email="other@evil.iam.gserviceaccount.com"), key, algorithm="RS256", headers={"kid": "k1"})
+    assert _verify(_fake_with(jwks), token) is False
+
+
+def test_verify_rejects_missing_email_verified(rsa_key):
+    key, jwks = rsa_key
+    claims = _claims()
+    del claims["email_verified"]
+    token = jwt.encode(claims, key, algorithm="RS256", headers={"kid": "k1"})
+    assert _verify(_fake_with(jwks), token) is False
+
+
+def test_verify_rejects_email_verified_string(rsa_key):
+    key, jwks = rsa_key
+    token = jwt.encode(_claims(email_verified="true"), key, algorithm="RS256", headers={"kid": "k1"})
+    assert _verify(_fake_with(jwks), token) is False
+
+
+def test_verify_audience_without_email_credential_is_fail_closed(rsa_key):
+    key, jwks = rsa_key
+    fake = _fake_with(jwks)
+    token = jwt.encode(_claims(), key, algorithm="RS256", headers={"kid": "k1"})
+    adapter = _adapter(fake, audience=AUD, email="")
+    assert adapter.verify_webhook({"Authorization": f"Bearer {token}"}, _body({"packageName": "x"})) is False
+    assert _certs_calls(fake) == 0

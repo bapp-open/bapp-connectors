@@ -12,11 +12,16 @@ proaspete din API) cu raspuns, cumparaturile anulate, starea abonamentelor si no
 4. `package_names`: pachetele aplicatiilor, separate prin virgula.
 5. Notificari: Play Console > Monetization setup > Real-time developer notifications > topic Pub/Sub; in Cloud Console
    creeaza o subscriptie **push** catre webhook-ul conexiunii. Daca activezi autentificarea push (OIDC), pune audience-ul in
-   `pubsub_audience`.
+   `pubsub_audience` si contul de serviciu ales la „Enable authentication” in `pubsub_service_account_email`
+   (amandoua sau niciunul: audience fara email = toate notificarile sunt respinse).
 
 ## Capcane
 - Raportul lunii apare in jurul datei de 5 a lunii urmatoare; pana atunci pagina e goala, nu eroare.
 - `reviews.list` din API da **doar ultimele 7 zile**; istoricul vine din CSV-urile lunare (UTF-16).
 - `voidedpurchases` tine **30 de zile** inapoi.
 - `payout_id = "YYYYMM:<moneda comerciantului>"`, o plata pe luna.
-- Push-ul Pub/Sub e acceptat fara token OIDC cand `pubsub_audience` e gol; cu audience setat, tokenul e verificat (RS256, iss Google, aud) si cheile JWKS se re-aduc o data la `kid` necunoscut.
+- **Fara `pubsub_audience` push-ul e acceptat NEVERIFICAT**: oricine stie URL-ul webhook-ului poate trimite notificari.
+  Cu audience setat, tokenul e verificat (RS256, iss Google, aud, `email` = `pubsub_service_account_email` cu
+  `email_verified`) si cheile JWKS se re-aduc o data la `kid` necunoscut.
+- Notificarile RTDN sunt doar **semnale**: nu poarta starea abonamentului. Starea se reciteste mereu cu
+  `get_subscription` (subscriptionsv2) inainte de orice decizie (acces, facturare).
