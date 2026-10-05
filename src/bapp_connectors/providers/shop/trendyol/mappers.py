@@ -284,10 +284,13 @@ def products_from_trendyol(response: dict) -> PaginatedResult[Product]:
     """
     content = response.get("content") or []
     products = [product_from_trendyol(row) for row in product_rows_from_trendyol(content)]
-    total_pages = response.get("totalPages", 1)
-    page = response.get("page", 0)
     token = response.get("nextPageToken")
-    has_more = bool(content) and page + 1 < total_pages
+    # A page fetched with a token comes back with `page: null`, so the page count says
+    # nothing there: the listing goes on for as long as Trendyol hands out a token and
+    # the page is not empty.
+    page = response.get("page") or 0
+    total_pages = response.get("totalPages") or 1
+    has_more = bool(content) and (bool(token) or page + 1 < total_pages)
     cursor = None
     if has_more:
         cursor = f"{PRODUCT_TOKEN_CURSOR}{token}" if token else str(page + 1)

@@ -147,6 +147,29 @@ def test_get_products_continues_with_the_page_token():
 
 
 @responses.activate
+def test_a_token_page_has_no_page_number():
+    # as the live API answers: `page` is null on a page fetched with a token
+    responses.add(
+        responses.GET, PRODUCTS_V2_URL, json={**PRODUCTS_V2_PAGE, "page": None, "nextPageToken": "tok-2"}, status=200
+    )
+
+    result = _create_adapter().get_products(cursor="token:tok-1")
+
+    assert (result.has_more, result.cursor) == (True, "token:tok-2")
+
+
+@responses.activate
+def test_an_empty_token_page_ends_the_listing():
+    responses.add(
+        responses.GET, PRODUCTS_V2_URL, json={"content": [], "page": None, "nextPageToken": "tok-3"}, status=200
+    )
+
+    result = _create_adapter().get_products(cursor="token:tok-2")
+
+    assert (result.has_more, result.cursor) == (False, None)
+
+
+@responses.activate
 def test_get_products_stops_on_the_last_page():
     responses.add(responses.GET, PRODUCTS_V2_URL, json={**PRODUCTS_V2_PAGE, "page": 2}, status=200)
 
