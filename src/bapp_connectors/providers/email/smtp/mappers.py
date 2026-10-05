@@ -16,7 +16,7 @@ from bapp_connectors.core.dto import (
     EmailDetail,
     EmailSummary,
 )
-from bapp_connectors.providers.email.smtp.client import _decode_header_value
+from bapp_connectors.providers.email.smtp.client import _decode_bytes, _decode_header_value
 
 logger = logging.getLogger(__name__)
 
@@ -124,13 +124,11 @@ def message_to_detail(
         elif content_type == "text/plain" and not text_body:
             payload = part.get_payload(decode=True)
             if payload:
-                charset = part.get_content_charset() or "utf-8"
-                text_body = payload.decode(charset, errors="replace")
+                text_body = _decode_bytes(payload, part.get_content_charset())
         elif content_type == "text/html" and not html_body:
             payload = part.get_payload(decode=True)
             if payload:
-                charset = part.get_content_charset() or "utf-8"
-                html_body = payload.decode(charset, errors="replace")
+                html_body = _decode_bytes(payload, part.get_content_charset())
 
     # Parse flags from the message (not available in RFC822 fetch directly,
     # but the adapter passes them via headers if needed)

@@ -158,6 +158,23 @@ class SMTPClient:
                 connection.quit()
 
 
+def _decode_bytes(data: bytes, charset: str | None) -> str:
+    """Decode bytes with the charset a message declares, whatever it declares.
+
+    The charset is free text written by the sending software. Python reports raw
+    8-bit header bytes as ``unknown-8bit``, and mailers invent names of their own;
+    ``bytes.decode`` raises LookupError for those, and one such message used to
+    fail the fetch of the whole folder on every run.
+    """
+    try:
+        return data.decode(charset or "utf-8", errors="replace")
+    except LookupError:
+        try:
+            return data.decode("utf-8")
+        except UnicodeDecodeError:
+            return data.decode("latin-1")
+
+
 def _decode_header_value(value: str) -> str:
     """Decode an RFC 2047 encoded header into a plain string."""
     if not value:
@@ -166,7 +183,7 @@ def _decode_header_value(value: str) -> str:
     decoded: list[str] = []
     for part, charset in parts:
         if isinstance(part, bytes):
-            decoded.append(part.decode(charset or "utf-8", errors="replace"))
+            decoded.append(_decode_bytes(part, charset))
         else:
             decoded.append(part)
     return " ".join(decoded)
