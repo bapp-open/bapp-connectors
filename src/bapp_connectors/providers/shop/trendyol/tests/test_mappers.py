@@ -93,8 +93,18 @@ def test_product_from_trendyol():
 def test_products_from_trendyol_pagination():
     response = {
         "content": [
-            {"productMainId": "1", "barcode": "B1", "title": "P1", "salePrice": 10, "quantity": 5, "archived": False},
-            {"productMainId": "2", "barcode": "B2", "title": "P2", "salePrice": 20, "quantity": 10, "archived": False},
+            {
+                "contentId": 1,
+                "productMainId": "1",
+                "title": "P1",
+                "variants": [{"barcode": "B1", "price": {"salePrice": 10}, "stock": {"quantity": 5}}],
+            },
+            {
+                "contentId": 2,
+                "productMainId": "2",
+                "title": "P2",
+                "variants": [{"barcode": "B2", "price": {"salePrice": 20}, "stock": {"quantity": 10}}],
+            },
         ],
         "totalPages": 3,
         "totalElements": 6,
@@ -103,7 +113,7 @@ def test_products_from_trendyol_pagination():
     }
     result = products_from_trendyol(response)
 
-    assert len(result.items) == 2
+    assert [(p.barcode, p.price, p.stock) for p in result.items] == [("B1", 10, 5), ("B2", 20, 10)]
     assert result.has_more is True
     assert result.cursor == "1"  # next page
     assert result.total == 6

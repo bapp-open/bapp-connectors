@@ -101,21 +101,42 @@ class TrendyolApiClient:
 
     # ── Products ──
 
-    def get_products(self, page: int = 0, per_page: int = 100, approved: bool | None = None, **kwargs) -> dict:
-        params: dict[str, Any] = {
-            "page": page,
-            "size": per_page,
-            "sort": "createdDate,desc",
-        }
-        if approved is not None:
-            params["approved"] = approved
-        extra_params = kwargs.pop("params", {})
-        params.update(extra_params)
-        return self._call("GET", f"product/sellers/{self.seller_id}/products", params=params, **kwargs)
+    # Product v2 lists at most 100 contents per page and at most page x size = 10,000;
+    # past that the `nextPageToken` of the previous answer continues the listing.
+    PRODUCTS_PAGE_SIZE = 100
 
-    def batch_update_products(self, products: list[dict], **kwargs) -> dict:
-        data = _json_encode({"items": products})
-        return self._call("PUT", f"product/sellers/{self.seller_id}/products/batch", data=data, **kwargs)
+    def get_products(
+        self,
+        page: int = 0,
+        per_page: int = PRODUCTS_PAGE_SIZE,
+        approved: bool | None = None,
+        next_page_token: str | None = None,
+        **kwargs,
+    ) -> dict:
+        """Approved products, from Product v2 (`products/approved`).
+
+        Product v1 (`GET product/sellers/{id}/products`) is switched off by Trendyol
+        on 2026-10-15. v2 groups the listing by content, with the barcodes under
+        `variants`; the answer is returned as Trendyol sends it. `approved` is kept
+        for callers of the v1 signature: this endpoint only lists approved products.
+        """
+        params: dict[str, Any] = {"size": min(per_page, self.PRODUCTS_PAGE_SIZE)}
+        if next_page_token:
+            params["nextPageToken"] = next_page_token
+        else:
+            params["page"] = page
+        params.update(kwargs.pop("params", None) or {})
+        return self._call("GET", f"product/sellers/{self.seller_id}/products/approved", params=params, **kwargs)
+
+    def batch_update_content(self, items: list[dict], **kwargs) -> dict:
+        """Update the content (title, description...) of approved products, Product v2.
+
+        Each item carries `contentId` plus only the fields to change; at most 1,000 per call.
+        """
+        data = _json_encode({"items": items})
+        return self._call(
+            "POST", f"product/sellers/{self.seller_id}/products/content-bulk-update", data=data, **kwargs
+        )
 
     def batch_update_price_inventory(self, products: list[dict], **kwargs) -> dict:
         data = _json_encode({"items": products})

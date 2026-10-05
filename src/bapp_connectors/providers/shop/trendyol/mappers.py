@@ -244,16 +244,57 @@ def product_from_trendyol(data: dict) -> Product:
     )
 
 
+PRODUCT_TOKEN_CURSOR = "token:"
+
+
+def product_rows_from_trendyol(contents: list[dict]) -> list[dict]:
+    """Flatten a Product v2 listing to one row per barcode.
+
+    v2 groups products by content, with the barcodes under `variants` and price and
+    stock nested one level further. The rows keep the flat keys of the v1 listing
+    (`barcode`, `salePrice`, `quantity`...) plus `contentId`, which content updates need.
+    """
+    rows = []
+    for content in contents:
+        for variant in content.get("variants") or []:
+            price = variant.get("price") or {}
+            rows.append(
+                {
+                    "contentId": content.get("contentId"),
+                    "productMainId": content.get("productMainId"),
+                    "title": content.get("title", ""),
+                    "barcode": variant.get("barcode", ""),
+                    "stockCode": variant.get("stockCode", ""),
+                    "archived": bool(variant.get("archived")),
+                    "onSale": variant.get("onSale"),
+                    "salePrice": price.get("salePrice") or 0,
+                    "listPrice": price.get("listPrice"),
+                    "quantity": (variant.get("stock") or {}).get("quantity"),
+                    "vatRate": variant.get("vatRate"),
+                }
+            )
+    return rows
+
+
 def products_from_trendyol(response: dict) -> PaginatedResult[Product]:
-    """Map a paginated Trendyol products response."""
+    """Map a paginated Trendyol Product v2 response.
+
+    The cursor is the next page number, or `token:<nextPageToken>` when Trendyol
+    hands one out (the only way past 10,000 products).
+    """
     content = response.get("content") or []
-    products = [product_from_trendyol(p) for p in content]
+    products = [product_from_trendyol(row) for row in product_rows_from_trendyol(content)]
     total_pages = response.get("totalPages", 1)
     page = response.get("page", 0)
+    token = response.get("nextPageToken")
+    has_more = bool(content) and page + 1 < total_pages
+    cursor = None
+    if has_more:
+        cursor = f"{PRODUCT_TOKEN_CURSOR}{token}" if token else str(page + 1)
     return PaginatedResult(
         items=products,
-        cursor=str(page + 1) if page + 1 < total_pages else None,
-        has_more=page + 1 < total_pages,
+        cursor=cursor,
+        has_more=has_more,
         total=response.get("totalElements"),
     )
 

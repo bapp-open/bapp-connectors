@@ -35,6 +35,7 @@ from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.providers.shop.trendyol.client import TrendyolApiClient
 from bapp_connectors.providers.shop.trendyol.manifest import TRENDYOL_LIVE_URL, TRENDYOL_STAGING_URL, manifest
 from bapp_connectors.providers.shop.trendyol.mappers import (
+    PRODUCT_TOKEN_CURSOR,
     TRENDYOL_STOREFRONT_CURRENCY,
     order_from_trendyol,
     orders_from_trendyol,
@@ -120,8 +121,10 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
         return order_from_trendyol(data)
 
     def get_products(self, cursor: str | None = None) -> PaginatedResult[Product]:
-        page = int(cursor) if cursor else 0
-        response = self.client.get_products(page=page, approved=True)
+        if cursor and cursor.startswith(PRODUCT_TOKEN_CURSOR):
+            response = self.client.get_products(next_page_token=cursor[len(PRODUCT_TOKEN_CURSOR) :])
+        else:
+            response = self.client.get_products(page=int(cursor) if cursor else 0)
         return products_from_trendyol(response)
 
     def update_product_stock(self, product_id: str, quantity: int) -> None:
@@ -141,47 +144,68 @@ class TrendyolShopAdapter(ShopPort, BulkUpdateCapability, InvoiceAttachmentCapab
 
     def bulk_update_products(self, updates: list[ProductUpdate]) -> BulkResult:
         price_inventory_items = []
-        product_items = []
+        name_updates = []
 
         for update in updates:
-            item: dict = {"barcode": update.barcode or update.product_id}
-            has_name = update.name is not None
-
+            barcode = update.barcode or update.product_id
+            item: dict = {"barcode": barcode}
             if update.price is not None:
                 item["salePrice"] = str(update.price)
                 item["listPrice"] = str(update.price)
             if update.stock is not None:
                 item["quantity"] = update.stock
-
-            if has_name:
-                item["title"] = update.name
-                product_items.append(item)
-            else:
+            if len(item) > 1:
                 price_inventory_items.append(item)
+            if update.name is not None:
+                name_updates.append((barcode, update.name, update.extra.get("contentId")))
 
-        succeeded = 0
+        failed = set()
         errors = []
 
         if price_inventory_items:
             try:
                 self.client.batch_update_price_inventory(price_inventory_items)
-                succeeded += len(price_inventory_items)
             except Exception as e:
+                failed.update(item["barcode"] for item in price_inventory_items)
                 errors.append({"type": "price_inventory", "error": str(e), "count": len(price_inventory_items)})
 
-        if product_items:
-            try:
-                self.client.batch_update_products(product_items)
-                succeeded += len(product_items)
-            except Exception as e:
-                errors.append({"type": "product", "error": str(e), "count": len(product_items)})
+        if name_updates:
+            # The title belongs to the content, which Product v2 addresses by contentId.
+            content_items = {}
+            for barcode, name, content_id in name_updates:
+                try:
+                    # `extra["contentId"]` (as get_products returns it) saves the lookup
+                    content_id = content_id or self._content_id_for_barcode(barcode)
+                except Exception as e:
+                    failed.add(barcode)
+                    errors.append({"type": "product", "error": str(e), "barcode": barcode})
+                    continue
+                if content_id is None:
+                    failed.add(barcode)
+                    errors.append({"type": "product", "error": "No approved product with this barcode.", "barcode": barcode})
+                    continue
+                content_items[content_id] = (barcode, name)
+            if content_items:
+                try:
+                    self.client.batch_update_content(
+                        [{"contentId": content_id, "title": name} for content_id, (_, name) in content_items.items()]
+                    )
+                except Exception as e:
+                    failed.update(barcode for barcode, _ in content_items.values())
+                    errors.append({"type": "product", "error": str(e), "count": len(content_items)})
 
+        failed_count = sum(1 for update in updates if (update.barcode or update.product_id) in failed)
         return BulkResult(
             total=len(updates),
-            succeeded=succeeded,
-            failed=len(updates) - succeeded,
+            succeeded=len(updates) - failed_count,
+            failed=failed_count,
             errors=errors,
         )
+
+    def _content_id_for_barcode(self, barcode: str):
+        response = self.client.get_products(params={"barcode": barcode})
+        content = response.get("content") or []
+        return content[0].get("contentId") if content else None
 
     # ── ShippingCapability ──
 

@@ -38,8 +38,8 @@ Trendyol marketplace integration for orders, products, and inventory management.
 |--------|----------|---------|
 | GET | `webhook/sellers/{sellerId}/webhooks` | List webhooks (used as auth test) |
 | GET | `order/sellers/{sellerId}/orders` | List orders (paginated, with filters) |
-| GET | `product/sellers/{sellerId}/products` | List products (paginated) |
-| PUT | `product/sellers/{sellerId}/products/batch` | Batch update products (name, etc.) |
+| GET | `product/sellers/{sellerId}/products/approved` | List approved products (Product v2, max 100 per page) |
+| POST | `product/sellers/{sellerId}/products/content-bulk-update` | Batch update content (title, etc.; Product v2) |
 | POST | `inventory/sellers/{sellerId}/products/price-and-inventory` | Batch update price and stock |
 | GET | `product/sellers/{sellerId}/products/batch-requests/{batchId}` | Get batch request result |
 | GET | `product/product-categories` | List product categories |
@@ -74,8 +74,13 @@ the fields being updated:
 
 - **Price/stock only:** `POST /inventory/sellers/{sellerId}/products/price-and-inventory`
   (uses `barcode` as identifier, supports `salePrice`, `listPrice`, `quantity`)
-- **Product data (name, etc.):** `PUT /product/sellers/{sellerId}/products/batch`
-  (uses `barcode` as identifier, supports `title` and other fields)
+- **Product data (name):** `POST /product/sellers/{sellerId}/products/content-bulk-update`
+  (Product v2; identified by `contentId`, taken from `ProductUpdate.extra["contentId"]`
+  when present, otherwise looked up by barcode)
+
+Product v1 (`GET .../products`, `PUT .../products/batch`) is switched off by Trendyol
+on 2026-10-15. The v2 listing groups barcodes under a content's `variants`; the adapter
+returns one `Product` per barcode, with `contentId` in `extra`.
 
 The adapter automatically routes each update to the appropriate endpoint.
 
