@@ -75,7 +75,13 @@ class GomagApiClient:
         return self.http.call("GET", "order/read/json", params=params, **kwargs)
 
     def get_order(self, order_id: str, **kwargs) -> dict:
-        params: dict[str, Any] = {"order_id": order_id}
+        """One order, by the number the customer sees (what the DTO carries as `order_id`).
+
+        The filter key is `number`. With anything else — `order_id` was sent here —
+        Gomag ignores the filter and answers with the page of most recent orders, so the
+        caller looked for its order in somebody else's and concluded it did not exist.
+        """
+        params: dict[str, Any] = {"number": order_id}
         return self.http.call("GET", "order/read/json", params=params, **kwargs)
 
     def update_order_status(self, order_id: str, status: str, **kwargs) -> dict:

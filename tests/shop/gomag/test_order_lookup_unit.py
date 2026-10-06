@@ -23,3 +23,21 @@ def test_empty_response_is_none():
     fake = FakeHttpClient()
     fake.add("GET", "order/read/json", {"orders": []})
     assert _adapter(fake).find_order_by_reference("2045") is None
+
+
+def test_one_order_is_asked_for_by_its_number(monkeypatch):
+    """Gomag filtreaza dupa `number`. Cu orice alta cheie ignora filtrul si intoarce
+    pagina de comenzi recente, iar cautarea concluziona ca nu exista comanda."""
+    sent: dict = {}
+
+    class FakeHttp:
+        def call(self, method, path, **kwargs):
+            sent.update(method=method, path=path, params=kwargs.get("params"))
+            return {"orders": {}}
+
+    from bapp_connectors.providers.shop.gomag.client import GomagApiClient
+
+    GomagApiClient(http_client=FakeHttp()).get_order("1354673")
+
+    assert sent["path"] == "order/read/json"
+    assert sent["params"] == {"number": "1354673"}
