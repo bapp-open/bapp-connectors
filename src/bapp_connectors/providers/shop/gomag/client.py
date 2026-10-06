@@ -84,12 +84,16 @@ class GomagApiClient:
         params: dict[str, Any] = {"number": order_id}
         return self.http.call("GET", "order/read/json", params=params, **kwargs)
 
-    def update_order_status(self, order_id: str, status: str, **kwargs) -> dict:
-        params: dict[str, Any] = {
-            "order_id": order_id,
-            "status": status,
-        }
-        return self.http.call("GET", "order/status/json", params=params, **kwargs)
+    def update_order_status(self, order_id: str | int, status_id: str | int, **kwargs) -> dict:
+        """Gomag takes the order's INTERNAL id and the NUMERIC status id, in a POST body.
+
+        Measured against the live API (2026-10-06), not read off the docs: the GET form
+        this used to send — `order/status/json?order_id=<customer number>&status=<name>` —
+        answers `{"error": "404", "message": ["NO DATA"]}` and leaves the order untouched,
+        while the POST below answers `{"error": "200"}` and the order moves.
+        """
+        payload = {"orders": [{"order": int(order_id), "status": int(status_id)}]}
+        return self._post("order/status/json", payload, **kwargs)
 
     def create_order(self, payload: dict, **kwargs) -> dict:
         return self._post("order/add/json", payload, **kwargs)

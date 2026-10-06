@@ -204,11 +204,40 @@ class GomagShopAdapter(
         item = inventory_item_to_gomag(product_id, price=price)
         self.client.update_product_inventory([item])
 
+    def _internal_order_id(self, order_id: str) -> int:
+        """Gomag's own row id for an order, from the number the customer sees.
+
+        The status endpoint addresses orders by that internal id; everywhere else in this
+        adapter an order is its `order_id`, which carries the customer's number.
+        """
+        response = self.client.get_order(order_id)
+        orders = response.get("orders") if isinstance(response, dict) else None
+        data = next(iter(orders.values())) if isinstance(orders, dict) and orders else {}
+        internal = data.get("id")
+        if not internal:
+            raise ValueError(f"Gomag has no order numbered {order_id}")
+        return int(internal)
+
+    def _status_id(self, value: str) -> int:
+        """The numeric id of a status, given its id or its name."""
+        text = str(value or "").strip()
+        if text.isdigit():
+            return int(text)
+        for row in _normalize_gomag_list(self.client.get_order_statuses(), key="status"):
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("name") or row.get("status") or row.get("title") or "").strip()
+            if name.casefold() == text.casefold() and row.get("id"):
+                return int(row["id"])
+        raise ValueError(f"Gomag has no status named {text!r}")
+
     def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         gomag_status = self._status_mapper.to_provider(status)
         if not gomag_status:
             raise ValueError(f"Cannot map OrderStatus.{status} to a Gomag status")
-        self.client.update_order_status(order_id, gomag_status)
+        self.client.update_order_status(
+            self._internal_order_id(order_id), self._status_id(gomag_status)
+        )
         return self.get_order(order_id)
 
     # ── Order status catalogue ──
@@ -216,9 +245,9 @@ class GomagShopAdapter(
     def list_order_statuses(self) -> list[RemoteOrderStatus]:
         """The statuses this shop defines, the merchant's own ones included.
 
-        Gomag's update endpoint takes the status NAME, not a numeric id, so the name is what
-        `id` carries; a numeric id, when the response has one, rides along in `extra` so a
-        caller can still tell two identically named statuses apart.
+        `id` is Gomag's numeric status id, which is what the update endpoint takes (measured
+        on the live API: a name there answers `NO DATA`). The name stays as the label, and
+        rides along in `extra` too, because the mapper is configured with names.
         """
         rows = _normalize_gomag_list(self.client.get_order_statuses(), key="status")
         statuses: list[RemoteOrderStatus] = []
@@ -231,9 +260,10 @@ class GomagShopAdapter(
                 continue
             seen.add(name)
             extra = {key: row[key] for key in ("id", "status_id", "color", "position") if key in row}
+            extra["name"] = name
             statuses.append(
                 RemoteOrderStatus(
-                    id=name,
+                    id=str(row.get("id") or row.get("status_id") or name),
                     label=name,
                     framework_status=getattr(self._status_mapper.to_framework(name, None), "value", "") or "",
                     extra=extra,
@@ -242,11 +272,13 @@ class GomagShopAdapter(
         return statuses
 
     def set_order_status_raw(self, order_id: str, raw_status: str) -> Order:
-        """Set a status by Gomag's own name, skipping the framework translation."""
+        """Set a status by Gomag's own name (or its id), skipping the framework translation."""
         status = str(raw_status or "").strip()
         if not status:
             raise ValueError("Gomag needs a status name")
-        self.client.update_order_status(order_id, status)
+        self.client.update_order_status(
+            self._internal_order_id(order_id), self._status_id(status)
+        )
         return self.get_order(order_id)
 
     def create_order(self, order: Order) -> Order:
