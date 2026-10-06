@@ -105,19 +105,29 @@ class GomagShopAdapter(
         self.shop_site = credentials.get("shop_site", "")
         self._lang = (config or {}).get("lang", DEFAULT_LANG)
 
+        # Gomag identifies the caller with two headers; `AuthStrategy.CUSTOM` means the
+        # registry does not build them for us.
+        auth = MultiHeaderAuth(
+            {
+                "ApiShop": self.shop_site,
+                "Apikey": self.token,
+                "User-Agent": "BappConnectors/1.0",
+                "Accept": "*/*",
+            }
+        )
         if http_client is None:
             http_client = ResilientHttpClient(
                 base_url=manifest.base_url,
-                auth=MultiHeaderAuth(
-                    {
-                        "ApiShop": self.shop_site,
-                        "Apikey": self.token,
-                        "User-Agent": "BappConnectors/1.0",
-                        "Accept": "*/*",
-                    }
-                ),
+                auth=auth,
                 provider_name="gomag",
             )
+        else:
+            # `registry.create_adapter` ALWAYS injects a client, and for a CUSTOM strategy
+            # it builds it with `NoAuth` ("adapter handles its own auth"). Without this the
+            # headers above were only ever set in tests: in production every call went out
+            # unauthenticated and Gomag answered `{"error": 100, "message": "Missing Api
+            # User"}`, which the shop lookup reported as "order not found".
+            http_client.auth = auth
 
         self.client = GomagApiClient(http_client=http_client)
 
