@@ -34,6 +34,7 @@ from bapp_connectors.core.dto import (
 )
 from bapp_connectors.core.pricing import to_gross, to_net
 from bapp_connectors.providers.shop.bapp_store.models import SyncItemResult, SyncTaskResponse
+from bapp_connectors.providers.shop.notes import customer_note_from
 
 DEFAULT_VAT_RATE = Decimal("0.21")
 
@@ -344,6 +345,7 @@ def order_from_store(data: dict, vat_rate: Decimal) -> Order:
         items=[_line_from_store(line, currency, vat_rate) for line in data.get("items", [])],
         billing=_billing_from_store(data.get("billing")),
         delivery_address=data.get("delivery_address", ""),
+        customer_note=customer_note_from(data, "customer_note", "notes"),  # nedovedit: tokenul conexiunii n-are drept pe comenzi
         total=to_net(Decimal(gross_total), vat_rate),
         created_at=_parse_iso(data.get("created_at")),
         updated_at=_parse_iso(data.get("updated_at")),

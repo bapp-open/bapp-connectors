@@ -22,6 +22,7 @@ from bapp_connectors.core.dto import (
     Product,
     ProviderMeta,
 )
+from bapp_connectors.providers.shop.notes import customer_note_from
 
 
 def _parse_datetime(value: str) -> datetime | None:
@@ -152,6 +153,7 @@ def order_from_cel(data: dict) -> Order:
         shipping=_map_shipping_contact(customer),
         shipping_address=_map_address(customer),
         delivery_address=_format_delivery_address(customer),
+        customer_note=customer_note_from(data, "observations", "observation", "note"),  # nedovedit: fara conexiune vie
         total=sum(item.unit_price * item.quantity for item in items),
         created_at=order_date,
         provider_meta=ProviderMeta(

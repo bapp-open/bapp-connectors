@@ -37,6 +37,7 @@ from bapp_connectors.core.dto import (
     WebhookEvent,
     WebhookEventType,
 )
+from bapp_connectors.providers.shop.notes import customer_note_from
 
 # ── Status mappings ──
 
@@ -310,6 +311,7 @@ def order_from_shopify(data: dict, price_from_provider=None, status_mapper=None)
         billing=billing_contact,
         shipping=shipping_contact,
         shipping_address=shipping_addr,
+        customer_note=customer_note_from(data, "note"),  # documentatia Admin API: Order.note
         total=total,
         created_at=_parse_datetime(data.get("created_at", "")),
         updated_at=_parse_datetime(data.get("updated_at", "")),

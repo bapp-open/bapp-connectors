@@ -40,6 +40,7 @@ from bapp_connectors.core.dto import (
     ProductUpdate,
     ProviderMeta,
 )
+from bapp_connectors.providers.shop.notes import customer_note_from
 
 if TYPE_CHECKING:
     from bapp_connectors.core.status_mapping import StatusMapper
@@ -227,6 +228,7 @@ def order_from_gomag(data: dict, *, status_mapper: StatusMapper | None = None) -
         shipping=_map_shipping_contact(data),
         shipping_address=_map_shipping_address(data),
         delivery_address=_format_delivery_address(data),
+        customer_note=customer_note_from(data, "observation", "note"),  # masurat pe magazin viu 2026-10-07
         total=total,
         created_at=order_date,
         provider_meta=ProviderMeta(

@@ -36,6 +36,7 @@ from bapp_connectors.core.dto import (
     WebhookEvent,
     WebhookEventType,
 )
+from bapp_connectors.providers.shop.notes import customer_note_from
 
 # ── Status mappings ──
 
@@ -215,6 +216,7 @@ def order_from_woocommerce(data: dict, price_from_provider=None, status_mapper=N
         shipping=_map_contact(data.get("shipping")),
         shipping_address=_map_address(data.get("shipping")),
         delivery_address=_format_delivery_address(data.get("shipping")),
+        customer_note=customer_note_from(data, "customer_note"),  # masurat pe magazin viu 2026-10-07
         total=total,
         created_at=order_date,
         provider_meta=ProviderMeta(

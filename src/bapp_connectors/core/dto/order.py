@@ -69,6 +69,11 @@ class Order(BaseDTO):
     shipping: Contact | None = None
     shipping_address: Address | None = None
     delivery_address: str = ""
+    #: What the customer wrote on the order ("ridicăm noi", "sunați înainte", a packing
+    #: wish). Every shop names the field differently; the mappers normalise it here so the
+    #: host application has one place to read it from. Empty when the shop has no such
+    #: field, or the customer wrote nothing.
+    customer_note: str = ""
     total: Decimal = Decimal("0")
     created_at: datetime | None = None
     updated_at: datetime | None = None

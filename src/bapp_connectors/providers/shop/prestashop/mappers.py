@@ -27,6 +27,7 @@ from bapp_connectors.core.dto import (
     ProductVariant,
     ProviderMeta,
 )
+from bapp_connectors.providers.shop.notes import customer_note_from
 
 
 def _parse_datetime(value: str) -> datetime | None:
@@ -282,6 +283,7 @@ def order_from_prestashop(
         shipping=shipping,
         shipping_address=shipping_addr_dto,
         delivery_address=delivery_address_str,
+        customer_note=customer_note_from(data, "note", "gift_message"),  # documentatia webservice: campul `note` al comenzii
         total=Decimal(str(data.get("total_paid_tax_incl", 0))),
         created_at=order_date,
         provider_meta=ProviderMeta(

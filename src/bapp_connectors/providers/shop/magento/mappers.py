@@ -34,6 +34,7 @@ from bapp_connectors.core.dto import (
     ProviderMeta,
     RelatedProductLink,
 )
+from bapp_connectors.providers.shop.notes import customer_note_from
 
 # ── Status mappings ──
 
@@ -311,6 +312,7 @@ def order_from_magento(data: dict, price_from_provider=None, status_mapper=None)
         billing=billing_contact,
         shipping=shipping_contact,
         shipping_address=shipping_addr,
+        customer_note=customer_note_from(data, "customer_note"),  # documentatia REST 2.4: sales order customer_note
         total=total,
         created_at=_parse_datetime(data.get("created_at", "")),
         updated_at=_parse_datetime(data.get("updated_at", "")),

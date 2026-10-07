@@ -15,6 +15,7 @@ from bapp_connectors.core.dto import (
     PaymentType,
     Product,
 )
+from bapp_connectors.providers.shop.notes import customer_note_from
 
 # Order status codes (spec): 1 Registered, 2 In Progress, 3 Partial Shipped, 4 Shipped,
 # 5 Partial Returned, 6 Returned, 7 Cancelled, 8 Ready to be shipped, 9 Completed,
@@ -124,6 +125,7 @@ def order_from_altex(data: dict) -> Order:
         shipping_address=shipping.address,
         delivery_address=", ".join(filter(None, [str(data.get("delivery_address") or ""),
                                                  str(data.get("delivery_city") or "")])),
+        customer_note=customer_note_from(data, "observations", "observation"),  # nedovedit: fara conexiune vie
         total=_dec(data.get("total_price")),
         created_at=_dt(data.get("order_date")),
         extra={"shipping_tax": data.get("shipping_tax"), "payment_tax": data.get("payment_tax"),

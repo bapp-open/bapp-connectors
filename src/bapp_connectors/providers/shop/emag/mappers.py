@@ -36,6 +36,7 @@ from bapp_connectors.core.dto import (
 )
 from bapp_connectors.core.dto.webhook import WebhookEvent, WebhookEventType
 from bapp_connectors.providers.shop.emag.models import EmagApiResponse
+from bapp_connectors.providers.shop.notes import customer_note_from
 
 if TYPE_CHECKING:
     from bapp_connectors.core.status_mapping import StatusMapper
@@ -264,6 +265,7 @@ def order_from_emag(data: dict, country: str = "RO", *, status_mapper: StatusMap
         shipping=_map_contact(data.get("delivery_address"), data.get("customer"), country),
         shipping_address=_map_address(data.get("delivery_address"), country),
         delivery_address=_format_delivery_address(data.get("delivery_address")),
+        customer_note=customer_note_from(data, "observation", "observations"),  # masurat pe magazin viu 2026-10-07; `observations` apare si in payload-ul vechi
         total=total,
         created_at=order_date,
         external_url=f"https://marketplace.emag.{country.lower()}/order/details/id/{emag_id}",
