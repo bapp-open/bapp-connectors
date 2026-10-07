@@ -74,6 +74,10 @@ class Order(BaseDTO):
     #: host application has one place to read it from. Empty when the shop has no such
     #: field, or the customer wrote nothing.
     customer_note: str = ""
+    #: Ce au scris oamenii din magazin pe comanda („Proforma trimisa", „de sunat inainte
+    #: de livrare") — alt lucru decit nota clientului, si nu se arata clientului. Gomag le
+    #: tine ca istoric cu autor; aici vin ca text, cite una pe rind.
+    internal_note: str = ""
     total: Decimal = Decimal("0")
     created_at: datetime | None = None
     updated_at: datetime | None = None

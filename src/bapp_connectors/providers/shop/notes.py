@@ -22,9 +22,33 @@ def customer_note_from(data: dict[str, Any] | None, *keys: str) -> str:
     """
     for key in keys:
         value = (data or {}).get(key)
-        if value is None:
+        # O lista sau un dict nu sint o nota, sint alta structura cu acelasi nume: Gomag
+        # tine sub `note` istoricul comentariilor interne, iar `str([])` ar fi intors
+        # textul "[]" ca observatie a clientului pe FIECARE comanda.
+        if value is None or isinstance(value, (list, dict, tuple, set)):
             continue
         text = str(value).strip()
         if text:
             return text
     return ""
+
+
+def staff_notes_from(entries: Any, comment_key: str = "comment", user_key: str = "user") -> str:
+    """Notele interne ale magazinului, ca text de pus in „Mentiuni".
+
+    Gomag le tine ca lista de `{comment, user, time}` — scrise de oamenii din magazin
+    („Proforma trimisa", „DE ANUNTAT CAND AJUNG PRODUSELE"), nu de client. Ora ramine in
+    payload-ul brut: aici conteaza cine si ce a scris, pe cite un rind.
+    """
+    if not isinstance(entries, (list, tuple)):
+        return ""
+    lines = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        comment = str(entry.get(comment_key) or "").strip()
+        if not comment:
+            continue
+        who = str(entry.get(user_key) or "").strip()
+        lines.append(f"{who}: {comment}" if who else comment)
+    return "\n".join(lines)

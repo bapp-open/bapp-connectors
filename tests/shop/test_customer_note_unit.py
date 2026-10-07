@@ -34,3 +34,36 @@ def test_keeps_the_text_as_the_customer_wrote_it_bar_the_edges():
 
 def test_a_number_still_comes_back_as_text():
     assert customer_note_from({"note": 1234}, "note") == "1234"
+
+
+def test_a_list_is_not_a_note():
+    """Gomag tine sub `note` istoricul comentariilor interne. `str([])` ar fi intors
+    textul "[]" ca observatie a clientului pe fiecare comanda — s-a si intimplat."""
+    assert customer_note_from({"note": []}, "note") == ""
+    assert customer_note_from({"note": [{"comment": "intern"}]}, "note") == ""
+    assert customer_note_from({"note": {"comment": "intern"}}, "note") == ""
+
+
+def test_falls_through_a_structured_key_to_a_real_one():
+    payload = {"note": [{"comment": "intern"}], "observation": "sunati inainte"}
+    assert customer_note_from(payload, "note", "observation") == "sunati inainte"
+
+
+def test_staff_notes_read_as_who_wrote_what():
+    from bapp_connectors.providers.shop.notes import staff_notes_from
+
+    entries = [
+        {"comment": "Comanda plasata telefonic", "user": "Alina", "time": 1791277326},
+        {"comment": "Proforma trimisa", "user": "Mihai", "time": 1791277609},
+    ]
+    assert staff_notes_from(entries) == "Alina: Comanda plasata telefonic\nMihai: Proforma trimisa"
+
+
+def test_staff_notes_survive_the_shapes_a_shop_can_send():
+    from bapp_connectors.providers.shop.notes import staff_notes_from
+
+    assert staff_notes_from([]) == ""
+    assert staff_notes_from(None) == ""
+    assert staff_notes_from("nu e lista") == ""
+    assert staff_notes_from([{"comment": "  "}, "junk", {"user": "fara comentariu"}]) == ""
+    assert staff_notes_from([{"comment": "fara autor"}]) == "fara autor"
