@@ -54,6 +54,13 @@ class PaymentPort(BasePort):
         """Get the status of a payment."""
         ...
 
+    def capture_payment(self, payment_id: str) -> PaymentResult:
+        """Take the money of a payment the payer approved (see WebhookEvent.authorization).
+
+        Idempotent: a payment already captured comes back as it is.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not support capture_payment")
+
     @abstractmethod
     def refund(self, payment_id: str, amount: Decimal | None = None, reason: str = "") -> Refund:
         """Issue a refund for a payment (full or partial)."""

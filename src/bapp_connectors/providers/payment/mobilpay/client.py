@@ -185,6 +185,14 @@ def parse_ipn_xml(xml_bytes: bytes) -> dict:
     order = orders[0]
     result["order_id"] = order.getAttribute("id")
 
+    # Invoice: what the order asked for; processed_amount below is in its currency
+    invoices = order.getElementsByTagName("invoice")
+    if invoices:
+        if currency := invoices[0].getAttribute("currency"):
+            result["currency"] = currency
+        if amount := invoices[0].getAttribute("amount"):
+            result["invoice_amount"] = amount
+
     # Signature
     sigs = order.getElementsByTagName("signature")
     if sigs and sigs[0].firstChild:

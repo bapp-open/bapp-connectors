@@ -218,6 +218,11 @@ def webhook_event_from_netopia(data: dict) -> WebhookEvent:
     payment = data.get("payment") or {}
     order = data.get("order") or {}
     ntp_id = payment.get("ntpID") or order.get("ntpID") or data.get("ntpID", "")
+    confirmed = None
+    if normalized_status == "completed":
+        confirmed = payment_from_netopia(data).model_copy(
+            update={"reference": str(order.get("orderID") or ""), "provider_meta": None}
+        )
 
     return WebhookEvent(
         event_id=str(ntp_id),
@@ -230,4 +235,5 @@ def webhook_event_from_netopia(data: dict) -> WebhookEvent:
         # status keeps "paid" (3) and "confirmed" (5) as one completion.
         idempotency_key=f"{ntp_id}:{normalized_status}",
         received_at=datetime.now(UTC),
+        payment=confirmed,
     )

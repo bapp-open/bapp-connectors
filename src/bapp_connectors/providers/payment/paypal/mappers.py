@@ -86,6 +86,30 @@ def payment_result_from_paypal(response: dict) -> PaymentResult:
     )
 
 
+def payment_from_paypal_capture(response: dict) -> PaymentResult:
+    """Map a captured order (capture response, or the order read after it) to its capture.
+
+    The order's own `purchase_units[0].amount` is not in the capture response: the money
+    taken is on `purchase_units[0].payments.captures[0]`.
+    """
+    purchase_units = response.get("purchase_units") or [{}]
+    unit = purchase_units[0]
+    captures = (unit.get("payments") or {}).get("captures") or [{}]
+    capture = captures[0]
+    amount_data = capture.get("amount") or unit.get("amount") or {}
+    raw_status = capture.get("status") or response.get("status", "")
+
+    return PaymentResult(
+        payment_id=capture.get("id") or response.get("id", ""),
+        status="completed" if raw_status == "COMPLETED" else raw_status.lower(),
+        amount=Decimal(str(amount_data.get("value", 0))),
+        currency=str(amount_data.get("currency_code", "")).upper(),
+        method=PaymentMethodType.WALLET,
+        reference=capture.get("custom_id") or unit.get("custom_id", ""),
+        extra={"paypal_order_id": response.get("id", ""), "paypal_status": raw_status},
+    )
+
+
 def refund_from_paypal(response: dict, capture_id: str) -> Refund:
     amount_data = response.get("amount", {})
     return Refund(
@@ -217,7 +241,8 @@ def transactions_from_paypal(response: dict) -> PaginatedResult[FinancialTransac
 
 
 WEBHOOK_EVENT_MAP = {
-    "CHECKOUT.ORDER.APPROVED": WebhookEventType.PAYMENT_COMPLETED,
+    # the payer approved: nothing is taken until the order is captured (intent CAPTURE)
+    "CHECKOUT.ORDER.APPROVED": WebhookEventType.PAYMENT_AUTHORIZED,
     "PAYMENT.CAPTURE.COMPLETED": WebhookEventType.PAYMENT_COMPLETED,
     "PAYMENT.CAPTURE.DENIED": WebhookEventType.PAYMENT_FAILED,
 }
@@ -232,6 +257,29 @@ def webhook_event_from_paypal(webhook_data: dict) -> WebhookEvent:
     custom_id = ""
     if purchase_units:
         custom_id = purchase_units[0].get("custom_id", "")
+    confirmed = authorization = None
+    if event_type_str == "CHECKOUT.ORDER.APPROVED" and purchase_units:
+        # resource is the order: capture_payment(order id) takes the money
+        amount_data = purchase_units[0].get("amount", {})
+        authorization = PaymentResult(
+            payment_id=resource.get("id", ""),
+            status="authorized",
+            amount=Decimal(str(amount_data.get("value", 0))),
+            currency=str(amount_data.get("currency_code", "")).upper(),
+            method=PaymentMethodType.WALLET,
+            reference=custom_id,
+        )
+    if event_type_str == "PAYMENT.CAPTURE.COMPLETED":
+        # resource is the capture: it carries the purchase unit's custom_id and the captured amount
+        amount_data = resource.get("amount", {})
+        confirmed = PaymentResult(
+            payment_id=resource.get("id", ""),
+            status="completed",
+            amount=Decimal(str(amount_data.get("value", 0))),
+            currency=str(amount_data.get("currency_code", "")).upper(),
+            method=PaymentMethodType.WALLET,
+            reference=resource.get("custom_id", ""),
+        )
 
     return WebhookEvent(
         event_id=webhook_data.get("id", ""),
@@ -242,4 +290,6 @@ def webhook_event_from_paypal(webhook_data: dict) -> WebhookEvent:
         idempotency_key=webhook_data.get("id", ""),
         received_at=datetime.now(UTC),
         extra={"custom_id": custom_id, "resource_id": resource.get("id", "")},
+        payment=confirmed,
+        authorization=authorization,
     )

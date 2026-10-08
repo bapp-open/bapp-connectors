@@ -457,19 +457,32 @@ def webhook_event_from_stripe(data: dict) -> WebhookEvent:
     """Map a Stripe webhook event to a normalized WebhookEvent DTO."""
     raw_type = data.get("type", "")
     event_type = STRIPE_WEBHOOK_EVENT_MAP.get(raw_type, WebhookEventType.UNKNOWN)
+    obj = data.get("data", {}).get("object", {})
+    confirmed = None
+    # only the checkout session carries metadata[identifier]; an async method completes it unpaid
+    if raw_type == "checkout.session.completed" and obj.get("payment_status") == "paid":
+        currency = (obj.get("currency") or "").upper()
+        confirmed = PaymentResult(
+            payment_id=obj.get("payment_intent") or obj.get("id", ""),
+            status="completed",
+            amount=amount_from_stripe(obj.get("amount_total") or 0, currency),
+            currency=currency,
+            reference=(obj.get("metadata") or {}).get("identifier", ""),
+        )
 
     return WebhookEvent(
         event_id=data.get("id", ""),
         event_type=event_type,
         provider="stripe",
         provider_event_type=raw_type,
-        payload=data.get("data", {}).get("object", {}),
+        payload=obj,
         idempotency_key=data.get("id", ""),
         received_at=datetime.now(UTC),
         extra={
             "api_version": data.get("api_version"),
             "livemode": data.get("livemode"),
         },
+        payment=confirmed,
         provider_meta=ProviderMeta(
             provider="stripe",
             raw_id=data.get("id", ""),

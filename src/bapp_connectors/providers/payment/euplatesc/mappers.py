@@ -166,8 +166,14 @@ def webhook_event_from_euplatesc(ipn_data: dict) -> WebhookEvent:
     """Map an EuPlatesc IPN to a WebhookEvent DTO."""
     action = ipn_data.get("action", "")
     event_type = WebhookEventType.UNKNOWN
+    confirmed = None
     if action == "0":
         event_type = WebhookEventType.ORDER_UPDATED  # payment confirmed
+        result = payment_result_from_ipn(ipn_data)
+        if result.status == "approved":  # not "suspect": the bank's fraud check has not cleared it
+            confirmed = result.model_copy(
+                update={"reference": ipn_data.get("invoice_id", ""), "currency": result.currency.upper(), "provider_meta": None}
+            )
 
     return WebhookEvent(
         event_id=ipn_data.get("ep_id", ""),
@@ -177,4 +183,5 @@ def webhook_event_from_euplatesc(ipn_data: dict) -> WebhookEvent:
         payload=ipn_data,
         idempotency_key=ipn_data.get("ep_id", ""),
         received_at=datetime.now(UTC),
+        payment=confirmed,
     )

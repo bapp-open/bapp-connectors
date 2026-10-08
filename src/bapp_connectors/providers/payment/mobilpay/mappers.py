@@ -79,6 +79,14 @@ def webhook_event_from_mobilpay(ipn_data: dict) -> WebhookEvent:
         code_int = -1
 
     event_type = WebhookEventType.ORDER_UPDATED if code_int == 0 else WebhookEventType.UNKNOWN
+    confirmed = None
+    # error 0 also comes with paid_pending, confirmed_pending, canceled and credit:
+    # only `confirmed` means the money was taken
+    if code_int == 0 and ipn_data.get("action") == "confirmed":
+        result = payment_result_from_mobilpay(ipn_data)
+        confirmed = result.model_copy(
+            update={"reference": ipn_data.get("order_id", ""), "currency": result.currency.upper(), "provider_meta": None}
+        )
 
     return WebhookEvent(
         event_id=ipn_data.get("order_id", ""),
@@ -88,4 +96,5 @@ def webhook_event_from_mobilpay(ipn_data: dict) -> WebhookEvent:
         payload=ipn_data,
         idempotency_key=ipn_data.get("crc", ipn_data.get("order_id", "")),
         received_at=datetime.now(UTC),
+        payment=confirmed,
     )

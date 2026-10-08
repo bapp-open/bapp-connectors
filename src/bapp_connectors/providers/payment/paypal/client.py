@@ -96,6 +96,7 @@ class PayPalApiClient:
         return self.http.call(
             "POST", f"/v2/checkout/orders/{order_id}/capture",
             headers=self._auth_headers(),
+            json={},  # PayPal answers 415 to a capture without a JSON content type
         )
 
     def create_refund(self, capture_id: str, amount: float | None = None, currency: str = "EUR") -> dict:

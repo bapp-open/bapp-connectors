@@ -76,6 +76,7 @@ def webhook_event_from_librapay(ipn_data: dict) -> WebhookEvent:
     action = ipn_data.get("ACTION", "")
     rc = ipn_data.get("RC", "")
     order = ipn_data.get("ORDER", "")
+    confirmed = None
     if not ipn_data.get("DESC"):
         # LibraPay's sync pings come without DESC; phclient ignores them too.
         event_type = WebhookEventType.UNKNOWN
@@ -84,6 +85,11 @@ def webhook_event_from_librapay(ipn_data: dict) -> WebhookEvent:
         # sale; without this it would read as a second completed payment.
         refund = ipn_data.get("TRTYPE") in REFUND_TRTYPES
         event_type = WebhookEventType.PAYMENT_REFUNDED if refund else WebhookEventType.PAYMENT_COMPLETED
+        if not refund:
+            result = payment_result_from_ipn(ipn_data)
+            confirmed = result.model_copy(
+                update={"reference": ipn_data["DESC"], "currency": result.currency.upper(), "provider_meta": None}
+            )
     else:
         event_type = LIBRAPAY_ACTION_EVENTS.get(action, WebhookEventType.UNKNOWN)
     return WebhookEvent(
@@ -96,4 +102,5 @@ def webhook_event_from_librapay(ipn_data: dict) -> WebhookEvent:
         # after a decline needs a fresh checkout (new ORDER) anyway.
         idempotency_key=f"{order}:{action}:{rc}",
         received_at=datetime.now(UTC),
+        payment=confirmed,
     )

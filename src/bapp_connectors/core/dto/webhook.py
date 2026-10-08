@@ -8,6 +8,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from .base import BaseDTO
+from .payment import PaymentResult
 
 
 class WebhookEventType(StrEnum):
@@ -28,6 +29,7 @@ class WebhookEventType(StrEnum):
 
     # Payments
     PAYMENT_PENDING = "payment.pending"
+    PAYMENT_AUTHORIZED = "payment.authorized"  # payer approved; the merchant must capture it
     PAYMENT_COMPLETED = "payment.completed"
     PAYMENT_FAILED = "payment.failed"
     PAYMENT_REFUNDED = "payment.refunded"
@@ -74,4 +76,11 @@ class WebhookEvent(BaseDTO):
     idempotency_key: str = ""
     signature_valid: bool | None = None
     received_at: datetime | None = None
+    # Set only when this message confirms the money was taken (a completed sale): amount,
+    # currency and the merchant `reference`. None for pending, failed, refunded, approve-only
+    # or suspect messages, so a consumer never has to read the provider's raw payload.
+    payment: PaymentResult | None = None
+    # Set when the payer approved but nothing is taken until the merchant captures it:
+    # pass `authorization.payment_id` to the adapter's capture_payment().
+    authorization: PaymentResult | None = None
     extra: dict = {}

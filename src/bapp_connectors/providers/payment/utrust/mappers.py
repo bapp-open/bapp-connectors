@@ -76,6 +76,16 @@ def webhook_event_from_utrust(webhook_data: dict) -> WebhookEvent:
     event_type_str = webhook_data.get("event_type", "")
     event_type = WEBHOOK_EVENT_MAP.get(event_type_str, WebhookEventType.UNKNOWN)
     resource = webhook_data.get("resource", {})
+    confirmed = None
+    if event_type_str == "ORDER.PAYMENT.RECEIVED":
+        result = payment_result_from_webhook(webhook_data)
+        confirmed = result.model_copy(
+            update={
+                "reference": resource.get("reference", ""),
+                "currency": result.currency.upper(),
+                "provider_meta": None,
+            }
+        )
 
     return WebhookEvent(
         event_id=resource.get("reference", ""),
@@ -85,4 +95,5 @@ def webhook_event_from_utrust(webhook_data: dict) -> WebhookEvent:
         payload=webhook_data,
         idempotency_key=resource.get("reference", ""),
         received_at=datetime.now(UTC),
+        payment=confirmed,
     )

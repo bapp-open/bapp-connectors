@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from bapp_connectors.core.dto import BillingDetails
-from bapp_connectors.core.errors import WebhookVerificationError
+from bapp_connectors.core.errors import PermanentProviderError, WebhookVerificationError
 from bapp_connectors.core.http import NoAuth, ResilientHttpClient
 from bapp_connectors.core.ports import PaymentPort
 from bapp_connectors.providers.payment.paypal.client import PayPalApiClient
@@ -37,6 +37,7 @@ from bapp_connectors.providers.payment.paypal.manifest import (
 )
 from bapp_connectors.providers.payment.paypal.mappers import (
     checkout_session_from_paypal,
+    payment_from_paypal_capture,
     payment_result_from_paypal,
     refund_from_paypal,
     transactions_from_paypal,
@@ -115,6 +116,16 @@ class PayPalPaymentAdapter(PaymentPort, WebhookCapability, FinancialCapability):
     def get_payment(self, payment_id: str) -> PaymentResult:
         response = self._client.get_order(payment_id)
         return payment_result_from_paypal(response)
+
+    def capture_payment(self, payment_id: str) -> PaymentResult:
+        """Capture an approved order (`payment_id` = PayPal order id); a repeat returns the existing capture."""
+        try:
+            response = self._client.capture_order(payment_id)
+        except PermanentProviderError as exc:
+            if "ORDER_ALREADY_CAPTURED" not in str(exc):
+                raise
+            response = self._client.get_order(payment_id)
+        return payment_from_paypal_capture(response)
 
     def refund(self, payment_id: str, amount: Decimal | None = None, reason: str = "") -> Refund:
         response = self._client.create_refund(

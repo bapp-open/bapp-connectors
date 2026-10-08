@@ -57,6 +57,8 @@ class PaymentResult(BaseDTO):
     currency: str
     method: PaymentMethodType | None = None
     paid_at: datetime | None = None
+    # the `identifier` given to create_checkout_session, as the provider sends it back
+    reference: str = ""
     extra: dict = {}
 
 

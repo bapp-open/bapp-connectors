@@ -7,6 +7,7 @@ Tests: webhook parsing, mapper functions, credential validation.
 from __future__ import annotations
 
 from decimal import Decimal
+from unittest import mock
 
 import pytest
 
@@ -17,6 +18,7 @@ from bapp_connectors.core.dto import (
     Refund,
     WebhookEventType,
 )
+from bapp_connectors.core.errors import PermanentProviderError
 from bapp_connectors.providers.payment.paypal.adapter import PayPalPaymentAdapter
 from bapp_connectors.providers.payment.paypal.mappers import (
     checkout_session_from_paypal,
@@ -146,7 +148,8 @@ class TestWebhookParsing:
     def test_checkout_approved(self):
         data = _make_webhook_payload("CHECKOUT.ORDER.APPROVED")
         event = webhook_event_from_paypal(data)
-        assert event.event_type == WebhookEventType.PAYMENT_COMPLETED
+        # approval takes no money: it asks for a capture, it does not complete the payment
+        assert event.event_type == WebhookEventType.PAYMENT_AUTHORIZED
         assert event.provider == "paypal"
 
     def test_capture_completed(self):
@@ -211,3 +214,57 @@ class TestCredentials:
     def test_missing_app_secret(self):
         adapter = PayPalPaymentAdapter(credentials={"client_id": CLIENT_ID})
         assert adapter.validate_credentials() is False
+
+
+class TestCapture:
+    CAPTURED = {
+        "id": "PP-ORDER-123",
+        "status": "COMPLETED",
+        "purchase_units": [
+            {
+                "reference_id": "default",
+                "payments": {
+                    "captures": [
+                        {
+                            "id": "CAP-9",
+                            "status": "COMPLETED",
+                            "custom_id": "o-abc",
+                            "amount": {"currency_code": "EUR", "value": "99.99"},
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+
+    def test_approved_webhook_carries_the_order_to_capture(self):
+        data = _make_webhook_payload("CHECKOUT.ORDER.APPROVED")
+        event = webhook_event_from_paypal(data)
+        assert event.payment is None
+        assert event.authorization.payment_id == data["resource"]["id"]
+        assert event.authorization.reference == data["resource"]["purchase_units"][0]["custom_id"]
+
+    def test_capture_maps_the_captured_amount(self, adapter):
+        with mock.patch.object(adapter._client, "capture_order", return_value=self.CAPTURED) as capture:
+            result = adapter.capture_payment("PP-ORDER-123")
+        capture.assert_called_once_with("PP-ORDER-123")
+        assert (result.payment_id, result.status, result.amount, result.currency, result.reference) == (
+            "CAP-9",
+            "completed",
+            Decimal("99.99"),
+            "EUR",
+            "o-abc",
+        )
+
+    def test_capture_of_an_already_captured_order_reads_it_back(self, adapter):
+        already = PermanentProviderError('Client error: 422 {"name":"UNPROCESSABLE_ENTITY","details":[{"issue":"ORDER_ALREADY_CAPTURED"}]}')
+        with (
+            mock.patch.object(adapter._client, "capture_order", side_effect=already),
+            mock.patch.object(adapter._client, "get_order", return_value=self.CAPTURED),
+        ):
+            assert adapter.capture_payment("PP-ORDER-123").status == "completed"
+
+    def test_other_capture_errors_propagate(self, adapter):
+        denied = PermanentProviderError('Client error: 422 {"details":[{"issue":"INSTRUMENT_DECLINED"}]}')
+        with mock.patch.object(adapter._client, "capture_order", side_effect=denied), pytest.raises(PermanentProviderError):
+            adapter.capture_payment("PP-ORDER-123")

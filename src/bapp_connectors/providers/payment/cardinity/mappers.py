@@ -72,6 +72,16 @@ WEBHOOK_EVENT_MAP = {
 def webhook_event_from_cardinity(post_data: dict) -> WebhookEvent:
     raw_status = post_data.get("status", "")
     event_type = WEBHOOK_EVENT_MAP.get(raw_status, WebhookEventType.UNKNOWN)
+    confirmed = None
+    if raw_status == "approved":
+        result = payment_result_from_cardinity(post_data)
+        confirmed = result.model_copy(
+            update={
+                "reference": post_data.get("order_id", ""),
+                "currency": result.currency.upper(),
+                "provider_meta": None,
+            }
+        )
 
     return WebhookEvent(
         event_id=post_data.get("id", post_data.get("order_id", "")),
@@ -81,4 +91,5 @@ def webhook_event_from_cardinity(post_data: dict) -> WebhookEvent:
         payload=post_data,
         idempotency_key=post_data.get("id", ""),
         received_at=datetime.now(UTC),
+        payment=confirmed,
     )
