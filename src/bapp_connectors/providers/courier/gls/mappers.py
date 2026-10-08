@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import contextlib
 import datetime
+import re
+from dataclasses import dataclass
 from datetime import UTC
 
 from bapp_connectors.core.dto import (
@@ -21,6 +23,7 @@ from bapp_connectors.core.dto import (
     ShipmentStatus,
     TrackingEvent,
 )
+from bapp_connectors.core.errors import ValidationError
 
 # ── Status mappings ──
 # GLS status codes mapped to normalized ShipmentStatus.
@@ -56,6 +59,15 @@ GLS_STATUS_MAP: dict[str, ShipmentStatus] = {
     "97": ShipmentStatus.DELIVERED,        # Placed to parcellocker
 }
 
+# Dialling codes for the GLS countries; SMS services want the number in international format
+_DIAL_CODES = {"RO": "40", "HU": "36", "HR": "385", "CZ": "420", "SI": "386", "SK": "421", "RS": "381"}
+# national (trunk) prefix dropped when going international; "0" elsewhere, none in CZ
+_TRUNK_PREFIX = {"HU": "06", "CZ": ""}
+# COD currency when the shipment does not say: the destination country's currency
+_COD_CURRENCY = {"RO": "RON", "HU": "HUF", "HR": "EUR", "CZ": "CZK", "SI": "EUR", "SK": "EUR", "RS": "RSD"}
+
+_GLS_DATE = re.compile(r"/Date\((-?\d+)(?:([+-])(\d{2})(\d{2}))?\)/")
+
 
 def _map_gls_status(status_code: str) -> ShipmentStatus:
     """Map a GLS status code to a normalized ShipmentStatus."""
@@ -66,26 +78,44 @@ def _parse_gls_date(value: str) -> datetime.datetime | None:
     """
     Parse GLS date format: /Date(1739142000000+0100)/
 
-    The timestamp is in milliseconds, optionally followed by a timezone offset.
+    The number is milliseconds since the epoch (UTC); the optional offset is the zone the
+    moment was recorded in, kept on the returned (aware) datetime.
     """
     if not value:
         return None
-    try:
-        inner = value.split("(")[1].split(")")[0]
-        if "+" in inner:
-            ts_str, tz_str = inner.split("+")
-        elif "-" in inner and inner.index("-") > 0:
-            ts_str, tz_str = inner.split("-")
-        else:
-            ts_str = inner
-            tz_str = "0000"
-        ts = int(ts_str)
-        tz_hours = int(tz_str[:2])
-        tz_minutes = int(tz_str[2:])
-        tz_offset = datetime.timedelta(hours=tz_hours, minutes=tz_minutes)
-        return datetime.datetime.fromtimestamp(ts / 1000, tz=UTC) - tz_offset + datetime.timedelta(hours=tz_hours, minutes=tz_minutes)
-    except (ValueError, TypeError, IndexError):
+    match = _GLS_DATE.search(value)
+    if not match:
         return None
+    millis, sign, hours, minutes = match.groups()
+    tz = UTC
+    if sign:
+        offset = datetime.timedelta(hours=int(hours), minutes=int(minutes))
+        tz = datetime.timezone(-offset if sign == "-" else offset)
+    return datetime.datetime.fromtimestamp(int(millis) / 1000, tz=tz)
+
+
+def international_phone(phone: str, country: str = "RO") -> str:
+    """`0722 123 456` -> `+40722123456`; numbers already international are only cleaned."""
+    raw = (phone or "").strip()
+    digits = re.sub(r"\D", "", raw)
+    if not digits:
+        return ""
+    if raw.startswith("+"):
+        return "+" + digits
+    if digits.startswith("00"):
+        return "+" + digits[2:]
+    country = (country or "RO").upper()
+    dial = _DIAL_CODES.get(country, "")
+    trunk = _TRUNK_PREFIX.get(country, "0")
+    if dial and digits.startswith(dial) and not digits.startswith("0"):
+        return "+" + digits
+    if dial and digits.startswith(trunk):
+        return f"+{dial}{digits[len(trunk):]}"
+    return digits
+
+
+def as_bool(value) -> bool:
+    return value not in (None, False, "", "false", "False", "0", 0)
 
 
 # ── AWB label mapper ──
@@ -93,14 +123,14 @@ def _parse_gls_date(value: str) -> datetime.datetime | None:
 
 def awb_label_from_gls(data: dict) -> AWBLabel:
     """Map a GLS PrintLabels response to an AWBLabel DTO."""
-    info_list = data.get("PrintLabelsInfoList", [])
-    errors = data.get("PrintLabelsErrorList", [])
+    info_list = data.get("PrintLabelsInfoList") or []
+    errors = data.get("PrintLabelsErrorList") or []
 
     tracking_number = ""
     parcel_id = 0
     if info_list:
         first = info_list[0]
-        tracking_number = str(first.get("ParcelNumber", ""))
+        tracking_number = str(first.get("ParcelNumber") or "")
         parcel_id = first.get("ParcelId", 0)
 
     label_pdf = None
@@ -116,12 +146,13 @@ def awb_label_from_gls(data: dict) -> AWBLabel:
         extra={
             "parcel_id": parcel_id,
             "parcels": info_list,
+            "parcel_numbers": [str(p.get("ParcelNumber")) for p in info_list if p.get("ParcelNumber")],
             "errors": errors,
         },
         provider_meta=ProviderMeta(
             provider="gls",
             raw_id=tracking_number,
-            raw_payload=data,
+            raw_payload={k: v for k, v in data.items() if k != "Labels"},
             fetched_at=datetime.datetime.now(UTC),
         ),
     )
@@ -131,29 +162,40 @@ def awb_label_from_gls(data: dict) -> AWBLabel:
 
 
 def tracking_events_from_gls(data: dict) -> list[TrackingEvent]:
-    """Map a GLS GetParcelStatuses response to a list of TrackingEvent DTOs."""
+    """Map a GLS `ParcelStatusList` (GetParcelStatuses, or one entry of GetParcelListStatuses)
+    to TrackingEvents, oldest first.
+
+    GLS lists the newest status first; callers take the last event as the current state."""
     events: list[TrackingEvent] = []
-    status_list = data.get("ParcelStatusList", [])
-
-    for entry in status_list:
-        timestamp = _parse_gls_date(entry.get("StatusDate", ""))
-        status_code = entry.get("StatusCode", "")
-
+    for entry in data.get("ParcelStatusList") or []:
+        status_code = str(entry.get("StatusCode") or "")
         events.append(
             TrackingEvent(
                 status=_map_gls_status(status_code),
-                description=entry.get("StatusDescription", ""),
-                location=entry.get("DepotCity", ""),
-                timestamp=timestamp,
+                description=entry.get("StatusDescription") or "",
+                location=entry.get("DepotCity") or "",
+                timestamp=_parse_gls_date(entry.get("StatusDate") or ""),
                 extra={
+                    "code": status_code,
                     "status_code": status_code,
-                    "status_info": entry.get("StatusInfo", ""),
-                    "depot_number": entry.get("DepotNumber", ""),
+                    "status_info": entry.get("StatusInfo") or "",
+                    "depot_number": entry.get("DepotNumber") or "",
                 },
             )
         )
-
+    # reversed first so events with the same (or no) timestamp keep GLS' order, oldest first
+    events.reverse()
+    events.sort(key=lambda e: e.timestamp or datetime.datetime.min.replace(tzinfo=UTC))
     return events
+
+
+def tracking_batch_from_gls(data: dict) -> dict[str, list[TrackingEvent]]:
+    """Map a GetParcelListStatuses response to {parcel number: events, oldest first}."""
+    return {
+        str(entry.get("ParcelNumber")): tracking_events_from_gls(entry)
+        for entry in data.get("ParcelList") or []
+        if entry.get("ParcelNumber")
+    }
 
 
 # ── Shipment mapper ──
@@ -237,59 +279,167 @@ def shipments_from_gls(response: dict) -> PaginatedResult[Shipment]:
 # ── Shipment request builder ──
 
 
-def build_awb_payload(shipment: Shipment, client_number: int) -> dict:
+@dataclass(frozen=True)
+class GLSServiceSettings:
+    """Account-wide notification services, from the connection settings."""
+
+    sms: bool = False           # SM1: SMS when the parcel is handed over, with a custom text
+    sms_text: str = ""
+    sms_preadvice: bool = False  # SM2: SMS on the delivery day
+    flex_delivery: bool = False  # FDS: e-mail with the delivery window and options
+    flex_delivery_sms: bool = False  # FSS: FDS by SMS (only together with FDS)
+
+    @classmethod
+    def from_config(cls, config: dict) -> GLSServiceSettings:
+        return cls(
+            sms=as_bool(config.get("service_sm1")),
+            sms_text=str(config.get("service_sm1_text") or "").strip(),
+            sms_preadvice=as_bool(config.get("service_sm2")),
+            flex_delivery=as_bool(config.get("service_fds")),
+            flex_delivery_sms=as_bool(config.get("service_fss")),
+        )
+
+    def validate(self) -> None:
+        if self.sms and not self.sms_text:
+            raise ValidationError("GLS: the SMS service (SM1) needs the SMS text in the connection settings.")
+        if self.flex_delivery_sms and not self.flex_delivery:
+            raise ValidationError("GLS: FlexDeliverySMS (FSS) works only together with FlexDelivery (FDS).")
+
+
+def _house_number(value) -> str:
+    """GLS takes digits only in HouseNumber and refuses 0 (error 23)."""
+    digits = re.sub(r"\D", "", str(value or ""))
+    return digits if digits.strip("0") else ""
+
+
+def _gls_address(address: Address, default_email: str = "") -> dict:
+    extra = address.extra or {}
+    country = (address.country or "RO").upper()
+    name = extra.get("company") or extra.get("name") or extra.get("contact_name") or ""
+    payload = {
+        "Name": name,
+        "Street": address.street,
+        "City": address.city,
+        "ZipCode": address.postal_code,
+        "CountryIsoCode": country,
+        "ContactName": extra.get("contact_name") or extra.get("name") or name,
+        "ContactPhone": international_phone(extra.get("phone", ""), country),
+        "ContactEmail": extra.get("email") or default_email,
+    }
+    if number := _house_number(extra.get("number")):
+        payload["HouseNumber"] = number
+    if info := extra.get("house_number_info"):
+        payload["HouseNumberInfo"] = str(info)
+    return payload
+
+
+def _parcel_properties(parcels: list[Parcel], content: str) -> list[dict]:
+    properties = []
+    for parcel in parcels:
+        prop: dict = {}
+        if parcel.weight:
+            prop["Weight"] = round(float(parcel.weight), 2)
+        for gls_name, value in (("Length", parcel.length), ("Width", parcel.width), ("Height", parcel.height)):
+            if value:
+                prop[gls_name] = round(float(value))
+        if prop:
+            if content:
+                prop["Content"] = content
+            properties.append(prop)
+    return properties
+
+
+def _notification_services(delivery: dict, settings: GLSServiceSettings) -> list[dict]:
+    phone = delivery.get("ContactPhone") or ""
+    email = delivery.get("ContactEmail") or ""
+    services = []
+    if settings.sms and phone and settings.sms_text:
+        services.append({"Code": "SM1", "SM1Parameter": {"Value": f"{phone}|{settings.sms_text}"}})
+    if settings.sms_preadvice and phone:
+        services.append({"Code": "SM2", "SM2Parameter": {"Value": phone}})
+    if settings.flex_delivery and email:
+        services.append({"Code": "FDS", "FDSParameter": {"Value": email}})
+        # FSS without FDS is refused (error 30), so it follows FDS, not the setting alone
+        if settings.flex_delivery_sms and phone:
+            services.append({"Code": "FSS", "FSSParameter": {"Value": phone}})
+    return services
+
+
+def _parcel_shop_service(pickup_point_id, delivery: dict) -> dict:
+    """PSD: delivery to a ParcelShop / ParcelLocker; GLS then requires the full recipient contact."""
+    missing = [f for f in ("ContactName", "ContactPhone", "ContactEmail") if not delivery.get(f)]
+    if missing:
+        raise ValidationError(f"GLS: delivery to a ParcelShop/locker needs the recipient's {', '.join(missing)}.")
+    point = str(pickup_point_id).strip()
+    # DeliveryPoint.Id (numeric) goes in IntegerValue; a matchcode ("2351-CSOMAGPONT") in StringValue
+    parameter = {"IntegerValue": int(point)} if point.isdigit() else {"StringValue": point}
+    return {"Code": "PSD", "PSDParameter": parameter}
+
+
+def build_awb_payload(
+    shipment: Shipment,
+    client_number: int,
+    services: GLSServiceSettings | None = None,
+) -> dict:
     """
     Build a GLS PrintLabels parcel payload from a normalized Shipment DTO.
 
     Args:
         shipment: The shipment to generate an AWB for.
         client_number: GLS client number.
+        services: Account-wide notification services (connection settings).
     """
-    recipient = shipment.recipient
-    sender = shipment.sender
-    parcels = shipment.parcels or [Parcel(weight=1.0)]
+    services = services or GLSServiceSettings()
+    services.validate()
+    if not shipment.recipient:
+        raise ValidationError("GLS needs the recipient address.")
+    if not shipment.sender:
+        raise ValidationError("GLS needs the pickup (sender) address.")
 
+    extra = shipment.extra or {}
+    parcels = shipment.parcels or [Parcel(weight=1.0)]
+    if len(parcels) > 99:
+        raise ValidationError("GLS accepts at most 99 parcels in one shipment.")
+    reference = str(extra.get("reference") or extra.get("client_reference") or "")
+    content = str(extra.get("content") or reference)
+
+    delivery = _gls_address(shipment.recipient)
     payload: dict = {
         "ClientNumber": client_number,
-        "ClientReference": shipment.extra.get("client_reference", "") if shipment.extra else "",
+        "ClientReference": reference,
         "Count": len(parcels),
+        "Content": content,
+        "PickupAddress": _gls_address(shipment.sender, default_email=extra.get("sender_email", "")),
+        "DeliveryAddress": delivery,
     }
 
-    if recipient:
-        payload["DeliveryAddress"] = {
-            "Name": recipient.extra.get("name", ""),
-            "Street": recipient.street,
-            "City": recipient.city,
-            "ZipCode": recipient.postal_code,
-            "CountryIsoCode": recipient.country or "RO",
-            "ContactName": recipient.extra.get("contact_name", recipient.extra.get("name", "")),
-            "ContactPhone": recipient.extra.get("phone", ""),
-            "ContactEmail": recipient.extra.get("email", ""),
-        }
+    service_list: list[dict] = []
 
-    if sender:
-        payload["PickupAddress"] = {
-            "Name": sender.extra.get("name", ""),
-            "Street": sender.street,
-            "City": sender.city,
-            "ZipCode": sender.postal_code,
-            "CountryIsoCode": sender.country or "RO",
-            "ContactName": sender.extra.get("contact_name", sender.extra.get("name", "")),
-            "ContactPhone": sender.extra.get("phone", ""),
-            "ContactEmail": sender.extra.get("email", ""),
-        }
+    cod_amount = float(extra.get("cod_amount") or 0)
+    if cod_amount > 0:
+        payload["CODAmount"] = round(cod_amount, 2)
+        payload["CODReference"] = str(extra.get("cod_reference") or reference)
+        payload["CODCurrency"] = extra.get("cod_currency") or _COD_CURRENCY.get(delivery["CountryIsoCode"], "RON")
+        service_list.append({"Code": "COD"})
 
-    # COD
-    if shipment.extra:
-        if shipment.extra.get("cod_amount"):
-            payload["CODAmount"] = shipment.extra["cod_amount"]
-            payload["CODReference"] = shipment.extra.get("cod_reference", "")
-            payload["CODCurrency"] = shipment.extra.get("cod_currency", "RON")
-        if "content" in shipment.extra:
-            payload["Content"] = shipment.extra["content"]
-        if "service_list" in shipment.extra:
-            payload["ServiceList"] = shipment.extra["service_list"]
-        if "pickup_date" in shipment.extra:
-            payload["PickupDate"] = shipment.extra["pickup_date"]
+    if pickup_point_id := (shipment.recipient.extra or {}).get("pickup_point_id"):
+        service_list.append(_parcel_shop_service(pickup_point_id, delivery))
+
+    service_list += _notification_services(delivery, services)
+
+    # raw GLS services from the caller (e.g. [{"Code": "SAT"}]); a code already set above is not repeated
+    codes = {s["Code"] for s in service_list}
+    service_list += [s for s in extra.get("service_list") or [] if s.get("Code") not in codes]
+    payload["ServiceList"] = service_list
+
+    if properties := _parcel_properties(parcels, content):
+        payload["ParcelPropertyList"] = properties
+
+    if pickup_date := extra.get("pickup_date"):
+        if isinstance(pickup_date, datetime.date):
+            if not isinstance(pickup_date, datetime.datetime):
+                pickup_date = datetime.datetime.combine(pickup_date, datetime.time(12))
+            pickup_date = f"/Date({int(pickup_date.timestamp() * 1000)})/"
+        payload["PickupDate"] = pickup_date
 
     return payload

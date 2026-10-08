@@ -1,5 +1,6 @@
 """Optional capability interfaces for feature discovery."""
 
+from .batch_tracking import BatchTrackingCapability
 from .bulk_operations import BulkImportCapability, BulkUpdateCapability, BulkUpsertCapability
 from .creative_upload import CreativeUploadCapability
 from .dns_allowlist import DnsAllowlistCapability
@@ -38,6 +39,7 @@ from .webhooks import WebhookCapability
 
 __all__ = [
     "AttributeManagementCapability",
+    "BatchTrackingCapability",
     "BulkImportCapability",
     "BulkUpdateCapability",
     "BulkUpsertCapability",

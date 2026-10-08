@@ -1,104 +1,75 @@
 # GLS
 
-GLS courier integration for AWB generation, tracking, and shipment management. Supports multiple countries across Central and Eastern Europe.
+MyGLS API (GLS Eastern Europe: RO, HU, HR, CZ, SI, SK, RS) — AWB + label, tracking (also 100 AWBs per
+request), cancellation, parcel list, ParcelShop/locker list.
 
-- **API version:** JSON-RPC style (WCF)
-- **Base URL:** `https://api.mygls.{country}/ParcelService.svc/json/` (country-specific)
-- **Auth:** Custom (username + SHA-512 hashed password embedded in every request body)
-- **Webhooks:** Not supported
-- **Rate limit:** 5 req/s, burst 10
+- **Base URL:** `https://api.mygls.{country}/ParcelService.svc/json/` — test: `https://api.test.mygls.{country}/...`
+- **Source:** "MyGLS API for system integration" ver. 25.12.11 and the sample files from
+  <https://api.mygls.ro/index_en.html>. **Not yet run against the live or test host**: the tests mock HTTP.
+- **Test account:** none public; the test host needs a separate account from GLS (Romania: it@gls-romania.ro).
+  Production logins answer `ErrorCode -1 Unauthorized` there.
+- **Capabilities:** `CourierPort`, `BatchTrackingCapability`.
 
-## Credentials
+## Credentials / settings
 
-| Field | Label | Required | Sensitive |
-|-------|-------|----------|-----------|
-| `username` | API Username | Yes | No |
-| `password` | API Password | Yes | Yes |
-| `client_number` | Client Number | Yes | No |
-| `country` | Country Code (RO, HU, HR, CZ, SI, SK, RS) | Yes | No |
-
-## Settings
-
-| Field | Label | Type | Default | Choices | Description |
-|-------|-------|------|---------|---------|-------------|
-| `printer_type` | AWB Printer Format | Select | `Connect` | `A4_2x2`, `A4_4x1`, `Connect`, `Thermo` | Label format for AWB printing. |
-
-## Capabilities
-
-| Capability | Supported | Notes |
-|------------|-----------|-------|
-| Generate AWB | Yes | Creates parcel via PrintLabels, returns tracking number + PDF label |
-| Get tracking | Yes | Returns tracking history via GetParcelStatuses |
-| Cancel shipment | Yes | Deletes parcel via DeleteLabels (requires ParcelId, not AWB number) |
-| List shipments | Yes | Lists parcels within a date range via GetParcelList |
-| Download labels | Yes (client only) | Re-download labels for existing parcels via `client.get_printed_labels()` |
-
-## API Endpoints
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `PrintLabels` | Generate AWB labels for parcels |
-| POST | `DeleteLabels` | Delete/cancel a parcel by ParcelId |
-| POST | `GetParcelStatuses` | Get tracking history for a parcel by AWB number |
-| POST | `GetParcelList` | List parcels within a date range |
-| POST | `GetPrintedLabels` | Download labels for already-generated parcels |
-
-## Supported Countries
-
-The base URL is determined by the `country` credential field:
-
-| Country Code | Base URL |
+| Field | Notes |
 |---|---|
-| `RO` | `https://api.mygls.ro/ParcelService.svc/json/` |
-| `HU` | `https://api.mygls.hu/ParcelService.svc/json/` |
-| `HR` | `https://api.mygls.hr/ParcelService.svc/json/` |
-| `CZ` | `https://api.mygls.cz/ParcelService.svc/json/` |
-| `SI` | `https://api.mygls.si/ParcelService.svc/json/` |
-| `SK` | `https://api.mygls.sk/ParcelService.svc/json/` |
-| `RS` | `https://api.mygls.rs/ParcelService.svc/json/` |
+| `username`, `password` | MyGLS login (e-mail + password); API access may need to be enabled by GLS on the account |
+| `client_number` | GLS client number |
+| `country` | `RO` / `HU` / `HR` / `CZ` / `SI` / `SK` / `RS` — picks the host, the tracking language, the COD currency |
+| `test` | `true` → `api.test.mygls.{country}` |
+| `printer_type` (setting) | `A4_2x2`, `A4_4x1`, `Connect` (default), `Thermo`, `ThermoZPL`, `ThermoZPL_300DPI`, `ShipItThermoPdf`, `ShipItThermoZpl`. The ZPL ones return ZPL in `label_pdf`, not PDF |
+| `hide_phone_on_label` (setting) | `HidePhoneNumberOnLabels` |
+| `service_sm1` + `service_sm1_text` (settings) | SM1: SMS at hand-over; text variables `#ParcelNr#`, `#COD#`, `#PickupDate#`, `#From_Name#`, `#ClientRef#` |
+| `service_sm2` (setting) | SM2: SMS on the delivery day |
+| `service_fds` (setting) | FDS FlexDelivery: e-mail with the delivery window |
+| `service_fss` (setting) | FSS FlexDelivery by SMS; only with FDS (otherwise GLS error 30) |
 
-## Shipment Status Mapping
+## Shipment mapping
 
-GLS uses numeric status codes (01-99). The adapter maps these to framework `ShipmentStatus` values.
+- `shipment.extra`: `reference` (→ `ClientReference`, also the default `CODReference`; `client_reference` is
+  accepted too), `content` (→ `Content`; defaults to the reference), `cod_amount`, `cod_reference`,
+  `cod_currency` (default: the destination country's currency), `pickup_date` (date/datetime or `/Date(..)/`),
+  `service_list` (raw GLS services, e.g. `[{"Code": "SAT"}]`), `sender_email`.
+- `recipient.extra` / `sender.extra`: `company` or `name` (→ `Name`), `contact_name`, `phone` (sent in
+  international format, `0722…` → `+40722…`), `email`, `number` (→ `HouseNumber`, digits only),
+  `house_number_info`, `pickup_point_id` (recipient: ParcelShop/locker `Id` from `get_delivery_points()` or a
+  matchcode → service `PSD`; then name, phone and e-mail are mandatory).
+- `shipment.parcels` → `Count` (max 99) and `ParcelPropertyList` (weight; length/width/height when set).
+- With `cod_amount` the `COD` service is added. SM1/SM2/FDS/FSS come from the settings, each only when the
+  recipient has the phone / e-mail it needs.
+- `AWBLabel.extra`: `parcel_id` (first `ParcelId`), `parcels` (`PrintLabelsInfoList`), `parcel_numbers`, `errors`.
 
-| GLS Code | Description | Framework Status |
-|---|---|---|
-| `01` | Handed over to GLS | `PICKED_UP` |
-| `02` | Left parcel center | `IN_TRANSIT` |
-| `03` | Reached parcel center | `IN_TRANSIT` |
-| `04` | Expected delivery during the day | `OUT_FOR_DELIVERY` |
-| `05` | Delivered | `DELIVERED` |
-| `06`, `07` | Stored in parcel center | `IN_TRANSIT` |
-| `11` | Consignee on holidays | `FAILED_DELIVERY` |
-| `12` | Consignee absent | `FAILED_DELIVERY` |
-| `14` | Reception closed | `FAILED_DELIVERY` |
-| `15` | Not delivered lack of time | `FAILED_DELIVERY` |
-| `16` | No cash available | `FAILED_DELIVERY` |
-| `17` | Refused acceptance | `RETURNED` |
-| `18` | Need address info | `FAILED_DELIVERY` |
-| `20` | Wrong/incomplete address | `FAILED_DELIVERY` |
-| `23`, `40` | Returned to sender | `RETURNED` |
-| `51` | Data entered, not yet handed over | `CREATED` |
-| `54` | Delivered to parcel box | `DELIVERED` |
-| `55` | Delivered at ParcelShop | `DELIVERED` |
-| `58` | Delivered at neighbour's | `DELIVERED` |
-| `83` | Pickup data entered | `PICKED_UP` |
-| `84` | Pickup label produced | `PICKED_UP` |
-| `85` | Driver received pickup order | `OUT_FOR_DELIVERY` |
-| `86` | Parcel reached center (pickup) | `IN_TRANSIT` |
-| `92` | Delivered (pickup) | `DELIVERED` |
-| `97` | Placed to parcellocker | `DELIVERED` |
+## Quirks
 
-Unmapped status codes default to `IN_TRANSIT`.
+- JSON-RPC style: every call is a `POST` with `Username` and `Password` in the body; the password is the
+  SHA-512 digest **as a list of byte values**, not hex.
+- The host depends on the credentials, so the client calls absolute URLs: the registry's HTTP client is bound to
+  the RO manifest URL.
+- Errors come with HTTP 200, in `PrintLabelsErrorList` / `DeleteLabelsErrorList` / `GetParcelStatusErrors` /
+  `GetParcelListStatusesErrors` (`ErrorInfo`: code + description, Appendix A). `-1` → `AuthenticationError`,
+  `31` (same request 5× in 5 min) → `RateLimitError`, `1000`/`1001` → `ProviderError`, the rest →
+  `ValidationError`. If `PrintLabels` returns a parcel number **and** errors, the AWB is kept and the errors are
+  logged (the parcel exists at GLS).
+- Tracking: `get_tracking` logs GLS errors (unknown number, not scanned yet, even a bad login) and returns no
+  events, so a status poller walking every tenant's AWBs is not stopped by one of them. `get_tracking_batch`
+  raises on a bad login.
+- `PrintLabels` and `DeleteLabels` are sent once (`retry=False`): a retry after a timeout would create a second
+  parcel. GLS itself refuses the 5th identical request in 5 minutes (error 31).
+- Cancel (`DeleteLabels`) takes the **ParcelId**, not the AWB number, and works only before hand-over; the first
+  ParcelId of a multi-parcel shipment deletes all of them.
+- Dates are WCF `/Date(ms+hhmm)/`; the milliseconds are UTC, the offset is kept on the parsed datetime.
+- `Labels` is a byte array serialized as a list of ints.
+- GLS lists statuses newest first; `get_tracking` returns them oldest first, like the other couriers.
+- `GetParcelListStatuses` takes at most 100 parcel numbers (`get_tracking_batch` chunks).
+- `GetDeliveryPoints` (MasterDataService) returns the points as GZIP-compressed JSON in a byte array; it is large,
+  cache it.
+- `LanguageIsoCode` is ISO 639-1 (`CS` for CZ, `SL` for SI), not the country code.
+- Method names are unversioned (= GLS' latest). `PrintLabels_20251022` only adds the locker `PIN` to the response.
+- Connection test: `GetParcelList` and look for `ErrorCode -1` (there is no dedicated auth endpoint).
 
-## API Quirks
+## Status mapping
 
-- **All endpoints use POST:** GLS uses a JSON-RPC style API where every call is a POST with the full request payload (including credentials) in the body.
-- **Password hashing:** The API requires the password as a SHA-512 hash represented as a list of byte values (e.g., `[104, 23, ...]`), not a hex string.
-- **Authentication in every request:** Unlike token-based APIs, GLS requires `Username` and `Password` (hashed) fields in every single request body.
-- **ParcelId vs AWB number:** `cancel_shipment()` requires the GLS-internal `ParcelId` (integer), not the AWB/tracking number. The `ParcelId` is returned in `AWBLabel.extra["parcel_id"]` after AWB generation.
-- **Date format:** GLS uses Microsoft WCF date format: `/Date(1739142000000+0100)/` (millisecond timestamp with timezone offset).
-- **Label bytes as int list:** The `Labels` field in responses is a list of integer byte values, not raw bytes or base64. The adapter converts this to `bytes` automatically.
-- **Connection test:** Verified by calling `GetParcelList` and checking for `ErrorCode == -1` (authentication failure) in the error list, since GLS has no dedicated auth test endpoint.
-- **Default date range:** `GetParcelList` defaults to the last 8 hours if no date range is provided.
-- **COD support:** Cash-on-delivery is supported via `CODAmount`, `CODReference`, and `CODCurrency` fields in the parcel payload.
+`01` picked up · `02`/`03`/`06`/`07`/`86` in transit · `04`/`85` out for delivery · `05`/`54`/`55`/`58`/`92`/`97`
+delivered · `11`/`12`/`14`/`15`/`16`/`18`/`20` failed delivery · `17`/`23`/`40` returned · `51` created ·
+`83`/`84` picked up. Unmapped codes → in transit. The raw code is in `TrackingEvent.extra["code"]`.
