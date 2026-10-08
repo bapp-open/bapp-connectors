@@ -12,7 +12,6 @@ import pytest
 from bapp_connectors.providers.payment.cardinity.mappers import webhook_event_from_cardinity
 from bapp_connectors.providers.payment.euplatesc.mappers import webhook_event_from_euplatesc
 from bapp_connectors.providers.payment.librapay.mappers import webhook_event_from_librapay
-from bapp_connectors.providers.payment.mobilpay.client import parse_ipn_xml
 from bapp_connectors.providers.payment.mobilpay.mappers import webhook_event_from_mobilpay
 from bapp_connectors.providers.payment.netopia.mappers import webhook_event_from_netopia
 from bapp_connectors.providers.payment.paypal.mappers import webhook_event_from_paypal
@@ -158,6 +157,9 @@ def test_event_types_are_unchanged():
 
 
 def test_mobilpay_ipn_reads_the_invoice_currency():
+    pytest.importorskip("OpenSSL", reason="pyOpenSSL required for the MobilPay IPN parser")
+    from bapp_connectors.providers.payment.mobilpay.client import parse_ipn_xml
+
     xml = f"""<?xml version="1.0" ?>
 <order type="card" id="{REF}">
     <invoice currency="EUR" amount="120.50"/>

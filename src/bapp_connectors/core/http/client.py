@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 #: firewall from treating us as an anonymous script.
 try:
     from bapp_connectors import __version__ as _version
-except Exception:  # noqa: BLE001 - import partial: numele conteaza, versiunea nu
+except Exception:  # import partial: numele conteaza, versiunea nu
     _version = ""
 DEFAULT_USER_AGENT = f"BappConnectors/{_version}" if _version else "BappConnectors"
 
