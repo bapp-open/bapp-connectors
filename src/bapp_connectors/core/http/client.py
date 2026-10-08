@@ -30,6 +30,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+#: Sent on every request unless the caller passes its own. A named agent is what keeps a shop's
+#: firewall from treating us as an anonymous script.
+try:
+    from bapp_connectors import __version__ as _version
+except Exception:  # noqa: BLE001 - import partial: numele conteaza, versiunea nu
+    _version = ""
+DEFAULT_USER_AGENT = f"BappConnectors/{_version}" if _version else "BappConnectors"
+
+
 class ResilientHttpClient:
     """
     Base HTTP client with retry, rate limiting, and observability.
@@ -46,8 +55,10 @@ class ResilientHttpClient:
         timeout: int = 10,
         provider_name: str = "",
         middleware: MiddlewareChain | None = None,
+        user_agent: str = "",
     ):
         self.base_url = base_url.rstrip("/") + "/"
+        self.user_agent = user_agent or DEFAULT_USER_AGENT
         self.auth = auth or NoAuth()
         self.retry_policy = retry_policy
         self.rate_limiter = rate_limiter
@@ -63,8 +74,14 @@ class ResilientHttpClient:
         return urljoin(self.base_url, path.lstrip("/"))
 
     def _build_headers(self, extra_headers: dict | None = None) -> dict:
-        """Build request headers with auth applied."""
-        headers = {}
+        """Build request headers with auth applied, under our own User-Agent.
+
+        Without one, requests sends `python-requests/x.y`, which shop firewalls block: a
+        WooCommerce store behind one answered every call with a 403 HTML page while the same
+        credentials worked from a client that named itself. A provider whose API demands a
+        particular agent (Trendyol, Okazii) passes its own and overrides this.
+        """
+        headers = {"User-Agent": self.user_agent}
         headers = self.auth.apply_to_headers(headers)
         if extra_headers:
             headers.update(extra_headers)
