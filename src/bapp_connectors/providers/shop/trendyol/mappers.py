@@ -343,6 +343,9 @@ def settlement_from_trendyol(data: dict, query_type: str = "") -> FinancialTrans
         raw_transaction_type=raw_type,
         transaction_date=_ms_to_datetime(data.get("transactionDate")),
         description=data.get("description") or "",
+        # Moneda decontului, nu a comenzii: vanzarile din Grecia/Bulgaria (EUR) se
+        # deconteaza vanzatorului roman in RON.
+        currency=data.get("currency") or "",
         debit=debt,
         credit=credit,
         net_amount=credit - debt,
