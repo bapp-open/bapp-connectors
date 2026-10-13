@@ -65,6 +65,7 @@ class SMTPEmailAdapter(EmailPort, InboxCapability):
             use_ssl=str(credentials.get("use_ssl", "false")).lower() == "true",
             timeout=int(credentials.get("timeout", 30)),
             from_email=credentials.get("from_email", ""),
+            from_name=credentials.get("from_name", ""),
         )
 
         # IMAP client — only when the switch is on (default) and a host is known.
@@ -134,6 +135,7 @@ class SMTPEmailAdapter(EmailPort, InboxCapability):
                 body=message.body,
                 html_body=message.html_body,
                 from_email=message.extra.get("from_email", ""),
+                from_name=message.extra.get("from_name", ""),
                 cc=cc,
                 bcc=bcc,
                 attachments=attachments or None,

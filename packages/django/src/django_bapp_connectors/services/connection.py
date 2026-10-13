@@ -77,6 +77,7 @@ def _serialize_credential_field(f: CredentialField) -> dict[str, Any]:
         "choices": f.choices,
         "help_text": f.help_text,
         "role": getattr(f, "role", None),
+        "group": getattr(f, "group", "") or "",
     }
 
 

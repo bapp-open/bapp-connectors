@@ -13,6 +13,10 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import EmailPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
 
+SERVER = "SMTP server"
+SENDER = "Sender"
+IMAP = "IMAP (inbox)"
+
 manifest = ProviderManifest(
     name="smtp",
     family=ProviderFamily.EMAIL,
@@ -22,17 +26,11 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="host", label="SMTP Host", sensitive=False),
-            CredentialField(name="port", label="SMTP Port", sensitive=False, default="587"),
-            CredentialField(name="username", label="Username", sensitive=False),
-            CredentialField(name="password", label="Password", sensitive=True),
-            CredentialField(
-                name="from_email",
-                label="From Email",
-                sensitive=False,
-                required=False,
-                help_text="Defaults to username if not set.",
-            ),
+            # ── SMTP server ──
+            CredentialField(name="host", label="SMTP Host", sensitive=False, group=SERVER),
+            CredentialField(name="port", label="SMTP Port", sensitive=False, default="587", group=SERVER),
+            CredentialField(name="username", label="Username", sensitive=False, group=SERVER),
+            CredentialField(name="password", label="Password", sensitive=True, group=SERVER),
             CredentialField(
                 name="use_tls",
                 label="Use TLS",
@@ -40,6 +38,7 @@ manifest = ProviderManifest(
                 required=False,
                 default="true",
                 choices=["true", "false"],
+                group=SERVER,
             ),
             CredentialField(
                 name="use_ssl",
@@ -48,6 +47,7 @@ manifest = ProviderManifest(
                 required=False,
                 default="false",
                 choices=["true", "false"],
+                group=SERVER,
             ),
             CredentialField(
                 name="timeout",
@@ -55,6 +55,24 @@ manifest = ProviderManifest(
                 sensitive=False,
                 required=False,
                 default="30",
+                group=SERVER,
+            ),
+            # ── Sender ──
+            CredentialField(
+                name="from_email",
+                label="From Email",
+                sensitive=False,
+                required=False,
+                help_text="Defaults to username if not set.",
+                group=SENDER,
+            ),
+            CredentialField(
+                name="from_name",
+                label="From Name",
+                sensitive=False,
+                required=False,
+                help_text="Shown to recipients as `From Name <from email>`; empty = just the address.",
+                group=SENDER,
             ),
             # ── IMAP (inbox) ──
             CredentialField(
@@ -66,6 +84,7 @@ manifest = ProviderManifest(
                 choices=["true", "false"],
                 help_text="Turn off for send-only relays without IMAP (e.g. Amazon SES): "
                 "the connection test then checks SMTP only.",
+                group=IMAP,
             ),
             CredentialField(
                 name="imap_host",
@@ -73,6 +92,7 @@ manifest = ProviderManifest(
                 sensitive=False,
                 required=False,
                 help_text="Required for inbox capabilities. Defaults to SMTP host if not set.",
+                group=IMAP,
             ),
             CredentialField(
                 name="imap_port",
@@ -80,6 +100,7 @@ manifest = ProviderManifest(
                 sensitive=False,
                 required=False,
                 default="993",
+                group=IMAP,
             ),
             CredentialField(
                 name="imap_use_ssl",
@@ -88,6 +109,7 @@ manifest = ProviderManifest(
                 required=False,
                 default="true",
                 choices=["true", "false"],
+                group=IMAP,
             ),
         ],
     ),

@@ -187,3 +187,13 @@ def test_provider_detail_exposes_credential_role():
     fields = {f["name"]: f for f in detail["auth"]["credential_fields"]}
     assert fields["domain"]["role"] == "endpoint"
     assert fields["consumer_key"]["role"] is None
+
+
+def test_provider_detail_exposes_credential_group():
+    """`group` ajunge la interfata ca sa poata desena separatoare intre sectiuni."""
+    from django_bapp_connectors.services.connection import ConnectionService
+
+    detail = ConnectionService.get_provider_detail("email", "smtp")
+    groups = {f["name"]: f["group"] for f in detail["auth"]["credential_fields"]}
+    assert groups["host"] == "SMTP server"
+    assert groups["imap_host"] == "IMAP (inbox)"

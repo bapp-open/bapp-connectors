@@ -25,6 +25,9 @@ class CredentialField:
     # "endpoint" marks the credential that identifies the remote host (shop domain,
     # server URL). UIs use it to label a connection ("WooCommerce · shop.example.com").
     role: str | None = None
+    # Optional section label. Consecutive fields with the same group belong together;
+    # a UI may open each group with a divider carrying this text. Empty = no section.
+    group: str = ""
 
     def __post_init__(self):
         if not self.label:

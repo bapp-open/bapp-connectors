@@ -42,6 +42,7 @@ class SMTPClient:
         use_ssl: bool = False,
         timeout: int = 30,
         from_email: str = "",
+        from_name: str = "",
     ):
         self.host = host
         self.port = port
@@ -51,6 +52,7 @@ class SMTPClient:
         self.use_ssl = use_ssl
         self.timeout = timeout
         self.from_email = from_email or username
+        self.from_name = from_name
 
     def _connect(self) -> smtplib.SMTP | smtplib.SMTP_SSL:
         """Create and authenticate an SMTP connection."""
@@ -90,6 +92,7 @@ class SMTPClient:
         cc: list[str] | None = None,
         bcc: list[str] | None = None,
         attachments: list[dict] | None = None,
+        from_name: str = "",
     ) -> bool:
         """
         Send a single email.
@@ -100,6 +103,8 @@ class SMTPClient:
             body: Plain text body.
             html_body: HTML body.
             from_email: Sender email (overrides default).
+            from_name: Display name for the From header (overrides default);
+                the header becomes `Name <email>`, or just the address when empty.
             cc: CC recipients.
             bcc: BCC recipients.
             attachments: List of dicts with keys: filename, content (bytes), content_type.
@@ -111,7 +116,7 @@ class SMTPClient:
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = formataddr(("", sender))
+        msg["From"] = formataddr((from_name or self.from_name, sender))
         msg["To"] = ", ".join(to)
         msg["Date"] = formatdate(localtime=True)
 
