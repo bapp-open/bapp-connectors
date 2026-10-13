@@ -41,6 +41,7 @@ manifest = ProviderManifest(
                 label="POS Signature",
                 sensitive=True,
                 help_text="Netopia POS signature identifier.",
+                colspan=12,
             ),
             CredentialField(
                 name="sandbox",
@@ -49,6 +50,7 @@ manifest = ProviderManifest(
                 required=False,
                 default="true",
                 help_text="Set to 'true' for sandbox/test mode, 'false' for live.",
+                colspan=12,
             ),
         ],
     ),

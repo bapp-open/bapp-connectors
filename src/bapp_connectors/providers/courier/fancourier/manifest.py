@@ -29,8 +29,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="username", label="selfAWB username"),
-            CredentialField(name="password", label="selfAWB password", sensitive=True),
+            CredentialField(name="username", label="selfAWB username", colspan=12),
+            CredentialField(name="password", label="selfAWB password", sensitive=True, colspan=12),
             CredentialField(
                 name="client_id",
                 label="Client ID (branch)",
@@ -62,6 +62,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.SELECT,
                 choices=["sender", "recipient"],
                 default="sender",
+                colspan=12,
             ),
             SettingsField(
                 name="label_format",
@@ -70,6 +71,7 @@ manifest = ProviderManifest(
                 choices=["A4", "A5", "A6"],
                 default="A4",
                 help_text="A6 is only available with ePOD.",
+                colspan=12,
             ),
         ],
     ),

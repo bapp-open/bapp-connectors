@@ -31,12 +31,13 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="api_key", label="API Key", sensitive=True),
+            CredentialField(name="api_key", label="API Key", sensitive=True, colspan=12),
             CredentialField(
                 name="webhook_secret",
                 label="Webhook Secret",
                 sensitive=True,
                 help_text="Secret for HMAC-SHA256 webhook signature verification.",
+                colspan=12,
             ),
         ],
     ),

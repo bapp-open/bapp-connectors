@@ -11,6 +11,11 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import FeedPort
 from bapp_connectors.core.types import AuthStrategy, FieldType, ProviderFamily
 
+SHOP = "Shop"
+PRODUCTS = "Products"
+OUTPUT = "Feed output"
+FILTERS = "Filters"
+
 manifest = ProviderManifest(
     name="facebook",
     family=ProviderFamily.FEED,
@@ -29,6 +34,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 required=True,
                 help_text="Base URL for product links (e.g., https://myshop.ro).",
+                group=SHOP,
             ),
             SettingsField(
                 name="product_url_template",
@@ -36,6 +42,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="{base_url}/product/{product_id}",
                 help_text="URL template for product links. Placeholders: {base_url}, {product_id}, {sku}.",
+                group=SHOP,
             ),
             SettingsField(
                 name="default_condition",
@@ -44,6 +51,8 @@ manifest = ProviderManifest(
                 choices=["new", "refurbished", "used"],
                 default="new",
                 help_text="Default product condition.",
+                group=PRODUCTS,
+                colspan=8,
             ),
             SettingsField(
                 name="brand_fallback",
@@ -51,6 +60,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Brand name when product has no brand attribute.",
+                group=PRODUCTS,
+                colspan=8,
             ),
             SettingsField(
                 name="currency",
@@ -58,6 +69,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="RON",
                 help_text="ISO 4217 currency code.",
+                group=PRODUCTS,
+                colspan=8,
             ),
             SettingsField(
                 name="feed_format",
@@ -66,6 +79,8 @@ manifest = ProviderManifest(
                 choices=["csv", "xml"],
                 default="csv",
                 help_text="Output format for the feed.",
+                group=OUTPUT,
+                colspan=8,
             ),
             SettingsField(
                 name="include_variants",
@@ -73,6 +88,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="true",
                 help_text="Expand product variants as separate feed items.",
+                group=OUTPUT,
+                colspan=8,
             ),
             SettingsField(
                 name="apparel_mode",
@@ -80,6 +97,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="false",
                 help_text="Include gender, age_group, color, size fields for apparel products.",
+                group=OUTPUT,
+                colspan=8,
             ),
             # ── Filters ──
             SettingsField(
@@ -88,6 +107,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="false",
                 help_text="Exclude products that are out of stock.",
+                group=FILTERS,
             ),
             SettingsField(
                 name="categories_exclude",
@@ -95,6 +115,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Comma-separated list of category IDs to exclude from the feed.",
+                group=FILTERS,
             ),
         ],
     ),

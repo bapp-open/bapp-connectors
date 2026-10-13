@@ -14,6 +14,13 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import FeedPort
 from bapp_connectors.core.types import AuthStrategy, FieldType, ProviderFamily
 
+PRODUCTS = "Products"
+PAYMENT = "Payment"
+DELIVERY = "Delivery"
+RETURNS = "Returns"
+VARIANTS = "Variants"
+FILTERS = "Filters"
+
 manifest = ProviderManifest(
     name="okazii",
     family=ProviderFamily.FEED,
@@ -33,6 +40,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="RON",
                 help_text="Currency code for prices.",
+                group=PRODUCTS,
+                colspan=8,
             ),
             SettingsField(
                 name="default_condition",
@@ -41,6 +50,8 @@ manifest = ProviderManifest(
                 choices=["1", "2"],
                 default="1",
                 help_text="Product condition: 1=New, 2=Used.",
+                group=PRODUCTS,
+                colspan=8,
             ),
             SettingsField(
                 name="brand_fallback",
@@ -48,6 +59,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Brand name when product has no brand attribute.",
+                group=PRODUCTS,
+                colspan=8,
             ),
             SettingsField(
                 name="invoice",
@@ -56,6 +69,8 @@ manifest = ProviderManifest(
                 choices=["1", "2"],
                 default="1",
                 help_text="Products have invoice: 1=Yes, 2=No.",
+                group=PRODUCTS,
+                colspan=12,
             ),
             SettingsField(
                 name="warranty",
@@ -64,6 +79,8 @@ manifest = ProviderManifest(
                 choices=["1", "2"],
                 default="1",
                 help_text="Products have warranty: 1=Yes, 2=No.",
+                group=PRODUCTS,
+                colspan=12,
             ),
             # ── Payment ──
             SettingsField(
@@ -72,6 +89,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="false",
                 help_text="Accept cash on pickup.",
+                group=PAYMENT,
+                colspan=8,
             ),
             SettingsField(
                 name="payment_ramburs",
@@ -79,6 +98,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="true",
                 help_text="Accept cash on delivery (ramburs).",
+                group=PAYMENT,
+                colspan=8,
             ),
             SettingsField(
                 name="payment_avans",
@@ -86,6 +107,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="true",
                 help_text="Accept bank transfer / prepayment.",
+                group=PAYMENT,
+                colspan=8,
             ),
             # ── Delivery ──
             SettingsField(
@@ -94,6 +117,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default="3",
                 help_text="Default delivery time in days.",
+                group=DELIVERY,
+                colspan=6,
             ),
             SettingsField(
                 name="courier_name",
@@ -101,6 +126,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Default courier name (e.g., Fan Courier, Sameday).",
+                group=DELIVERY,
+                colspan=12,
             ),
             SettingsField(
                 name="courier_price",
@@ -108,6 +135,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Default shipping cost (e.g., 15.99).",
+                group=DELIVERY,
+                colspan=6,
             ),
             # ── Return policy ──
             SettingsField(
@@ -116,6 +145,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="true",
                 help_text="Accept product returns.",
+                group=RETURNS,
+                colspan=12,
             ),
             SettingsField(
                 name="return_days",
@@ -123,6 +154,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default="14",
                 help_text="Number of days for returns.",
+                group=RETURNS,
+                colspan=12,
             ),
             # ── Variants ──
             SettingsField(
@@ -131,6 +164,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="true",
                 help_text="Map product variants to Okazii STOCKS section (Size/Color).",
+                group=VARIANTS,
             ),
             # ── Filters ──
             SettingsField(
@@ -139,6 +173,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="false",
                 help_text="Exclude products that are out of stock.",
+                group=FILTERS,
             ),
             SettingsField(
                 name="categories_exclude",
@@ -146,6 +181,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Comma-separated list of category IDs to exclude from the feed.",
+                group=FILTERS,
             ),
         ],
     ),

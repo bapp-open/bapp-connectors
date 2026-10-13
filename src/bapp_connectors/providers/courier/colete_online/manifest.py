@@ -23,8 +23,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.OAUTH2,
         required_fields=[
-            CredentialField(name="client_id", label="Client ID", sensitive=False),
-            CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+            CredentialField(name="client_id", label="Client ID", sensitive=False, colspan=12),
+            CredentialField(name="client_secret", label="Client Secret", sensitive=True, colspan=12),
         ],
     ),
     settings=SettingsConfig(

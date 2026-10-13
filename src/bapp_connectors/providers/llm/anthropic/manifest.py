@@ -47,6 +47,7 @@ manifest = ProviderManifest(
                 ],
                 default="claude-sonnet-4-6",
                 help_text="Model to use when none is specified in the request.",
+                colspan=16,
             ),
             SettingsField(
                 name="max_tokens",
@@ -54,6 +55,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default=4096,
                 help_text="Default maximum tokens in the response.",
+                colspan=8,
             ),
             SettingsField(
                 name="platform_api_key",

@@ -30,8 +30,9 @@ manifest = ProviderManifest(
                 label="Server",
                 role="endpoint",
                 help_text="Hostname of the cPanel server, e.g. cpanel.example.net (no scheme, no port).",
+                colspan=12,
             ),
-            CredentialField(name="username", label="cPanel user"),
+            CredentialField(name="username", label="cPanel user", colspan=12),
             CredentialField(
                 name="token",
                 label="API token",
@@ -42,10 +43,16 @@ manifest = ProviderManifest(
     ),
     settings=SettingsConfig(
         fields=[
-            SettingsField(name="port", label="Port", field_type=FieldType.INT, default=2083),
-            SettingsField(name="webmail_port", label="Webmail port", field_type=FieldType.INT, default=2096),
-            SettingsField(name="verify_ssl", label="Verify TLS certificate", field_type=FieldType.BOOL, default=True),
-            SettingsField(name="timeout", label="Timeout (seconds)", field_type=FieldType.INT, default=30),
+            SettingsField(name="port", label="Port", field_type=FieldType.INT, default=2083, colspan=6),
+            SettingsField(name="webmail_port", label="Webmail port", field_type=FieldType.INT, default=2096, colspan=6),
+            SettingsField(
+                name="verify_ssl",
+                label="Verify TLS certificate",
+                field_type=FieldType.BOOL,
+                default=True,
+                colspan=6,
+            ),
+            SettingsField(name="timeout", label="Timeout (seconds)", field_type=FieldType.INT, default=30, colspan=6),
         ],
     ),
     capabilities=[HostingPort, DnsPort, MailboxCapability, PanelLinkCapability],

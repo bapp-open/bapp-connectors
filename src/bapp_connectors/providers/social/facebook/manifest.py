@@ -19,6 +19,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import SocialPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
 
+ACCOUNT = "Account"
+OAUTH_APP = "OAuth app"
+
 manifest = ProviderManifest(
     name="facebook",
     family=ProviderFamily.SOCIAL,
@@ -41,17 +44,21 @@ manifest = ProviderManifest(
                     "permissions; pages_manage_posts is required for publishing. Optional when "
                     "connecting via the OAuth flow (obtained afterwards via list_page_tokens)."
                 ),
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="page_id",
                 label="Page ID",
                 help_text="Numeric ID of the Facebook Page.",
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="app_id",
                 label="App ID",
                 required=False,
                 help_text="Meta app ID, used for the OAuth authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
             CredentialField(
                 name="app_secret",
@@ -59,12 +66,14 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Meta app secret, used for the OAuth authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="app_id", label="App ID"),
-                CredentialField(name="app_secret", label="App Secret", sensitive=True),
+                CredentialField(name="app_id", label="App ID", colspan=12),
+                CredentialField(name="app_secret", label="App Secret", sensitive=True, colspan=12),
             ],
             scopes=["pages_show_list", "pages_read_engagement", "read_insights", "pages_manage_posts"],
             display_name="Connect with Facebook",

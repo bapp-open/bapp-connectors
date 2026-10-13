@@ -31,8 +31,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="public_key", label="Public key"),
-            CredentialField(name="private_key", label="Private key", sensitive=True),
+            CredentialField(name="public_key", label="Public key", colspan=12),
+            CredentialField(name="private_key", label="Private key", sensitive=True, colspan=12),
             CredentialField(
                 name="staging",
                 label="Staging",

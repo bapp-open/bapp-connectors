@@ -18,6 +18,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import SocialPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+API_ACCESS = "API access"
+OAUTH_APP = "OAuth app"
+
 manifest = ProviderManifest(
     name="youtube",
     family=ProviderFamily.SOCIAL,
@@ -36,6 +39,7 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Google API key for public data access.",
+                group=API_ACCESS,
             ),
             CredentialField(
                 name="access_token",
@@ -47,6 +51,7 @@ manifest = ProviderManifest(
                     "Publishing (video upload) requires the "
                     "https://www.googleapis.com/auth/youtube.upload scope."
                 ),
+                group=API_ACCESS,
             ),
             CredentialField(
                 name="client_id",
@@ -54,6 +59,8 @@ manifest = ProviderManifest(
                 sensitive=False,
                 required=False,
                 help_text="OAuth2 client ID for the redirect-based authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
             CredentialField(
                 name="client_secret",
@@ -61,12 +68,14 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="OAuth2 client secret for the redirect-based authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="client_id", label="Client ID", sensitive=False),
-                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+                CredentialField(name="client_id", label="Client ID", sensitive=False, colspan=12),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True, colspan=12),
             ],
             scopes=[
                 "https://www.googleapis.com/auth/youtube.readonly",
@@ -93,6 +102,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="true",
                 help_text="Only include Shorts, i.e. videos not longer than shorts_max_seconds.",
+                colspan=12,
             ),
             SettingsField(
                 name="shorts_max_seconds",
@@ -100,6 +110,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default=180,
                 help_text="Maximum duration in seconds for a video to count as a Short.",
+                colspan=12,
             ),
         ],
     ),

@@ -23,8 +23,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,  # CEL uses login endpoint to obtain a bearer token
         required_fields=[
-            CredentialField(name="username", label="API Username", sensitive=False),
-            CredentialField(name="password", label="API Password", sensitive=True),
+            CredentialField(name="username", label="API Username", sensitive=False, colspan=8),
+            CredentialField(name="password", label="API Password", sensitive=True, colspan=8),
             CredentialField(
                 name="country",
                 label="Country Code",
@@ -32,6 +32,7 @@ manifest = ProviderManifest(
                 default="RO",
                 required=False,
                 choices=["RO"],
+                colspan=8,
             ),
         ],
     ),

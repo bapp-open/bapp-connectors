@@ -19,6 +19,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import MessagingPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+API_ACCESS = "API access"
+WEBHOOK = "Webhook"
+
 manifest = ProviderManifest(
     name="instagram",
     family=ProviderFamily.MESSAGING,
@@ -33,12 +36,14 @@ manifest = ProviderManifest(
                 label="Page Access Token",
                 sensitive=True,
                 help_text="Page access token linked to the Instagram account (same token used for Messenger).",
+                group=API_ACCESS,
             ),
             CredentialField(
                 name="ig_user_id",
                 label="Instagram User ID",
                 sensitive=False,
                 help_text="Instagram-scoped user ID (numeric). Found in Meta Business Suite or via /me?fields=instagram_business_account.",
+                group=API_ACCESS,
             ),
             CredentialField(
                 name="app_secret",
@@ -46,6 +51,8 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Meta App Secret for webhook signature verification (X-Hub-Signature-256).",
+                group=WEBHOOK,
+                colspan=12,
             ),
             CredentialField(
                 name="webhook_verify_token",
@@ -53,6 +60,8 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Custom token for Meta's webhook URL verification challenge.",
+                group=WEBHOOK,
+                colspan=12,
             ),
         ],
     ),

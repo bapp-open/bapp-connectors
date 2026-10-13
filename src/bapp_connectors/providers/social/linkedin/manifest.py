@@ -21,6 +21,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import SocialPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+ACCOUNT = "Account"
+OAUTH_APP = "OAuth app"
+
 manifest = ProviderManifest(
     name="linkedin",
     family=ProviderFamily.SOCIAL,
@@ -44,17 +47,21 @@ manifest = ProviderManifest(
                     "rw_organization_admin for share statistics. Optional when "
                     "connecting via the OAuth flow."
                 ),
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="organization_id",
                 label="Organization ID",
                 help_text="Numeric ID of the LinkedIn organization (company page).",
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="client_id",
                 label="Client ID",
                 required=False,
                 help_text="LinkedIn app client ID, used for the OAuth authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
             CredentialField(
                 name="client_secret",
@@ -62,12 +69,14 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="LinkedIn app client secret, used for the OAuth authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="client_id", label="Client ID"),
-                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+                CredentialField(name="client_id", label="Client ID", colspan=12),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True, colspan=12),
             ],
             scopes=["r_organization_social", "w_organization_social", "rw_organization_admin"],
             display_name="Connect with LinkedIn",

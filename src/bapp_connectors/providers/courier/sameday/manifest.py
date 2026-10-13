@@ -23,8 +23,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="username", label="API Username", sensitive=False),
-            CredentialField(name="password", label="API Password", sensitive=True),
+            CredentialField(name="username", label="API Username", sensitive=False, colspan=12),
+            CredentialField(name="password", label="API Password", sensitive=True, colspan=12),
         ],
     ),
     settings=SettingsConfig(
@@ -35,6 +35,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 required=False,
                 help_text="If not set, the default pickup point from the API will be used.",
+                colspan=12,
             ),
             SettingsField(
                 name="service_id",
@@ -42,6 +43,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default=7,
                 help_text="Sameday service ID. Default: 7 (24h).",
+                colspan=12,
             ),
             SettingsField(
                 name="cod_source",

@@ -25,8 +25,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.BASIC,
         required_fields=[
-            CredentialField(name="username", label="Username", sensitive=False),
-            CredentialField(name="password", label="Password", sensitive=True),
+            CredentialField(name="username", label="Username", sensitive=False, colspan=12),
+            CredentialField(name="password", label="Password", sensitive=True, colspan=12),
             CredentialField(
                 name="ip",
                 label="Device IP",
@@ -43,6 +43,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default=1,
                 help_text="GSM line/SIM slot to use for sending (default: 1).",
+                colspan=12,
             ),
             SettingsField(
                 name="max_retries",
@@ -50,6 +51,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default=0,
                 help_text="Number of retries when the line is busy (default: 0).",
+                colspan=12,
             ),
             SettingsField(
                 name="base_url",

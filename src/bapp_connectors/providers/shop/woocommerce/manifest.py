@@ -34,6 +34,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+PRICES = "Prices"
+CATALOG_SYNC = "Catalog sync"
+
 manifest = ProviderManifest(
     name="woocommerce",
     family=ProviderFamily.SHOP,
@@ -44,9 +47,9 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="consumer_key", label="Consumer Key", sensitive=True, required=False),
-            CredentialField(name="consumer_secret", label="Consumer Secret", sensitive=True, required=False),
-            CredentialField(name="domain", label="Store Domain", sensitive=False, help_text="e.g. https://myshop.com", role="endpoint"),
+            CredentialField(name="consumer_key", label="Consumer Key", sensitive=True, required=False, colspan=12),
+            CredentialField(name="consumer_secret", label="Consumer Secret", sensitive=True, required=False, colspan=12),
+            CredentialField(name="domain", label="Store Domain", sensitive=False, help_text="e.g. https://myshop.com", role="endpoint", colspan=16),
             CredentialField(
                 name="verify_ssl",
                 label="Verify SSL",
@@ -54,6 +57,7 @@ manifest = ProviderManifest(
                 required=False,
                 default="true",
                 help_text="Set to 'false' to disable SSL verification",
+                colspan=8,
             ),
         ],
         oauth=OAuthConfig(
@@ -72,6 +76,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=True,
                 help_text="Whether the WooCommerce store is configured to use VAT-inclusive prices (WooCommerce > Settings > Tax > Prices entered with tax).",
+                group=PRICES,
+                colspan=12,
             ),
             SettingsField(
                 name="vat_rate",
@@ -79,23 +85,32 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="0.19",
                 help_text="VAT rate as a decimal (e.g., 0.19 for 19%). Used to convert between net and gross prices.",
+                group=PRICES,
+                colspan=12,
             ),
             SettingsField(
                 name="batch_size", label="Products per batch", field_type=FieldType.INT, default=20,
                 help_text="How many products are sent in one /products/batch call (max 100). Smaller batches are gentler on the WordPress server, especially when images are included.",
+                group=CATALOG_SYNC,
+                colspan=8,
             ),
             SettingsField(
                 name="pause_seconds", label="Pause between batches (s)", field_type=FieldType.INT, default=2,
                 help_text="Seconds to wait between consecutive batches so the store keeps serving customers.",
+                group=CATALOG_SYNC,
+                colspan=8,
             ),
             SettingsField(
                 name="publish_status", label="Status for new products", field_type=FieldType.SELECT,
                 choices=["publish", "draft"], default="publish",
                 help_text="Newly created products are published immediately or left as drafts for review.",
+                group=CATALOG_SYNC,
+                colspan=8,
             ),
             SettingsField(
                 name="sync_images", label="Sync product images", field_type=FieldType.BOOL, default=True,
                 help_text="Send product photos to the store (WordPress downloads each image; disable for a faster first sync).",
+                group=CATALOG_SYNC,
             ),
         ],
     ),

@@ -22,6 +22,9 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType,
 ECOLET_LIVE_URL = "https://panel.ecolet.ro/api/"
 ECOLET_STAGING_URL = "https://staging.ecolet.ro/api/"
 
+OAUTH_APP = "OAuth app"
+ACCOUNT = "Account"
+
 manifest = ProviderManifest(
     name="ecolet",
     family=ProviderFamily.COURIER,
@@ -35,16 +38,21 @@ manifest = ProviderManifest(
                 name="client_id",
                 label="OAuth Client ID",
                 help_text="From the eColet panel: Cont > Aplicatii OAuth (/account/oauth/clients).",
+                group=OAUTH_APP,
+                colspan=12,
             ),
-            CredentialField(name="client_secret", label="OAuth Client Secret", sensitive=True),
-            CredentialField(name="username", label="Account email"),
-            CredentialField(name="password", label="Account password", sensitive=True),
+            CredentialField(
+                name="client_secret", label="OAuth Client Secret", sensitive=True, group=OAUTH_APP, colspan=12
+            ),
+            CredentialField(name="username", label="Account email", group=ACCOUNT, colspan=12),
+            CredentialField(name="password", label="Account password", sensitive=True, group=ACCOUNT, colspan=12),
             CredentialField(
                 name="staging",
                 label="Staging",
                 required=False,
                 default="false",
                 help_text="Use staging.ecolet.ro (needs a staging account).",
+                group=ACCOUNT,
             ),
         ],
     ),
@@ -64,6 +72,7 @@ manifest = ProviderManifest(
                 choices=["courier", "self"],
                 default="courier",
                 help_text="courier: the courier collects the parcel at the first available slot; self: you drop it off.",
+                colspan=12,
             ),
             SettingsField(
                 name="awb_wait_seconds",
@@ -71,6 +80,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default=30,
                 help_text="eColet books the courier asynchronously; how long to poll for the AWB number.",
+                colspan=12,
             ),
         ],
     ),

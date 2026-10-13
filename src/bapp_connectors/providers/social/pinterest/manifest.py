@@ -48,6 +48,7 @@ manifest = ProviderManifest(
                 label="Client ID",
                 required=False,
                 help_text="Pinterest app client ID (needed for the OAuth flow).",
+                colspan=12,
             ),
             CredentialField(
                 name="client_secret",
@@ -55,12 +56,13 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Pinterest app client secret (needed for the OAuth flow).",
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="client_id", label="Client ID"),
-                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+                CredentialField(name="client_id", label="Client ID", colspan=12),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True, colspan=12),
             ],
             scopes=[
                 "user_accounts:read",

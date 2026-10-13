@@ -22,12 +22,13 @@ manifest = ProviderManifest(
         strategy=AuthStrategy.CUSTOM,  # API key goes in JSON body, not headers
         required_fields=[
             CredentialField(name="api_key", label="API Key", sensitive=True),
-            CredentialField(name="from_email", label="Default From Email", sensitive=False),
+            CredentialField(name="from_email", label="Default From Email", sensitive=False, colspan=12),
             CredentialField(
                 name="from_name",
                 label="Default From Name",
                 sensitive=False,
                 required=False,
+                colspan=12,
             ),
         ],
     ),

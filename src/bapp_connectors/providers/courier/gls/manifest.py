@@ -26,6 +26,9 @@ PRINTER_TYPES = [
     "ShipItThermoZpl",
 ]
 
+LABEL = "Label"
+NOTIFICATIONS = "Recipient notifications"
+
 manifest = ProviderManifest(
     name="gls",
     family=ProviderFamily.COURIER,
@@ -36,15 +39,16 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="username", label="API Username (MyGLS e-mail)", sensitive=False),
-            CredentialField(name="password", label="API Password", sensitive=True),
-            CredentialField(name="client_number", label="Client Number", sensitive=False),
+            CredentialField(name="username", label="API Username (MyGLS e-mail)", sensitive=False, colspan=12),
+            CredentialField(name="password", label="API Password", sensitive=True, colspan=12),
+            CredentialField(name="client_number", label="Client Number", sensitive=False, colspan=16),
             CredentialField(
                 name="country",
                 label="Country",
                 sensitive=False,
                 default="RO",
                 choices=["RO", "HU", "HR", "CZ", "SI", "SK", "RS"],
+                colspan=8,
             ),
             CredentialField(
                 name="test",
@@ -64,12 +68,14 @@ manifest = ProviderManifest(
                 default="Connect",
                 choices=PRINTER_TYPES,
                 help_text="Label format. ThermoZPL* / ShipItThermoZpl return ZPL, not PDF.",
+                group=LABEL,
             ),
             SettingsField(
                 name="hide_phone_on_label",
                 label="Hide phone numbers on the label",
                 field_type=FieldType.BOOL,
                 default=False,
+                group=LABEL,
             ),
             SettingsField(
                 name="service_sm1",
@@ -77,6 +83,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=False,
                 help_text="SMS to the recipient when the parcel is handed over to GLS.",
+                group=NOTIFICATIONS,
             ),
             SettingsField(
                 name="service_sm1_text",
@@ -84,6 +91,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.TEXTAREA,
                 default="",
                 help_text="Variables: #ParcelNr#, #COD#, #PickupDate#, #From_Name#, #ClientRef#.",
+                group=NOTIFICATIONS,
             ),
             SettingsField(
                 name="service_sm2",
@@ -91,6 +99,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=False,
                 help_text="SMS to the recipient on the delivery day.",
+                group=NOTIFICATIONS,
+                colspan=8,
             ),
             SettingsField(
                 name="service_fds",
@@ -98,6 +108,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=False,
                 help_text="E-mail with the estimated delivery window and delivery options.",
+                group=NOTIFICATIONS,
+                colspan=8,
             ),
             SettingsField(
                 name="service_fss",
@@ -105,6 +117,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=False,
                 help_text="FlexDelivery by SMS; only together with FlexDelivery (FDS).",
+                group=NOTIFICATIONS,
+                colspan=8,
             ),
         ],
     ),

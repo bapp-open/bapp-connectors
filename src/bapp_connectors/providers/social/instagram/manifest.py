@@ -19,6 +19,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import SocialPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
 
+ACCOUNT = "Account"
+OAUTH_APP = "OAuth app"
+
 manifest = ProviderManifest(
     name="instagram",
     family=ProviderFamily.SOCIAL,
@@ -42,17 +45,21 @@ manifest = ProviderManifest(
                     "for publishing. Optional when connecting via the OAuth flow (obtained "
                     "afterwards via list_instagram_accounts)."
                 ),
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="ig_user_id",
                 label="Instagram Business Account ID",
                 help_text="Numeric ID of the Instagram Business/Creator account (not the username).",
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="app_id",
                 label="App ID",
                 required=False,
                 help_text="Meta app ID, used for the OAuth authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
             CredentialField(
                 name="app_secret",
@@ -60,12 +67,14 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Meta app secret, used for the OAuth authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="app_id", label="App ID"),
-                CredentialField(name="app_secret", label="App Secret", sensitive=True),
+                CredentialField(name="app_id", label="App ID", colspan=12),
+                CredentialField(name="app_secret", label="App Secret", sensitive=True, colspan=12),
             ],
             scopes=["instagram_basic", "instagram_content_publish", "instagram_manage_insights", "pages_show_list"],
             display_name="Connect with Instagram",

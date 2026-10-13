@@ -24,8 +24,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.BASIC,
         required_fields=[
-            CredentialField(name="username", label="Username", help_text="A pfSense admin account."),
-            CredentialField(name="password", label="Password", sensitive=True),
+            CredentialField(name="username", label="Username", help_text="A pfSense admin account.", colspan=12),
+            CredentialField(name="password", label="Password", sensitive=True, colspan=12),
         ],
     ),
     settings=SettingsConfig(
@@ -44,12 +44,14 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=False,
                 help_text="pfSense ships a self-signed certificate; leave off unless you installed a trusted one.",
+                colspan=12,
             ),
             SettingsField(
                 name="timeout",
                 label="Timeout (seconds)",
                 field_type=FieldType.INT,
                 default=20,
+                colspan=12,
             ),
         ],
     ),

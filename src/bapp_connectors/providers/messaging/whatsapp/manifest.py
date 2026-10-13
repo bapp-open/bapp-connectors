@@ -18,6 +18,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import MessagingPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+API_ACCESS = "API access"
+WEBHOOK = "Webhook"
+
 manifest = ProviderManifest(
     name="whatsapp",
     family=ProviderFamily.MESSAGING,
@@ -32,12 +35,14 @@ manifest = ProviderManifest(
                 label="Access Token",
                 sensitive=True,
                 help_text="Permanent or temporary access token from Meta developer portal.",
+                group=API_ACCESS,
             ),
             CredentialField(
                 name="phone_number_id",
                 label="Phone Number ID",
                 sensitive=False,
                 help_text="Phone number ID from Meta WhatsApp Business dashboard.",
+                group=API_ACCESS,
             ),
             CredentialField(
                 name="app_secret",
@@ -45,6 +50,8 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Meta App Secret — used to verify webhook signatures (X-Hub-Signature-256).",
+                group=WEBHOOK,
+                colspan=12,
             ),
             CredentialField(
                 name="webhook_verify_token",
@@ -52,6 +59,8 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Custom token for Meta's webhook URL verification challenge (GET hub.verify_token).",
+                group=WEBHOOK,
+                colspan=12,
             ),
         ],
     ),

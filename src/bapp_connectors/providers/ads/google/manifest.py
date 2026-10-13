@@ -18,6 +18,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import AdsPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+ACCOUNT = "Account"
+OAUTH_APP = "OAuth app"
+
 manifest = ProviderManifest(
     name="google",
     family=ProviderFamily.ADS,
@@ -32,6 +35,7 @@ manifest = ProviderManifest(
                 label="Developer Token",
                 sensitive=True,
                 help_text="Google Ads API developer token from the API Center.",
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="access_token",
@@ -39,17 +43,22 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="OAuth2 access token with https://www.googleapis.com/auth/adwords scope.",
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="customer_id",
                 label="Customer ID",
                 help_text="10-digit customer ID, dashes allowed (e.g. 123-456-7890).",
+                group=ACCOUNT,
+                colspan=12,
             ),
             CredentialField(
                 name="login_customer_id",
                 label="Login Customer ID",
                 required=False,
                 help_text="Manager/MCC account ID when accessing a client account.",
+                group=ACCOUNT,
+                colspan=12,
             ),
             CredentialField(
                 name="client_id",
@@ -57,6 +66,8 @@ manifest = ProviderManifest(
                 sensitive=False,
                 required=False,
                 help_text="OAuth2 client ID for the redirect-based authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
             CredentialField(
                 name="client_secret",
@@ -64,12 +75,14 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="OAuth2 client secret for the redirect-based authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="client_id", label="Client ID", sensitive=False),
-                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+                CredentialField(name="client_id", label="Client ID", sensitive=False, colspan=12),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True, colspan=12),
             ],
             scopes=["https://www.googleapis.com/auth/adwords"],
             display_name="Connect with Google Ads",

@@ -23,8 +23,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="access_key_id", label="Access Key ID", sensitive=False),
-            CredentialField(name="secret_access_key", label="Secret Access Key", sensitive=True),
+            CredentialField(name="access_key_id", label="Access Key ID", sensitive=False, colspan=12),
+            CredentialField(name="secret_access_key", label="Secret Access Key", sensitive=True, colspan=12),
             CredentialField(name="from_email", label="Default From Email", sensitive=False),
         ],
     ),
@@ -36,6 +36,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="us-east-1",
                 help_text="AWS region for SES.",
+                colspan=12,
             ),
             SettingsField(
                 name="configuration_set",
@@ -43,6 +44,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 required=False,
                 help_text="SES Configuration Set name for tracking.",
+                colspan=12,
             ),
         ],
     ),

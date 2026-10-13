@@ -42,6 +42,7 @@ manifest = ProviderManifest(
                 choices_source="list_models",
                 default="llama3.2",
                 help_text="Model to use when none is specified. Lists models installed on the Ollama server.",
+                colspan=16,
             ),
             SettingsField(
                 name="temperature",
@@ -49,6 +50,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="0.7",
                 help_text="Default sampling temperature.",
+                colspan=8,
             ),
         ],
     ),

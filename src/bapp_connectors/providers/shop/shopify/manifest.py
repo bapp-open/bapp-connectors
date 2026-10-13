@@ -38,14 +38,14 @@ manifest = ProviderManifest(
         required_fields=[
             CredentialField(name="store_domain", label="Store Domain (e.g. myshop.myshopify.com)", sensitive=False),
             CredentialField(name="access_token", label="Admin API Access Token", sensitive=True, required=False),
-            CredentialField(name="client_id", label="App Client ID", sensitive=False, required=False),
-            CredentialField(name="client_secret", label="App Client Secret", sensitive=True, required=False),
+            CredentialField(name="client_id", label="App Client ID", sensitive=False, required=False, colspan=12),
+            CredentialField(name="client_secret", label="App Client Secret", sensitive=True, required=False, colspan=12),
         ],
         oauth=OAuthConfig(
             credential_fields=[
                 CredentialField(name="store_domain", label="Store Domain (e.g. myshop.myshopify.com)", sensitive=False),
-                CredentialField(name="client_id", label="App Client ID", sensitive=False),
-                CredentialField(name="client_secret", label="App Client Secret", sensitive=True),
+                CredentialField(name="client_id", label="App Client ID", sensitive=False, colspan=12),
+                CredentialField(name="client_secret", label="App Client Secret", sensitive=True, colspan=12),
             ],
             scopes=["read_products", "write_products", "read_orders", "write_orders", "read_inventory", "write_inventory"],
             display_name="Connect with Shopify",
@@ -59,6 +59,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="2024-01",
                 help_text="Shopify API version (e.g., 2024-01).",
+                colspan=8,
             ),
             SettingsField(
                 name="prices_include_vat",
@@ -66,12 +67,14 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=False,
                 help_text="Whether Shopify prices include tax.",
+                colspan=8,
             ),
             SettingsField(
                 name="vat_rate",
                 label="VAT Rate",
                 field_type=FieldType.STR,
                 default="0.19",
+                colspan=8,
             ),
         ],
     ),

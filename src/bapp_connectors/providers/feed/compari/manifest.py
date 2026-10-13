@@ -11,6 +11,12 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import FeedPort
 from bapp_connectors.core.types import AuthStrategy, FieldType, ProviderFamily
 
+SHOP = "Shop"
+PRODUCTS = "Products"
+SHIPPING = "Shipping"
+OUTPUT = "Feed output"
+FILTERS = "Filters"
+
 manifest = ProviderManifest(
     name="compari",
     family=ProviderFamily.FEED,
@@ -29,6 +35,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 required=True,
                 help_text="Base URL for product links (e.g., https://myshop.ro).",
+                group=SHOP,
             ),
             SettingsField(
                 name="product_url_template",
@@ -36,6 +43,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="{base_url}/product/{product_id}",
                 help_text="URL template for product links. Placeholders: {base_url}, {product_id}, {sku}.",
+                group=SHOP,
             ),
             SettingsField(
                 name="manufacturer_fallback",
@@ -43,6 +51,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Manufacturer name when product has no brand/manufacturer attribute.",
+                group=PRODUCTS,
+                colspan=12,
             ),
             SettingsField(
                 name="currency",
@@ -50,6 +60,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="RON",
                 help_text="Currency code for prices.",
+                group=PRODUCTS,
+                colspan=12,
             ),
             SettingsField(
                 name="default_delivery_time",
@@ -57,6 +69,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Default delivery time (e.g., '1-3 zile').",
+                group=SHIPPING,
+                colspan=12,
             ),
             SettingsField(
                 name="default_delivery_cost",
@@ -64,6 +78,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Default delivery cost (e.g., '15.99').",
+                group=SHIPPING,
+                colspan=12,
             ),
             SettingsField(
                 name="feed_format",
@@ -72,6 +88,8 @@ manifest = ProviderManifest(
                 choices=["xml", "csv"],
                 default="xml",
                 help_text="Output format for the feed.",
+                group=OUTPUT,
+                colspan=12,
             ),
             SettingsField(
                 name="include_variants",
@@ -79,6 +97,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="true",
                 help_text="Expand product variants as separate feed items.",
+                group=OUTPUT,
+                colspan=12,
             ),
             # ── Filters ──
             SettingsField(
@@ -87,6 +107,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="false",
                 help_text="Exclude products that are out of stock.",
+                group=FILTERS,
             ),
             SettingsField(
                 name="categories_exclude",
@@ -94,6 +115,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Comma-separated list of category IDs to exclude from the feed.",
+                group=FILTERS,
             ),
         ],
     ),

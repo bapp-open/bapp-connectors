@@ -16,6 +16,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import AdsPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
 
+ACCOUNT = "Account"
+OAUTH_APP = "OAuth app"
+
 manifest = ProviderManifest(
     name="tiktok",
     family=ProviderFamily.ADS,
@@ -34,17 +37,21 @@ manifest = ProviderManifest(
                     "TikTok for Business access token (sent as the Access-Token header). "
                     "Leave empty when connecting via OAuth."
                 ),
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="advertiser_id",
                 label="Advertiser ID",
                 help_text="Numeric TikTok Ads advertiser account ID.",
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="app_id",
                 label="App ID",
                 required=False,
                 help_text="TikTok for Business developer app ID (needed for the OAuth flow).",
+                group=OAUTH_APP,
+                colspan=12,
             ),
             CredentialField(
                 name="app_secret",
@@ -52,12 +59,14 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="TikTok for Business developer app secret (needed for the OAuth flow).",
+                group=OAUTH_APP,
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="app_id", label="App ID"),
-                CredentialField(name="app_secret", label="App Secret", sensitive=True),
+                CredentialField(name="app_id", label="App ID", colspan=12),
+                CredentialField(name="app_secret", label="App Secret", sensitive=True, colspan=12),
             ],
             # Business API scopes are configured on the developer app, not the URL.
             scopes=[],

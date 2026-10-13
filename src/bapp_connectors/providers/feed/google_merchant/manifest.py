@@ -11,6 +11,12 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import FeedPort
 from bapp_connectors.core.types import AuthStrategy, FieldType, ProviderFamily
 
+SHOP = "Shop"
+PRODUCTS = "Products"
+CATEGORIES = "Categories"
+OUTPUT = "Feed output"
+FILTERS = "Filters"
+
 manifest = ProviderManifest(
     name="google_merchant",
     family=ProviderFamily.FEED,
@@ -29,6 +35,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 required=True,
                 help_text="Base URL for product links (e.g., https://myshop.ro).",
+                group=SHOP,
             ),
             SettingsField(
                 name="product_url_template",
@@ -36,6 +43,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="{base_url}/product/{product_id}",
                 help_text="URL template for product links. Placeholders: {base_url}, {product_id}, {sku}.",
+                group=SHOP,
             ),
             SettingsField(
                 name="default_condition",
@@ -44,6 +52,8 @@ manifest = ProviderManifest(
                 choices=["new", "refurbished", "used"],
                 default="new",
                 help_text="Default product condition.",
+                group=PRODUCTS,
+                colspan=12,
             ),
             SettingsField(
                 name="default_availability",
@@ -52,6 +62,8 @@ manifest = ProviderManifest(
                 choices=["in stock", "out of stock", "preorder"],
                 default="in stock",
                 help_text="Default availability when stock is unknown.",
+                group=PRODUCTS,
+                colspan=12,
             ),
             SettingsField(
                 name="brand_fallback",
@@ -59,6 +71,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Brand name to use when product has no brand attribute.",
+                group=PRODUCTS,
+                colspan=12,
             ),
             SettingsField(
                 name="currency",
@@ -66,6 +80,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="RON",
                 help_text="ISO 4217 currency code for prices.",
+                group=PRODUCTS,
+                colspan=12,
             ),
             SettingsField(
                 name="default_google_category",
@@ -73,6 +89,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Default Google taxonomy category (e.g., 'Electronics > Computers'). Used when no per-product or mapped category exists.",
+                group=CATEGORIES,
             ),
             SettingsField(
                 name="category_mapping",
@@ -80,6 +97,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.TEXTAREA,
                 default="",
                 help_text='JSON object mapping store categories to Google taxonomy. E.g., {"Electronics": "Electronics", "Clothing > T-Shirts": "Apparel & Accessories > Clothing > Shirts & Tops"}.',
+                group=CATEGORIES,
             ),
             SettingsField(
                 name="feed_title",
@@ -87,6 +105,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="Product Feed",
                 help_text="Title element in the feed.",
+                group=OUTPUT,
+                colspan=8,
             ),
             SettingsField(
                 name="feed_format",
@@ -95,6 +115,8 @@ manifest = ProviderManifest(
                 choices=["xml", "csv"],
                 default="xml",
                 help_text="Output format for the feed.",
+                group=OUTPUT,
+                colspan=8,
             ),
             SettingsField(
                 name="include_variants",
@@ -102,6 +124,8 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="true",
                 help_text="Expand product variants as separate feed items.",
+                group=OUTPUT,
+                colspan=8,
             ),
             # ── Filters ──
             SettingsField(
@@ -110,6 +134,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default="false",
                 help_text="Exclude products that are out of stock.",
+                group=FILTERS,
             ),
             SettingsField(
                 name="categories_exclude",
@@ -117,6 +142,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Comma-separated list of category IDs to exclude from the feed.",
+                group=FILTERS,
             ),
         ],
     ),

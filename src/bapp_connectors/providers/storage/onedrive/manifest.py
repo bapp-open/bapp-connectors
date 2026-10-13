@@ -27,13 +27,19 @@ manifest = ProviderManifest(
         required_fields=[
             CredentialField(name="token", label="Access Token", sensitive=True, required=False),
             CredentialField(name="refresh_token", label="Refresh Token", sensitive=True, required=False),
-            CredentialField(name="client_id", label="Application (Client) ID", sensitive=False, required=False),
-            CredentialField(name="client_secret", label="Client Secret", sensitive=True, required=False),
+            CredentialField(
+                name="client_id",
+                label="Application (Client) ID",
+                sensitive=False,
+                required=False,
+                colspan=12,
+            ),
+            CredentialField(name="client_secret", label="Client Secret", sensitive=True, required=False, colspan=12),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="client_id", label="Application (Client) ID", sensitive=False),
-                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+                CredentialField(name="client_id", label="Application (Client) ID", sensitive=False, colspan=12),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True, colspan=12),
             ],
             scopes=["Files.ReadWrite", "offline_access"],
             display_name="Connect with OneDrive",

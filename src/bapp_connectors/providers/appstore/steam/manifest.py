@@ -16,8 +16,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="financial_api_key", label="Financial Web API Key", sensitive=True, help_text="Steamworks > Users & Permissions > Manage Groups > Financial API Group > Web API Key."),
-            CredentialField(name="app_ids", label="App IDs", help_text="Separate prin virgula (ex. 4000, 4001)."),
+            CredentialField(name="financial_api_key", label="Financial Web API Key", sensitive=True, help_text="Steamworks > Users & Permissions > Manage Groups > Financial API Group > Web API Key.", colspan=12),
+            CredentialField(name="app_ids", label="App IDs", help_text="Separate prin virgula (ex. 4000, 4001).", colspan=12),
         ],
     ),
     capabilities=[AppStorePort, FinancialCapability],

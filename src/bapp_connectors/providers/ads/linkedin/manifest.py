@@ -19,6 +19,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import AdsPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+ACCOUNT = "Account"
+OAUTH_APP = "OAuth app"
+
 manifest = ProviderManifest(
     name="linkedin",
     family=ProviderFamily.ADS,
@@ -42,17 +45,21 @@ manifest = ProviderManifest(
                     "OAuth2 access token with the rw_ads and r_ads_reporting scopes. "
                     "Optional when connecting via the OAuth flow."
                 ),
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="ad_account_id",
                 label="Ad Account Id",
                 help_text="Numeric sponsored ad account ID (the tail of urn:li:sponsoredAccount:*).",
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="client_id",
                 label="Client ID",
                 required=False,
                 help_text="LinkedIn app client ID, used for the OAuth authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
             CredentialField(
                 name="client_secret",
@@ -60,12 +67,14 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="LinkedIn app client secret, used for the OAuth authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="client_id", label="Client ID"),
-                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+                CredentialField(name="client_id", label="Client ID", colspan=12),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True, colspan=12),
             ],
             scopes=["rw_ads", "r_ads_reporting"],
             display_name="Connect with LinkedIn Ads",

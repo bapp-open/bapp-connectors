@@ -43,6 +43,7 @@ manifest = ProviderManifest(
                 choices_source="list_models",
                 default="gpt-4o-mini",
                 help_text="Model to use when none is specified in the request.",
+                colspan=16,
             ),
             SettingsField(
                 name="temperature",
@@ -50,6 +51,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="0.7",
                 help_text="Default sampling temperature (0.0 - 2.0).",
+                colspan=8,
             ),
             SettingsField(
                 name="platform_api_key",

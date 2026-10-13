@@ -26,8 +26,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.BASIC,
         required_fields=[
-            CredentialField(name="username", label="Username", sensitive=False),
-            CredentialField(name="password", label="Password", sensitive=True),
+            CredentialField(name="username", label="Username", sensitive=False, colspan=12),
+            CredentialField(name="password", label="Password", sensitive=True, colspan=12),
             CredentialField(
                 name="base_url",
                 label="WebDAV URL",
@@ -44,6 +44,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="/",
                 help_text="Default remote folder for file operations.",
+                colspan=12,
             ),
             SettingsField(
                 name="verify_ssl",
@@ -51,6 +52,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=True,
                 help_text="Verify SSL certificates when connecting.",
+                colspan=6,
             ),
             SettingsField(
                 name="timeout",
@@ -58,6 +60,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default=10,
                 help_text="HTTP request timeout in seconds.",
+                colspan=6,
             ),
         ],
     ),

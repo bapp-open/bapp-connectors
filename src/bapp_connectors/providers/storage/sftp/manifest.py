@@ -26,8 +26,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="host", label="Hostname / IP", sensitive=False),
-            CredentialField(name="username", label="Username", sensitive=False),
+            CredentialField(name="host", label="Hostname / IP", sensitive=False, colspan=12),
+            CredentialField(name="username", label="Username", sensitive=False, colspan=12),
             CredentialField(
                 name="password",
                 label="Password",
@@ -52,6 +52,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default=22,
                 help_text="SSH port (default: 22).",
+                colspan=6,
             ),
             SettingsField(
                 name="default_folder",
@@ -59,6 +60,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="/",
                 help_text="Default remote directory for file operations.",
+                colspan=12,
             ),
             SettingsField(
                 name="timeout",
@@ -66,6 +68,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.INT,
                 default=10,
                 help_text="Connection timeout in seconds.",
+                colspan=6,
             ),
         ],
     ),

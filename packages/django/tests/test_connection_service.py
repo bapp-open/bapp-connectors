@@ -206,5 +206,6 @@ def test_provider_detail_exposes_field_layout():
     detail = ConnectionService.get_provider_detail("email", "smtp")
     spans = {f["name"]: f["colspan"] for f in detail["auth"]["credential_fields"]}
     assert spans["host"] == 16 and spans["port"] == 8
-    for s in ConnectionService.get_provider_detail("shop", "woocommerce")["settings"]:
-        assert s["colspan"] == 0 and s["group"] == ""
+    settings = {s["name"]: s for s in ConnectionService.get_provider_detail("shop", "woocommerce")["settings"]}
+    assert all("colspan" in s and "group" in s for s in settings.values())
+    assert settings["prices_include_vat"]["colspan"] == 12 and settings["prices_include_vat"]["group"]

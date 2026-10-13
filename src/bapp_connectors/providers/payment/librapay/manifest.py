@@ -24,6 +24,9 @@ LIBRAPAY_SANDBOX_URL = "https://merchant.librapay.ro/pay_auth.php"
 LIBRAPAY_LIVE_REFUND_URL = "https://secure.librapay.ro/pay_sales.php"
 LIBRAPAY_SANDBOX_REFUND_URL = "https://merchant.librapay.ro/pay_sales.php"
 
+TERMINAL = "Terminal"
+MERCHANT = "Merchant details"
+
 manifest = ProviderManifest(
     name="librapay",
     family=ProviderFamily.PAYMENT,
@@ -33,12 +36,12 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="merchant", label="Merchant ID", sensitive=False),
-            CredentialField(name="terminal", label="Terminal ID", sensitive=False),
-            CredentialField(name="key", label="Merchant Key (hex-encoded)", sensitive=True),
-            CredentialField(name="merchant_name", label="Merchant Name", sensitive=False),
-            CredentialField(name="merchant_url", label="Merchant URL", sensitive=False),
-            CredentialField(name="merchant_email", label="Merchant Email", sensitive=False),
+            CredentialField(name="merchant", label="Merchant ID", sensitive=False, group=TERMINAL, colspan=12),
+            CredentialField(name="terminal", label="Terminal ID", sensitive=False, group=TERMINAL, colspan=12),
+            CredentialField(name="key", label="Merchant Key (hex-encoded)", sensitive=True, group=TERMINAL),
+            CredentialField(name="merchant_name", label="Merchant Name", sensitive=False, group=MERCHANT),
+            CredentialField(name="merchant_url", label="Merchant URL", sensitive=False, group=MERCHANT, colspan=12),
+            CredentialField(name="merchant_email", label="Merchant Email", sensitive=False, group=MERCHANT, colspan=12),
         ],
     ),
     settings=SettingsConfig(

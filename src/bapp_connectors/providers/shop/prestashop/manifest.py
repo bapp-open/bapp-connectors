@@ -49,6 +49,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=True,
                 help_text="Whether PrestaShop prices include tax (tax_incl fields).",
+                colspan=12,
             ),
             SettingsField(
                 name="vat_rate",
@@ -56,6 +57,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="0.19",
                 help_text="VAT rate as decimal (e.g., 0.19 for 19%).",
+                colspan=12,
             ),
         ],
     ),

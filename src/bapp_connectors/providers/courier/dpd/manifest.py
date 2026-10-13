@@ -29,8 +29,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="username", label="API username"),
-            CredentialField(name="password", label="API password", sensitive=True),
+            CredentialField(name="username", label="API username", colspan=12),
+            CredentialField(name="password", label="API password", sensitive=True, colspan=12),
             CredentialField(
                 name="client_id",
                 label="Sender client ID",
@@ -54,6 +54,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.SELECT,
                 choices=["SENDER", "RECIPIENT"],
                 default="SENDER",
+                colspan=8,
             ),
             SettingsField(
                 name="paper_size",
@@ -61,6 +62,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.SELECT,
                 choices=["A6", "A4", "A4_4xA6"],
                 default="A6",
+                colspan=8,
             ),
             SettingsField(
                 name="package",
@@ -68,6 +70,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="BOX",
                 help_text="Free text required by DPD (max 50), e.g. BOX, ENVELOPE.",
+                colspan=8,
             ),
         ],
     ),

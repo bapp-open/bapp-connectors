@@ -21,13 +21,14 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.TOKEN,
         required_fields=[
-            CredentialField(name="token", label="API Token", sensitive=True),
+            CredentialField(name="token", label="API Token", sensitive=True, colspan=12),
             CredentialField(
                 name="device_id",
                 label="Device ID",
                 sensitive=False,
                 required=False,
                 help_text="The device used to send SMS.",
+                colspan=12,
             ),
         ],
     ),

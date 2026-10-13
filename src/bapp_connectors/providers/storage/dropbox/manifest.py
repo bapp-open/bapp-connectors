@@ -24,8 +24,8 @@ manifest = ProviderManifest(
         strategy=AuthStrategy.BEARER,
         required_fields=[
             CredentialField(name="token", label="Access Token", sensitive=True, required=False),
-            CredentialField(name="app_key", label="App Key", sensitive=False, required=False),
-            CredentialField(name="app_secret", label="App Secret", sensitive=True, required=False),
+            CredentialField(name="app_key", label="App Key", sensitive=False, required=False, colspan=12),
+            CredentialField(name="app_secret", label="App Secret", sensitive=True, required=False, colspan=12),
             CredentialField(name="refresh_token", label="Refresh Token", sensitive=True, required=False),
             CredentialField(
                 name="default_folder",
@@ -38,8 +38,8 @@ manifest = ProviderManifest(
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="app_key", label="App Key", sensitive=False),
-                CredentialField(name="app_secret", label="App Secret", sensitive=True),
+                CredentialField(name="app_key", label="App Key", sensitive=False, colspan=12),
+                CredentialField(name="app_secret", label="App Secret", sensitive=True, colspan=12),
             ],
             scopes=[],
             display_name="Connect with Dropbox",

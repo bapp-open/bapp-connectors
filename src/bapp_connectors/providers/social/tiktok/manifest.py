@@ -45,6 +45,7 @@ manifest = ProviderManifest(
                 label="Client Key",
                 required=False,
                 help_text="TikTok Login Kit app client key (needed for the OAuth flow).",
+                colspan=12,
             ),
             CredentialField(
                 name="client_secret",
@@ -52,12 +53,13 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="TikTok Login Kit app client secret (needed for the OAuth flow).",
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="client_key", label="Client Key"),
-                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+                CredentialField(name="client_key", label="Client Key", colspan=12),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True, colspan=12),
             ],
             scopes=[
                 "user.info.basic",

@@ -26,8 +26,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="access_key_id", label="Access Key ID", sensitive=False),
-            CredentialField(name="secret_access_key", label="Secret Access Key", sensitive=True),
+            CredentialField(name="access_key_id", label="Access Key ID", sensitive=False, colspan=12),
+            CredentialField(name="secret_access_key", label="Secret Access Key", sensitive=True, colspan=12),
             CredentialField(name="bucket", label="Bucket Name", sensitive=False),
         ],
     ),
@@ -46,6 +46,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="us-east-1",
                 help_text="AWS region or compatible region identifier.",
+                colspan=8,
             ),
             SettingsField(
                 name="default_prefix",
@@ -53,6 +54,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="",
                 help_text="Default key prefix for all operations (e.g. 'uploads/' or 'tenant-123/').",
+                colspan=8,
             ),
             SettingsField(
                 name="addressing_style",
@@ -61,6 +63,7 @@ manifest = ProviderManifest(
                 choices=["auto", "path", "virtual"],
                 default="auto",
                 help_text="S3 addressing style. Use 'path' for MinIO/local S3. 'auto' works for AWS.",
+                colspan=8,
             ),
         ],
     ),

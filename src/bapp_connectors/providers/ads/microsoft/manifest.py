@@ -19,6 +19,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import AdsPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+ACCOUNT = "Account"
+OAUTH_APP = "OAuth app"
+
 manifest = ProviderManifest(
     name="microsoft",
     family=ProviderFamily.ADS,
@@ -34,6 +37,7 @@ manifest = ProviderManifest(
                 label="Developer Token",
                 sensitive=True,
                 help_text="Microsoft Advertising developer token from the Developer Portal.",
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="access_token",
@@ -41,16 +45,21 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Microsoft identity platform OAuth2 access token with the msads.manage scope.",
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="customer_id",
                 label="Customer ID",
                 help_text="Microsoft Advertising customer (manager) ID that owns the ad account.",
+                group=ACCOUNT,
+                colspan=12,
             ),
             CredentialField(
                 name="account_id",
                 label="Account ID",
                 help_text="Microsoft Advertising ad account ID (CustomerAccountId).",
+                group=ACCOUNT,
+                colspan=12,
             ),
             CredentialField(
                 name="client_id",
@@ -58,6 +67,8 @@ manifest = ProviderManifest(
                 sensitive=False,
                 required=False,
                 help_text="Azure AD application (client) ID for the redirect-based authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
             CredentialField(
                 name="client_secret",
@@ -65,12 +76,14 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Azure AD application client secret for the redirect-based authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="client_id", label="Client ID", sensitive=False),
-                CredentialField(name="client_secret", label="Client Secret", sensitive=True),
+                CredentialField(name="client_id", label="Client ID", sensitive=False, colspan=12),
+                CredentialField(name="client_secret", label="Client Secret", sensitive=True, colspan=12),
             ],
             scopes=["https://ads.microsoft.com/msads.manage", "offline_access"],
             display_name="Connect with Microsoft Ads",

@@ -50,6 +50,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="default",
                 help_text="Magento store view code (e.g., 'default', 'en', 'ro'). Used in the API URL path.",
+                colspan=8,
             ),
             SettingsField(
                 name="prices_include_vat",
@@ -57,6 +58,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=False,
                 help_text="Whether Magento catalog prices include tax (Stores > Config > Tax > Catalog Prices).",
+                colspan=8,
             ),
             SettingsField(
                 name="vat_rate",
@@ -64,6 +66,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="0.19",
                 help_text="VAT rate as decimal (e.g., 0.19 for 19%).",
+                colspan=8,
             ),
         ],
     ),

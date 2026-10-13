@@ -14,6 +14,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import AppStorePort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+CONNECT_API = "App Store Connect API"
+IN_APP = "In-App Purchase"
+
 manifest = ProviderManifest(
     name="apple",
     family=ProviderFamily.APPSTORE,
@@ -29,37 +32,51 @@ manifest = ProviderManifest(
                 name="issuer_id",
                 label="Issuer ID",
                 help_text="App Store Connect > Users and Access > Integrations > App Store Connect API.",
+                group=CONNECT_API,
+                colspan=12,
             ),
             CredentialField(
                 name="key_id",
                 label="Key ID",
                 help_text="ID-ul cheii API; cheia trebuie sa aiba rolul Finance (sau Admin).",
+                group=CONNECT_API,
+                colspan=12,
             ),
             CredentialField(
                 name="private_key",
                 label="Cheia privata (.p8)",
                 sensitive=True,
                 help_text="Continutul fisierului AuthKey_XXXX.p8, inclusiv liniile BEGIN/END.",
+                group=CONNECT_API,
             ),
             CredentialField(
                 name="vendor_number",
                 label="Vendor Number",
                 help_text="App Store Connect > Payments and Financial Reports (numar de 8 cifre).",
+                group=CONNECT_API,
             ),
             CredentialField(
                 name="bundle_id",
                 label="Bundle ID",
                 required=False,
                 help_text="Necesar doar pentru abonamente si notificari (App Store Server API).",
+                group=IN_APP,
+                colspan=12,
             ),
             CredentialField(
                 name="iap_key_id",
                 label="In-App Purchase Key ID",
                 required=False,
                 help_text="Users and Access > Integrations > In-App Purchase. Alta cheie decat cea App Store Connect.",
+                group=IN_APP,
+                colspan=12,
             ),
             CredentialField(
-                name="iap_private_key", label="In-App Purchase cheia privata (.p8)", sensitive=True, required=False
+                name="iap_private_key",
+                label="In-App Purchase cheia privata (.p8)",
+                sensitive=True,
+                required=False,
+                group=IN_APP,
             ),
         ],
     ),
@@ -71,6 +88,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=True,
                 help_text="Randurile cu 0 incasari (descarcari gratuite) intra in raportul de vanzari.",
+                colspan=12,
             ),
             SettingsField(
                 name="server_api_environment",
@@ -78,6 +96,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.SELECT,
                 choices=["production", "sandbox"],
                 default="production",
+                colspan=12,
             ),
         ]
     ),

@@ -30,8 +30,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="project_key", label="Project Key", sensitive=False),
-            CredentialField(name="project_secret", label="Project Secret", sensitive=True),
+            CredentialField(name="project_key", label="Project Key", sensitive=False, colspan=12),
+            CredentialField(name="project_secret", label="Project Secret", sensitive=True, colspan=12),
         ],
     ),
     settings=SettingsConfig(

@@ -34,9 +34,9 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.BASIC,
         required_fields=[
-            CredentialField(name="username", label="API Username", sensitive=False),
-            CredentialField(name="password", label="API Password", sensitive=True),
-            CredentialField(name="seller_id", label="Seller ID", sensitive=False),
+            CredentialField(name="username", label="API Username", sensitive=False, colspan=12),
+            CredentialField(name="password", label="API Password", sensitive=True, colspan=12),
+            CredentialField(name="seller_id", label="Seller ID", sensitive=False, colspan=12),
             CredentialField(
                 name="country",
                 label="Country Code",
@@ -44,6 +44,7 @@ manifest = ProviderManifest(
                 default="RO",
                 required=False,
                 choices=["RO", "DE", "SA", "AE", "GR", "SK", "CZ"],
+                colspan=12,
             ),
             CredentialField(
                 name="sandbox",

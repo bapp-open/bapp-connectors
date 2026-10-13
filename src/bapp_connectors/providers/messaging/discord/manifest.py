@@ -39,6 +39,7 @@ manifest = ProviderManifest(
                 label="Application ID",
                 sensitive=False,
                 help_text="Discord application ID from the Developer Portal.",
+                colspan=12,
             ),
             CredentialField(
                 name="public_key",
@@ -46,6 +47,7 @@ manifest = ProviderManifest(
                 sensitive=False,
                 required=False,
                 help_text="Ed25519 public key for verifying interaction webhook signatures.",
+                colspan=12,
             ),
         ],
     ),

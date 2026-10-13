@@ -18,6 +18,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import AdsPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+ACCOUNT = "Account"
+OAUTH_APP = "OAuth app"
+
 manifest = ProviderManifest(
     name="facebook",
     family=ProviderFamily.ADS,
@@ -36,17 +39,21 @@ manifest = ProviderManifest(
                     "Marketing API access token with the ads_management scope. "
                     "Optional when connecting via the OAuth flow."
                 ),
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="ad_account_id",
                 label="Ad Account Id",
                 help_text="Numeric ad account ID, without the act_ prefix.",
+                group=ACCOUNT,
             ),
             CredentialField(
                 name="app_id",
                 label="App ID",
                 required=False,
                 help_text="Meta app ID, used for the OAuth authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
             CredentialField(
                 name="app_secret",
@@ -54,12 +61,14 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Meta app secret, used for the OAuth authorization flow.",
+                group=OAUTH_APP,
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="app_id", label="App ID"),
-                CredentialField(name="app_secret", label="App Secret", sensitive=True),
+                CredentialField(name="app_id", label="App ID", colspan=12),
+                CredentialField(name="app_secret", label="App Secret", sensitive=True, colspan=12),
             ],
             scopes=["ads_management", "ads_read", "business_management"],
             display_name="Connect with Facebook",
@@ -74,6 +83,7 @@ manifest = ProviderManifest(
                 choices=["REACH", "IMPRESSIONS", "LINK_CLICKS", "OFFSITE_CONVERSIONS", "VIDEO_VIEWS"],
                 default="LINK_CLICKS",
                 help_text="Optimization goal applied to newly created ad sets.",
+                colspan=12,
             ),
             SettingsField(
                 name="default_billing_event",
@@ -82,6 +92,7 @@ manifest = ProviderManifest(
                 choices=["IMPRESSIONS", "LINK_CLICKS"],
                 default="IMPRESSIONS",
                 help_text="Billing event applied to newly created ad sets.",
+                colspan=12,
             ),
             SettingsField(
                 name="page_id",

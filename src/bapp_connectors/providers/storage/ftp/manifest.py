@@ -12,6 +12,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import StoragePort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
 
+SERVER = "FTP server"
+OPTIONS = "Options"
+
 manifest = ProviderManifest(
     name="ftp",
     family=ProviderFamily.STORAGE,
@@ -21,10 +24,10 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
-            CredentialField(name="host", label="FTP Host", sensitive=False),
-            CredentialField(name="port", label="FTP Port", sensitive=False, default="21"),
-            CredentialField(name="username", label="Username", sensitive=False),
-            CredentialField(name="password", label="Password", sensitive=True),
+            CredentialField(name="host", label="FTP Host", sensitive=False, group=SERVER, colspan=16),
+            CredentialField(name="port", label="FTP Port", sensitive=False, default="21", group=SERVER, colspan=8),
+            CredentialField(name="username", label="Username", sensitive=False, group=SERVER, colspan=12),
+            CredentialField(name="password", label="Password", sensitive=True, group=SERVER, colspan=12),
             CredentialField(
                 name="use_tls",
                 label="Use TLS",
@@ -32,6 +35,7 @@ manifest = ProviderManifest(
                 required=False,
                 default="false",
                 choices=["true", "false"],
+                group=SERVER,
             ),
             CredentialField(
                 name="default_folder",
@@ -40,6 +44,8 @@ manifest = ProviderManifest(
                 required=False,
                 default="",
                 help_text="Default base folder for file operations.",
+                group=OPTIONS,
+                colspan=16,
             ),
             CredentialField(
                 name="timeout",
@@ -47,6 +53,8 @@ manifest = ProviderManifest(
                 sensitive=False,
                 required=False,
                 default="10",
+                group=OPTIONS,
+                colspan=8,
             ),
         ],
     ),

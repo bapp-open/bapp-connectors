@@ -22,6 +22,9 @@ from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType,
 EUPLATESC_LIVE_URL = "https://secure.euplatesc.ro/tdsprocess/tranzactd.php"
 EUPLATESC_SANDBOX_URL = "https://secure.euplatesc.ro/tdsprocess/tranzactd.php"
 
+MERCHANT = "Merchant"
+REPORTING = "Reporting API"
+
 manifest = ProviderManifest(
     name="euplatesc",
     family=ProviderFamily.PAYMENT,
@@ -36,12 +39,16 @@ manifest = ProviderManifest(
                 label="Merchant ID",
                 sensitive=False,
                 help_text="EuPlatesc Merchant ID (MID).",
+                group=MERCHANT,
+                colspan=12,
             ),
             CredentialField(
                 name="merchant_key",
                 label="Merchant Key",
                 sensitive=True,
                 help_text="EuPlatesc Merchant Key (hex-encoded).",
+                group=MERCHANT,
+                colspan=12,
             ),
             CredentialField(
                 name="user_key",
@@ -49,6 +56,8 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="EuPlatesc User Key (required for capture, refund, and financial reporting).",
+                group=REPORTING,
+                colspan=12,
             ),
             CredentialField(
                 name="user_api",
@@ -56,6 +65,8 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="EuPlatesc User API key (required for capture, refund, and financial reporting).",
+                group=REPORTING,
+                colspan=12,
             ),
         ],
     ),

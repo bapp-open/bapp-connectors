@@ -18,6 +18,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import MessagingPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+API_ACCESS = "API access"
+WEBHOOK = "Webhook"
+
 manifest = ProviderManifest(
     name="messenger",
     family=ProviderFamily.MESSAGING,
@@ -32,12 +35,14 @@ manifest = ProviderManifest(
                 label="Page Access Token",
                 sensitive=True,
                 help_text="Long-lived Page access token from Meta developer portal.",
+                group=API_ACCESS,
             ),
             CredentialField(
                 name="page_id",
                 label="Page ID",
                 sensitive=False,
                 help_text="Facebook Page ID.",
+                group=API_ACCESS,
             ),
             CredentialField(
                 name="app_secret",
@@ -45,6 +50,8 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Meta App Secret — used to verify webhook signatures (X-Hub-Signature-256).",
+                group=WEBHOOK,
+                colspan=12,
             ),
             CredentialField(
                 name="webhook_verify_token",
@@ -52,6 +59,8 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Custom token for Meta's webhook URL verification challenge.",
+                group=WEBHOOK,
+                colspan=12,
             ),
         ],
     ),

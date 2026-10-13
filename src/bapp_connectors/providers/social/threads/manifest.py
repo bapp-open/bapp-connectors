@@ -47,6 +47,7 @@ manifest = ProviderManifest(
                 label="App ID",
                 required=False,
                 help_text="Meta app ID (Threads use case), used for the OAuth authorization flow.",
+                colspan=12,
             ),
             CredentialField(
                 name="app_secret",
@@ -54,12 +55,13 @@ manifest = ProviderManifest(
                 sensitive=True,
                 required=False,
                 help_text="Meta app secret, used for the OAuth authorization flow.",
+                colspan=12,
             ),
         ],
         oauth=OAuthConfig(
             credential_fields=[
-                CredentialField(name="app_id", label="App ID"),
-                CredentialField(name="app_secret", label="App Secret", sensitive=True),
+                CredentialField(name="app_id", label="App ID", colspan=12),
+                CredentialField(name="app_secret", label="App Secret", sensitive=True, colspan=12),
             ],
             scopes=["threads_basic", "threads_content_publish", "threads_manage_insights"],
             display_name="Connect with Threads",

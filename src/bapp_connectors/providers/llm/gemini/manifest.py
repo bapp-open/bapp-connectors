@@ -46,6 +46,7 @@ manifest = ProviderManifest(
                 choices_source="list_models",
                 default="gemini-2.0-flash",
                 help_text="Model to use when none is specified.",
+                colspan=16,
             ),
             SettingsField(
                 name="temperature",
@@ -53,6 +54,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.STR,
                 default="1.0",
                 help_text="Default sampling temperature.",
+                colspan=8,
             ),
             SettingsField(
                 name="platform_api_key",
