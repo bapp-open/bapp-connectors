@@ -27,10 +27,10 @@ manifest = ProviderManifest(
         strategy=AuthStrategy.CUSTOM,
         required_fields=[
             # ── SMTP server ──
-            CredentialField(name="host", label="SMTP Host", sensitive=False, group=SERVER),
-            CredentialField(name="port", label="SMTP Port", sensitive=False, default="587", group=SERVER),
-            CredentialField(name="username", label="Username", sensitive=False, group=SERVER),
-            CredentialField(name="password", label="Password", sensitive=True, group=SERVER),
+            CredentialField(name="host", label="SMTP Host", sensitive=False, group=SERVER, colspan=16),
+            CredentialField(name="port", label="SMTP Port", sensitive=False, default="587", group=SERVER, colspan=8),
+            CredentialField(name="username", label="Username", sensitive=False, group=SERVER, colspan=12),
+            CredentialField(name="password", label="Password", sensitive=True, group=SERVER, colspan=12),
             CredentialField(
                 name="use_tls",
                 label="Use TLS",
@@ -39,6 +39,7 @@ manifest = ProviderManifest(
                 default="true",
                 choices=["true", "false"],
                 group=SERVER,
+                colspan=8,
             ),
             CredentialField(
                 name="use_ssl",
@@ -48,6 +49,7 @@ manifest = ProviderManifest(
                 default="false",
                 choices=["true", "false"],
                 group=SERVER,
+                colspan=8,
             ),
             CredentialField(
                 name="timeout",
@@ -56,6 +58,7 @@ manifest = ProviderManifest(
                 required=False,
                 default="30",
                 group=SERVER,
+                colspan=8,
             ),
             # ── Sender ──
             CredentialField(
@@ -65,6 +68,7 @@ manifest = ProviderManifest(
                 required=False,
                 help_text="Defaults to username if not set.",
                 group=SENDER,
+                colspan=12,
             ),
             CredentialField(
                 name="from_name",
@@ -73,6 +77,7 @@ manifest = ProviderManifest(
                 required=False,
                 help_text="Shown to recipients as `From Name <from email>`; empty = just the address.",
                 group=SENDER,
+                colspan=12,
             ),
             # ── IMAP (inbox) ──
             CredentialField(
@@ -93,6 +98,7 @@ manifest = ProviderManifest(
                 required=False,
                 help_text="Required for inbox capabilities. Defaults to SMTP host if not set.",
                 group=IMAP,
+                colspan=12,
             ),
             CredentialField(
                 name="imap_port",
@@ -101,6 +107,7 @@ manifest = ProviderManifest(
                 required=False,
                 default="993",
                 group=IMAP,
+                colspan=6,
             ),
             CredentialField(
                 name="imap_use_ssl",
@@ -110,6 +117,7 @@ manifest = ProviderManifest(
                 default="true",
                 choices=["true", "false"],
                 group=IMAP,
+                colspan=6,
             ),
         ],
     ),

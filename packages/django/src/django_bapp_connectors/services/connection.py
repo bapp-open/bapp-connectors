@@ -78,6 +78,7 @@ def _serialize_credential_field(f: CredentialField) -> dict[str, Any]:
         "help_text": f.help_text,
         "role": getattr(f, "role", None),
         "group": getattr(f, "group", "") or "",
+        "colspan": getattr(f, "colspan", 0) or 0,
     }
 
 
@@ -92,6 +93,8 @@ def _serialize_settings_field(f: SettingsField) -> dict[str, Any]:
         "choices_source": f.choices_source,
         "help_text": f.help_text,
         "description": f.description,
+        "group": getattr(f, "group", "") or "",
+        "colspan": getattr(f, "colspan", 0) or 0,
     }
 
 

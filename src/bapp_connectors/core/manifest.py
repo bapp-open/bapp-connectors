@@ -10,6 +10,14 @@ from dataclasses import dataclass, field
 
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, FieldType, ProviderFamily
 
+#: Form grid width. `colspan` is the share of a row a field takes: 12 = half, 8 = a third.
+GRID_COLUMNS = 24
+
+
+def _check_colspan(field_name: str, colspan: int) -> None:
+    if not 0 <= colspan <= GRID_COLUMNS:
+        raise ValueError(f"{field_name}: colspan must be between 0 (full row) and {GRID_COLUMNS}, got {colspan}")
+
 
 @dataclass
 class CredentialField:
@@ -28,10 +36,14 @@ class CredentialField:
     # Optional section label. Consecutive fields with the same group belong together;
     # a UI may open each group with a divider carrying this text. Empty = no section.
     group: str = ""
+    # Width on a 24-column form grid; fields that fit share a row (12 + 12, 16 + 8).
+    # 0 = the UI's default, a full row.
+    colspan: int = 0
 
     def __post_init__(self):
         if not self.label:
             self.label = self.name.replace("_", " ").title()
+        _check_colspan(self.name, self.colspan)
 
 
 @dataclass
@@ -54,10 +66,15 @@ class SettingsField:
     choices_source: str | None = None
     help_text: str = ""
     description: str = ""
+    # Same layout hints as CredentialField: a section label opening a divider, and the
+    # width on a 24-column grid (0 = full row).
+    group: str = ""
+    colspan: int = 0
 
     def __post_init__(self):
         if not self.label:
             self.label = self.name.replace("_", " ").title()
+        _check_colspan(self.name, self.colspan)
 
     def resolve_choices(self, adapter=None) -> list[str] | None:
         """Resolve choices for this field, dynamically if `choices_source` is set.

@@ -197,3 +197,14 @@ def test_provider_detail_exposes_credential_group():
     groups = {f["name"]: f["group"] for f in detail["auth"]["credential_fields"]}
     assert groups["host"] == "SMTP server"
     assert groups["imap_host"] == "IMAP (inbox)"
+
+
+def test_provider_detail_exposes_field_layout():
+    """`colspan` (si `group` pe setari) ajung la interfata ca sa aseze mai multe campuri pe un rand."""
+    from django_bapp_connectors.services.connection import ConnectionService
+
+    detail = ConnectionService.get_provider_detail("email", "smtp")
+    spans = {f["name"]: f["colspan"] for f in detail["auth"]["credential_fields"]}
+    assert spans["host"] == 16 and spans["port"] == 8
+    for s in ConnectionService.get_provider_detail("shop", "woocommerce")["settings"]:
+        assert s["colspan"] == 0 and s["group"] == ""
