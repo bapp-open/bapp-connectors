@@ -67,8 +67,11 @@ class SMTPEmailAdapter(EmailPort, InboxCapability):
             from_email=credentials.get("from_email", ""),
         )
 
-        # IMAP client — only created if IMAP credentials are provided
-        imap_host = credentials.get("imap_host", "") or host
+        # IMAP client — only when the switch is on (default) and a host is known.
+        # Off, nothing IMAP is built: a send-only relay such as Amazon SES has no
+        # port 993, and probing it stalls the connection test for ~90 s.
+        imap_enabled = str(credentials.get("imap_enabled", "true")).lower() == "true"
+        imap_host = (credentials.get("imap_host", "") or host) if imap_enabled else ""
         if imap_host:
             self.imap_client: IMAPClient | None = IMAPClient(
                 host=imap_host,

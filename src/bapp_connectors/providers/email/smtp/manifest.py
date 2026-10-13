@@ -58,6 +58,16 @@ manifest = ProviderManifest(
             ),
             # ── IMAP (inbox) ──
             CredentialField(
+                name="imap_enabled",
+                label="IMAP (inbox)",
+                sensitive=False,
+                required=False,
+                default="true",
+                choices=["true", "false"],
+                help_text="Turn off for send-only relays without IMAP (e.g. Amazon SES): "
+                "the connection test then checks SMTP only.",
+            ),
+            CredentialField(
                 name="imap_host",
                 label="IMAP Host",
                 sensitive=False,
