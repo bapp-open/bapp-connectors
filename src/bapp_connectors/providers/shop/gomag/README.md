@@ -23,7 +23,7 @@ Gomag e-commerce platform integration for orders, products, and inventory manage
 | Get single order | Yes |
 | Get products (paginated) | Yes |
 | Update order status | Yes |
-| Update product stock | No (API v1 limitation) |
+| Update product stock | Yes (`product/inventory/json`, `{"products": [{"sku", "stock"}]}`) |
 | Update product price | No (API v1 limitation) |
 | Get categories | Yes (client only) |
 | Get order statuses | Yes (client only) |
@@ -37,6 +37,7 @@ Gomag e-commerce platform integration for orders, products, and inventory manage
 | GET | `order/status/json` | Update order status |
 | GET | `order/status/read/json` | List available order statuses |
 | GET | `category/read/json` | List categories |
+| POST | `product/inventory/json` | Stock / price per SKU (`data={"products": [...]}`) |
 
 ## Order Status Mapping
 

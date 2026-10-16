@@ -520,12 +520,16 @@ def inventory_item_to_gomag(
     stock: int | None = None,
     special_price: Decimal | None = None,
 ) -> dict:
-    """Build one entry for the ``/product/inventory/json`` bulk endpoint."""
+    """Build one entry of ``products`` for the ``/product/inventory/json`` bulk endpoint.
+
+    The quantity goes under ``stock``: with ``quantity`` Gomag answers 200 and leaves the
+    stock as it was (confirmed by Gomag support, 2026-10).
+    """
     item: dict = {"sku": sku}
     if price is not None:
         item["price"] = str(price)
     if stock is not None:
-        item["quantity"] = stock
+        item["stock"] = stock
     if special_price is not None:
         item["special_price"] = str(special_price)
     return item

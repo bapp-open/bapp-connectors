@@ -58,7 +58,14 @@ class GomagApiClient:
         return self._post("product/patch/json", payload, **kwargs)
 
     def update_product_inventory(self, payload: list[dict], **kwargs) -> dict:
-        return self._post("product/inventory/json", payload, **kwargs)
+        """Stock / price per SKU: ``data={"products": [{"sku": ..., "stock": ...}]}``.
+
+        Gomag answers 200 to a payload it does not understand (a bare list, ``quantity``
+        instead of ``stock``) and changes nothing, so the body is kept in the execution
+        log (``log_body``) to show what it answered for each call.
+        """
+        kwargs.setdefault("log_body", True)
+        return self._post("product/inventory/json", {"products": list(payload)}, **kwargs)
 
     def delete_product(self, payload: list[dict], **kwargs) -> dict:
         return self._post("product/delete/json", payload, **kwargs)
