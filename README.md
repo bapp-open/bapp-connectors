@@ -39,10 +39,11 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Network** | pfSense | 1 |
 | **App Stores** | Apple App Store, Google Play, Steam | 3 |
 | **Hosting** | cPanel | 1 |
+| **ERP** | BAPP | 1 |
 | **Ads** | Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads | 6 |
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
 | **Social** | Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts | 7 |
-| | **Total** | **72** |
+| | **Total** | **73** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -251,6 +252,7 @@ packages/connectors/
 │       ├── network/       # pfSense
 │       ├── appstore/      # Apple App Store, Google Play, Steam
 │       ├── hosting/       # cPanel
+│       ├── erp/           # BAPP
 │       ├── ads/           # Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads
 │       ├── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
 │       └── social/        # Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts
