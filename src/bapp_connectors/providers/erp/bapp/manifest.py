@@ -12,6 +12,9 @@ from bapp_connectors.core.manifest import (
 from bapp_connectors.core.ports import ErpPort, MessagingPort
 from bapp_connectors.core.types import AuthStrategy, BackoffStrategy, ProviderFamily
 
+# The token only travels over https to this host or a subdomain of it (adapter.base_url_error).
+ALLOWED_HOST = "bapp.ro"
+
 manifest = ProviderManifest(
     name="bapp",
     family=ProviderFamily.ERP,
@@ -31,7 +34,7 @@ manifest = ProviderManifest(
                 name="base_url",
                 label="API URL",
                 default="https://panel.bapp.ro/api/",
-                help_text="Change only for a self-hosted BAPP.",
+                help_text="Change only for another BAPP environment; must be https on bapp.ro or a subdomain.",
                 colspan=24,
             ),
         ],

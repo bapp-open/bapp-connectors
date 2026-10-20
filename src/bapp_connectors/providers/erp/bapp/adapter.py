@@ -4,16 +4,36 @@ BAPP ERP adapter — implements ErpPort and MessagingPort (SMS through the ERP's
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from bapp_connectors.core.dto import (
     ConnectionTestResult,
     DeliveryReport,
     DeliveryStatus,
     OutboundMessage,
 )
+from bapp_connectors.core.errors import ConfigurationError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import ErpPort, MessagingPort
 from bapp_connectors.providers.erp.bapp.client import BappErpApiClient
-from bapp_connectors.providers.erp.bapp.manifest import manifest
+from bapp_connectors.providers.erp.bapp.manifest import ALLOWED_HOST, manifest
+
+
+def base_url_error(base_url: str) -> str:
+    """Why ``base_url`` may not carry the token, or "" when it may.
+
+    The token is a BAPP user token: it only goes over https to bapp.ro or a subdomain of it.
+    """
+    try:
+        parts = urlsplit(base_url or "")
+        host = (parts.hostname or "").lower()
+    except ValueError:
+        return "API URL invalid"
+    if parts.scheme != "https":
+        return "API URL trebuie sa fie https"
+    if host != ALLOWED_HOST and not host.endswith("." + ALLOWED_HOST):
+        return f"API URL trebuie sa fie pe {ALLOWED_HOST}"
+    return ""
 
 
 class BappErpAdapter(ErpPort, MessagingPort):
@@ -33,6 +53,8 @@ class BappErpAdapter(ErpPort, MessagingPort):
         self.credentials = credentials
         config = config or {}
         base_url = config.get("base_url") or self.manifest.base_url
+        # checked here, raised on use: building the adapter (listing, schema) must not break
+        self._base_url_error = base_url_error(base_url)
 
         if http_client is None:
             http_client = ResilientHttpClient(base_url=base_url, provider_name="bapp")
@@ -63,13 +85,20 @@ class BappErpAdapter(ErpPort, MessagingPort):
 
     # ── ErpPort ──
 
+    def _ensure_base_url(self) -> None:
+        if self._base_url_error:
+            raise ConfigurationError(self._base_url_error)
+
     def get_capabilities(self) -> dict:
+        self._ensure_base_url()
         return self.client.get_capabilities()
 
     def print_file(self, url: str, device: str = "", printer: str = "", copies: int = 1) -> dict:
+        self._ensure_base_url()
         return self.client.print_file(url, device, printer, copies)
 
     def send_sms(self, recipients: list[str], body: str, phone: str = "") -> dict:
+        self._ensure_base_url()
         return self.client.send_sms(recipients, body, phone)
 
     # ── MessagingPort ──

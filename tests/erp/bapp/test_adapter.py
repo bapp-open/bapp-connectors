@@ -3,9 +3,10 @@
 import json
 
 import pytest
+import requests
 
 from bapp_connectors.core.dto import DeliveryStatus, MessageChannel, OutboundMessage
-from bapp_connectors.core.errors import AuthenticationError, ConnectorError
+from bapp_connectors.core.errors import AuthenticationError, ConfigurationError, ConnectorError
 from bapp_connectors.core.ports import ErpPort, MessagingPort
 from bapp_connectors.core.registry import registry
 from bapp_connectors.core.types import AuthStrategy, ProviderFamily
@@ -45,7 +46,21 @@ class FakeResponse:
 
 
 def ok(data):
-    return FakeResponse(200, {"success": True, "message": "", "data": data})
+    # the ERP's real DirectTask wire shape (no "success" key); see wire_answer below
+    return FakeResponse(200, wire_answer(True, "", data))
+
+
+def wire_answer(success: bool, message: str, data: dict | None = None) -> dict:
+    """What ``DirectTaskInterface.perform_action`` serializes for a ``DirectTaskResponse``.
+
+    Copied from aio-backend application/bapp_framework/sdk/schema/tasks/interface.py
+    (perform_action, ``result_data``): it answers HTTP 200 for a refused task too.
+    """
+    return {"finished": True, "message": str(message), "failed": not success, "data": data or {}}
+
+
+def failed(message):
+    return FakeResponse(200, wire_answer(False, message))
 
 
 def make_adapter(http=None, **credentials):
@@ -107,10 +122,12 @@ def test_default_http_client_is_built_without_registry():
 
 def test_base_url_setting_overrides_default(http):
     adapter = BappErpAdapter(
-        credentials={"token": TOKEN, "tenant_id": "42"}, http_client=http, config={"base_url": "https://erp.test/api"}
+        credentials={"token": TOKEN, "tenant_id": "42"},
+        http_client=http,
+        config={"base_url": "https://staging.bapp.ro/api"},
     )
     adapter.get_capabilities()
-    assert http.last_call().path == "https://erp.test/api/tasks/company_device.BappCapabilities"
+    assert http.last_call().path == "https://staging.bapp.ro/api/tasks/company_device.BappCapabilities"
 
 
 def test_send_sms_posts_task(http):
@@ -121,11 +138,7 @@ def test_send_sms_posts_task(http):
 
 def test_task_failure_message_is_raised_verbatim():
     http = FakeHttpClient()
-    http.add(
-        "POST",
-        "company_device.PrintFile",
-        FakeResponse(200, {"success": False, "message": "Nu exista nicio imprimanta activa."}),
-    )
+    http.add("POST", "company_device.PrintFile", failed("Nu exista nicio imprimanta activa."))
     adapter, _ = make_adapter(http)
     with pytest.raises(BappErpError) as exc:
         adapter.print_file("https://x.test/a.pdf")
@@ -134,7 +147,7 @@ def test_task_failure_message_is_raised_verbatim():
 
 def test_http_error_message_is_raised_verbatim():
     http = FakeHttpClient()
-    http.add("POST", "company_sms.SendSms", FakeResponse(400, {"success": False, "message": "Numar invalid"}))
+    http.add("POST", "company_sms.SendSms", FakeResponse(400, {"message": "Numar invalid"}))
     adapter, _ = make_adapter(http)
     with pytest.raises(BappErpError) as exc:
         adapter.send_sms(["x"], "b")
@@ -172,7 +185,7 @@ def test_send_maps_to_sms_task_and_returns_queued(http):
 
 def test_send_failure_returns_failed_report():
     http = FakeHttpClient()
-    http.add("POST", "company_sms.SendSms", FakeResponse(200, {"success": False, "message": "Nu exista telefon"}))
+    http.add("POST", "company_sms.SendSms", failed("Nu exista telefon"))
     adapter, _ = make_adapter(http)
     report = adapter.send(OutboundMessage(channel=MessageChannel.SMS, to="+40700", body="hi"))
     assert report.status == DeliveryStatus.FAILED
@@ -219,3 +232,150 @@ def test_token_never_in_error_message_or_repr():
     assert TOKEN not in repr(adapter) and TOKEN not in repr(adapter.client)
     # (the fake http client records the request headers on purpose, so it is left out)
     assert TOKEN not in str({k: v for k, v in vars(adapter.client).items() if k != "http"})
+
+
+# ── wire format (finding: the ERP answers "failed", not "success") ──
+
+
+class TestDirectTaskWireContract:
+    """Pins the adapter to what the ERP really sends for a DirectTask."""
+
+    # Exactly what perform_action serializes for
+    # DirectTaskResponse(success=False, message='Dispozitivul nu exista')
+    # (aio-backend application/bapp_framework/sdk/schema/tasks/interface.py, perform_action):
+    REFUSED = {"finished": True, "message": "Dispozitivul nu exista", "failed": True, "data": {}}
+
+    def test_refused_task_raises_with_message_verbatim(self):
+        http = FakeHttpClient()
+        http.add("POST", "company_device.PrintFile", FakeResponse(200, dict(self.REFUSED)))
+        adapter, _ = make_adapter(http)
+        with pytest.raises(BappErpError) as exc:
+            adapter.print_file("https://x.test/a.pdf", device="nope")
+        assert str(exc.value) == "Dispozitivul nu exista"
+
+    def test_refused_sms_is_a_failed_delivery(self):
+        http = FakeHttpClient()
+        http.add("POST", "company_sms.SendSms", FakeResponse(200, dict(self.REFUSED)))
+        adapter, _ = make_adapter(http)
+        report = adapter.send(OutboundMessage(channel=MessageChannel.SMS, to="+40700", body="hi"))
+        assert report.status == DeliveryStatus.FAILED
+        assert report.error == "Dispozitivul nu exista"
+
+    def test_wire_answer_matches_the_refused_fixture(self):
+        assert wire_answer(False, "Dispozitivul nu exista") == self.REFUSED
+
+    def test_success_returns_data(self):
+        http = FakeHttpClient()
+        http.add(
+            "POST",
+            "company_device.PrintFile",
+            FakeResponse(200, {"finished": True, "message": "ok", "failed": False, "data": {"device": "d1"}}),
+        )
+        adapter, _ = make_adapter(http)
+        assert adapter.print_file("https://x.test/a.pdf") == {"device": "d1"}
+
+    def test_legacy_success_false_also_raises(self):
+        http = FakeHttpClient()
+        http.add("POST", "company_device.PrintFile", FakeResponse(200, {"success": False, "message": "Nu"}))
+        adapter, _ = make_adapter(http)
+        with pytest.raises(BappErpError, match=r"^Nu$"):
+            adapter.print_file("https://x.test/a.pdf")
+
+    @pytest.mark.parametrize("body", [{"message": "", "data": {"device": "d1"}}, {"failed": None, "data": {}}, {}])
+    def test_neither_failed_nor_success_fails_closed(self, body):
+        http = FakeHttpClient()
+        http.add("POST", "company_device.PrintFile", FakeResponse(200, body))
+        adapter, _ = make_adapter(http)
+        with pytest.raises(BappErpError, match="Unexpected BAPP response"):
+            adapter.print_file("https://x.test/a.pdf")
+
+
+# ── base_url allowlist (R11) ──
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://panel.bapp.ro/api/", "https://erp.test/api/", "https://bapp.ro.evil.test/api/", "https://evilbapp.ro/"],
+)
+def test_foreign_or_plain_http_base_url_is_refused_before_any_request(url):
+    http = FakeHttpClient()
+    http.add("POST", "tasks/", ok(CAPS))
+    adapter = BappErpAdapter(
+        credentials={"token": TOKEN, "tenant_id": "42"}, http_client=http, config={"base_url": url}
+    )
+    with pytest.raises(ConfigurationError) as exc:
+        adapter.get_capabilities()
+    with pytest.raises(ConfigurationError):
+        adapter.print_file("https://x.test/a.pdf")
+    with pytest.raises(ConfigurationError):
+        adapter.send_sms(["+40700"], "hi")
+    assert http.calls == []  # the token never left
+    assert TOKEN not in str(exc.value)
+    result = adapter.test_connection()
+    assert result.success is False and http.calls == []
+    report = adapter.send(OutboundMessage(channel=MessageChannel.SMS, to="+40700", body="hi"))
+    assert report.status == DeliveryStatus.FAILED and http.calls == []
+
+
+@pytest.mark.parametrize("url", ["https://panel.bapp.ro/api/", "https://staging.bapp.ro/api/", "https://bapp.ro/api/"])
+def test_bapp_ro_base_urls_are_accepted(url):
+    http = FakeHttpClient()
+    http.add("POST", "tasks/", ok(CAPS))
+    adapter = BappErpAdapter(
+        credentials={"token": TOKEN, "tenant_id": "42"}, http_client=http, config={"base_url": url}
+    )
+    assert adapter.get_capabilities() == CAPS
+    assert len(http.calls) == 1
+
+
+# ── timeouts (print/SMS are not idempotent) ──
+
+
+def _raiser(exc):
+    def respond(method, path, kwargs):
+        raise exc
+
+    return respond
+
+
+@pytest.mark.parametrize("call", ["print", "sms"])
+def test_read_timeout_on_print_or_sms_says_outcome_unknown(call):
+    http = FakeHttpClient()
+    http.add("POST", "tasks/", _raiser(requests.ReadTimeout("read timed out")))
+    adapter, _ = make_adapter(http)
+    with pytest.raises(BappErpError) as exc:
+        if call == "print":
+            adapter.print_file("https://x.test/a.pdf")
+        else:
+            adapter.send_sms(["+40700"], "hi")
+    assert "nu se stie daca s-a trimis" in str(exc.value)
+    assert "nu retrimite" in str(exc.value)
+    assert len(http.calls) == 1  # not resent
+
+
+def test_connection_refused_is_not_reported_as_unknown_outcome():
+    http = FakeHttpClient()
+    http.add("POST", "tasks/", _raiser(requests.ConnectionError("refused")))
+    adapter, _ = make_adapter(http)
+    with pytest.raises(BappErpError) as exc:
+        adapter.print_file("https://x.test/a.pdf")
+    assert "unreachable" in str(exc.value)
+    assert "nu se stie" not in str(exc.value)
+
+
+def test_connect_timeout_is_unreachable_not_unknown():
+    http = FakeHttpClient()
+    http.add("POST", "tasks/", _raiser(requests.ConnectTimeout("connect timed out")))
+    adapter, _ = make_adapter(http)
+    with pytest.raises(BappErpError) as exc:
+        adapter.send_sms(["+40700"], "hi")
+    assert "unreachable" in str(exc.value) and "nu se stie" not in str(exc.value)
+
+
+def test_timeout_on_capabilities_is_plain():
+    http = FakeHttpClient()
+    http.add("POST", "tasks/", _raiser(requests.ReadTimeout("read timed out")))
+    adapter, _ = make_adapter(http)
+    with pytest.raises(BappErpError, match="nu a raspuns la timp") as exc:
+        adapter.get_capabilities()
+    assert "nu se stie" not in str(exc.value)
