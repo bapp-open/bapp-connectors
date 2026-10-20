@@ -24,38 +24,43 @@ PROVIDERS_DIR = ROOT / "src" / "bapp_connectors" / "providers"
 
 def discover_providers() -> dict[str, list[dict]]:
     """
-    Discover all providers by importing their manifests from the registry.
+    Discover all providers by importing each one's manifest module.
+
+    Reads ``<provider>/manifest.py`` rather than the registry: providers with an optional
+    extra (S3, SFTP, MobilPay, App Store, SES) only register when that extra is installed, and
+    the pre-commit hook runs whatever ``python`` is on PATH, so the registry would make the
+    README depend on the committer's environment. Manifests import only ``bapp_connectors.core``.
 
     Returns: {family: [{name, display_name, settings_count, capabilities}, ...]}
     """
-    # Import all provider packages to trigger auto-registration
+    # this checkout's code, not whatever bapp_connectors the active interpreter has installed
+    sys.path.insert(0, str(ROOT / "src"))
+    import importlib
+
+    result: dict[str, list[dict]] = defaultdict(list)
     for family_dir in sorted(PROVIDERS_DIR.iterdir()):
         if not family_dir.is_dir() or family_dir.name.startswith("_"):
             continue
         for provider_dir in sorted(family_dir.iterdir()):
             if not provider_dir.is_dir() or provider_dir.name.startswith("_"):
                 continue
-            # Only import if it has an adapter.py (fully implemented)
-            if not (provider_dir / "adapter.py").exists():
+            # Only list it if it has an adapter.py (fully implemented)
+            if not (provider_dir / "adapter.py").exists() or not (provider_dir / "manifest.py").exists():
                 continue
-            module = f"bapp_connectors.providers.{family_dir.name}.{provider_dir.name}"
+            module = f"bapp_connectors.providers.{family_dir.name}.{provider_dir.name}.manifest"
             try:
-                __import__(module)
+                manifest = importlib.import_module(module).manifest
             except Exception as e:
                 print(f"  Warning: could not import {module}: {e}", file=sys.stderr)
-
-    from bapp_connectors.core.registry import registry
-
-    result: dict[str, list[dict]] = defaultdict(list)
-    for manifest in registry.list_providers():
-        caps = [c.__name__ for c in manifest.capabilities]
-        result[manifest.family.value].append({
-            "name": manifest.name,
-            "display_name": manifest.display_name,
-            "description": manifest.description,
-            "settings_count": len(manifest.settings.fields),
-            "capabilities": caps,
-        })
+                continue
+            caps = [c.__name__ for c in manifest.capabilities]
+            result[manifest.family.value].append({
+                "name": manifest.name,
+                "display_name": manifest.display_name,
+                "description": manifest.description,
+                "settings_count": len(manifest.settings.fields),
+                "capabilities": caps,
+            })
 
     # Sort providers within each family
     for family in result:
@@ -66,7 +71,7 @@ def discover_providers() -> dict[str, list[dict]]:
 
 def build_providers_table(providers: dict[str, list[dict]]) -> str:
     """Build the markdown providers table."""
-    family_order = ["shop", "courier", "payment", "messaging", "storage", "llm", "feed", "network", "appstore", "hosting", "dns"]
+    family_order = ["shop", "courier", "payment", "messaging", "storage", "llm", "feed", "network", "appstore", "hosting", "dns", "erp"]
     # Include any families not in the predefined order
     for fam in sorted(providers.keys()):
         if fam not in family_order:
@@ -83,6 +88,7 @@ def build_providers_table(providers: dict[str, list[dict]]) -> str:
         "hosting": "Hosting",
         "dns": "DNS",
         "appstore": "App Stores",
+        "erp": "ERP",
     }
 
     lines = [
@@ -106,7 +112,7 @@ def build_providers_table(providers: dict[str, list[dict]]) -> str:
 
 def build_structure_tree(providers: dict[str, list[dict]]) -> str:
     """Build the providers section of the project structure tree."""
-    family_order = ["shop", "courier", "payment", "messaging", "storage", "llm", "feed", "network", "appstore", "hosting", "dns"]
+    family_order = ["shop", "courier", "payment", "messaging", "storage", "llm", "feed", "network", "appstore", "hosting", "dns", "erp"]
     for fam in sorted(providers.keys()):
         if fam not in family_order:
             family_order.append(fam)
