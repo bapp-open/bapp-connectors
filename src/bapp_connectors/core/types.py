@@ -24,6 +24,7 @@ class ProviderFamily(StrEnum):
     HOSTING = "hosting"
     DNS = "dns"
     APPSTORE = "appstore"
+    ERP = "erp"
 
 
 class BackoffStrategy(StrEnum):

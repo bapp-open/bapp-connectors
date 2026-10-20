@@ -24,6 +24,7 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 | hosting | `HostingPort` | cPanel |
 | dns | `DnsPort` | cPanel (through its hosting connection) |
 | appstore | `AppStorePort` (sales, refunds, reviews, stats) | Apple App Store, Google Play, Steam |
+| erp | `ErpPort` (capabilities, print a file, send SMS; also `MessagingPort`) | BAPP |
 
 ### Provider File Structure (7 files each)
 

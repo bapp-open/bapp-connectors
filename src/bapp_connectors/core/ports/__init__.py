@@ -6,6 +6,7 @@ from .base import BasePort
 from .courier import CourierPort
 from .dns import DnsPort
 from .email import EmailPort
+from .erp import ErpPort
 from .feed import FeedPort
 from .hosting import HostingPort
 from .llm import LLMPort
@@ -23,6 +24,7 @@ __all__ = [
     "CourierPort",
     "DnsPort",
     "EmailPort",
+    "ErpPort",
     "FeedPort",
     "FileInfo",
     "HostingPort",
