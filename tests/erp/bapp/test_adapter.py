@@ -65,7 +65,7 @@ def failed(message):
 
 def make_adapter(http=None, **credentials):
     http = http or FakeHttpClient()
-    creds = {"token": TOKEN, "tenant_id": "42", **credentials}
+    creds = {"token": TOKEN, **credentials}
     return BappErpAdapter(credentials=creds, http_client=http), http
 
 
@@ -95,34 +95,35 @@ def test_manifest():
     assert ErpPort in manifest.capabilities and MessagingPort in manifest.capabilities
     fields = {f.name: f for f in manifest.auth.required_fields}
     assert fields["token"].sensitive and fields["token"].required
-    assert fields["tenant_id"].required
+    assert set(fields) == {"token"}
 
 
 def test_registered():
     assert registry.get_adapter_class(ProviderFamily.ERP, "bapp") is BappErpAdapter
 
 
-def test_print_posts_task_with_token_and_tenant_headers(http):
+def test_print_posts_task_with_token_header_only(http):
     adapter, _ = make_adapter(http)
     result = adapter.print_file("https://x.test/a.pdf", device="d1", printer="HP", copies=2)
     call = http.last_call()
     assert call.method == "POST"
     assert call.path == "https://panel.bapp.ro/api/tasks/company_device.PrintFile"
     assert call.kwargs["json"] == {"url": "https://x.test/a.pdf", "device": "d1", "printer": "HP", "copies": 2}
-    assert call.kwargs["headers"]["X-Tenant-Id"] == "42"
+    # the token is bound to one company; BAPP resolves it from the token
+    assert "X-Tenant-Id" not in call.kwargs["headers"]
     # set per request: the registry builds its client with a bare (prefix-less) TokenAuth
     assert call.kwargs["headers"]["Authorization"] == f"Token {TOKEN}"
     assert result == {"device": "d1", "device_alias": "Reception", "printer": "HP"}
 
 
 def test_default_http_client_is_built_without_registry():
-    adapter = BappErpAdapter(credentials={"token": TOKEN, "tenant_id": "42"})
+    adapter = BappErpAdapter(credentials={"token": TOKEN})
     assert adapter.client.http.base_url == "https://panel.bapp.ro/api/"
 
 
 def test_base_url_setting_overrides_default(http):
     adapter = BappErpAdapter(
-        credentials={"token": TOKEN, "tenant_id": "42"},
+        credentials={"token": TOKEN},
         http_client=http,
         config={"base_url": "https://staging.bapp.ro/api"},
     )
@@ -216,8 +217,9 @@ def test_test_connection_failure_reports_message():
     assert TOKEN not in result.message
 
 
-def test_validate_credentials_requires_token_and_tenant():
-    assert BappErpAdapter(credentials={"token": TOKEN}, http_client=FakeHttpClient()).validate_credentials() is False
+def test_validate_credentials_requires_only_the_token():
+    assert BappErpAdapter(credentials={"token": TOKEN}, http_client=FakeHttpClient()).validate_credentials() is True
+    assert BappErpAdapter(credentials={}, http_client=FakeHttpClient()).validate_credentials() is False
 
 
 def test_token_never_in_error_message_or_repr():
@@ -301,7 +303,7 @@ def test_foreign_or_plain_http_base_url_is_refused_before_any_request(url):
     http = FakeHttpClient()
     http.add("POST", "tasks/", ok(CAPS))
     adapter = BappErpAdapter(
-        credentials={"token": TOKEN, "tenant_id": "42"}, http_client=http, config={"base_url": url}
+        credentials={"token": TOKEN}, http_client=http, config={"base_url": url}
     )
     with pytest.raises(ConfigurationError) as exc:
         adapter.get_capabilities()
@@ -322,7 +324,7 @@ def test_bapp_ro_base_urls_are_accepted(url):
     http = FakeHttpClient()
     http.add("POST", "tasks/", ok(CAPS))
     adapter = BappErpAdapter(
-        credentials={"token": TOKEN, "tenant_id": "42"}, http_client=http, config={"base_url": url}
+        credentials={"token": TOKEN}, http_client=http, config={"base_url": url}
     )
     assert adapter.get_capabilities() == CAPS
     assert len(http.calls) == 1

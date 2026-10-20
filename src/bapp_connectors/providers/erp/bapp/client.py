@@ -42,21 +42,20 @@ class _Secret:
 
 
 class BappErpApiClient:
-    def __init__(self, http_client: ResilientHttpClient, token: str, tenant_id: str, base_url: str):
+    def __init__(self, http_client: ResilientHttpClient, token: str, base_url: str):
         self.http = http_client
         self._token = _Secret(token)
-        self.tenant_id = str(tenant_id)
         self.base_url = base_url.rstrip("/") + "/"
 
     def __repr__(self) -> str:
-        return f"BappErpApiClient(base_url={self.base_url!r}, tenant_id={self.tenant_id!r})"
+        return f"BappErpApiClient(base_url={self.base_url!r})"
 
     def _headers(self) -> dict:
         # Set here, not left to the http client's auth: the registry builds that with a bare
-        # token and BAPP wants "Token <uuid>".
+        # token and BAPP wants "Token <uuid>". No X-Tenant-Id: the token is bound to one company
+        # and BAPP takes the company from it.
         return {
             "Authorization": f"Token {self._token.get()}",
-            "X-Tenant-Id": self.tenant_id,
             "Content-Type": "application/json",
         }
 

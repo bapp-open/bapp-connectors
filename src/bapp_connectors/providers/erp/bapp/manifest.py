@@ -24,8 +24,8 @@ manifest = ProviderManifest(
     auth=AuthConfig(
         strategy=AuthStrategy.TOKEN,
         required_fields=[
+            # a BAPP API token is issued for one company, so the company is not asked for
             CredentialField(name="token", label="API token", sensitive=True, colspan=12),
-            CredentialField(name="tenant_id", label="Company ID", colspan=12),
         ],
     ),
     settings=SettingsConfig(

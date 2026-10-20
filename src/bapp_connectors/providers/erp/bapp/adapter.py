@@ -62,7 +62,6 @@ class BappErpAdapter(ErpPort, MessagingPort):
         self.client = BappErpApiClient(
             http_client=http_client,
             token=credentials.get("token", ""),
-            tenant_id=credentials.get("tenant_id", ""),
             base_url=base_url,
         )
 

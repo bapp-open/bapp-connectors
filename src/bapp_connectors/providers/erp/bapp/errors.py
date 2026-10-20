@@ -10,4 +10,4 @@ class BappErpError(PermanentProviderError):
 
 
 class BappErpAuthError(BappErpError, AuthenticationError):
-    """BAPP rejected the token or tenant (HTTP 401/403)."""
+    """BAPP rejected the token (HTTP 401/403)."""
