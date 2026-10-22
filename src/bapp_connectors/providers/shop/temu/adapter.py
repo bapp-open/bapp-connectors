@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import urllib.parse
 import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -34,12 +35,20 @@ from bapp_connectors.core.dto import (
     ProductUpdate,
 )
 from bapp_connectors.core.dto.webhook import WebhookEvent
-from bapp_connectors.core.errors import ConnectorError, ProviderError, ValidationError
+from bapp_connectors.core.errors import (
+    AuthenticationError,
+    ConnectorError,
+    ProviderError,
+    UnsupportedFeatureError,
+    ValidationError,
+)
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.providers.shop.temu.client import DEFAULT_PAGE_SIZE, TemuApiClient
 from bapp_connectors.providers.shop.temu.manifest import manifest
 from bapp_connectors.providers.shop.temu.mappers import (
+    amounts_from_invoice_detail,
+    amounts_from_v2,
     contact_from_shipping_info,
     goods_v3_payload,
     order_from_temu,
@@ -303,8 +312,28 @@ class TemuShopAdapter(
     def list_webhooks(self) -> list[dict]:
         return [{"event": event} for event in self.manifest.webhooks.events]
 
-    def attach_invoice(self, order_id, invoice_url, **kwargs):
-        raise NotImplementedError
+    # ── InvoiceAttachmentCapability ──
+
+    def attach_invoice(self, order_id: str, invoice_url: str, name: str = "", credit_note: bool = False,
+                       currency: str = "", date: str = "", amount: Decimal | None = None) -> bool:
+        """Upload the seller's invoice (or credit note) for a parent order; `invoice_url` must be public."""
+        if not name:
+            name = urllib.parse.urlparse(invoice_url).path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        fields: dict = {
+            "parentOrderSn": order_id,
+            "invoiceDirection": 2 if credit_note else 1,
+            "invoiceName": name[:200],
+            "recipientType": 1,
+            "fileUrl": invoice_url,
+        }
+        if currency:
+            fields["invoiceCurrency"] = currency
+        if date:
+            fields["invoiceDate"] = date
+        if amount is not None:
+            fields["invoiceAmount"] = float(amount)
+        result = self.client.upload_invoice(**fields)
+        return bool(result.get("success", True)) if isinstance(result, dict) else True
 
     # ── FulfillmentCapability / ShippingCapability ──
 
@@ -434,8 +463,18 @@ class TemuShopAdapter(
             raise ProviderError(f"Temu: nu există etichetă pentru pachetul {awb_id}: {data.get('warningMessage')}")
         return self.client.download_signed(str(url))
 
-    def get_order_amounts(self, order_id):
-        raise NotImplementedError
+    # ── OrderAmountCapability ──
+
+    def get_order_amounts(self, order_id: str) -> OrderAmounts:
+        """Consumer prices + seller settlement; falls back to the self-billing invoice content when
+        the token lacks the amount scope (3000032) or the API is unsupported."""
+        try:
+            return amounts_from_v2(self.client.order_amounts_v2(order_id), order_id)
+        except (AuthenticationError, UnsupportedFeatureError) as first:
+            data = self.client.invoice_detail(order_id)
+            if not (data or {}).get("invoiceDetailInfoList"):
+                raise first
+            return amounts_from_invoice_detail(data, order_id)
 
     def get_financial_transactions(self, *args, **kwargs):
         raise NotImplementedError

@@ -1,0 +1,43 @@
+{
+ "invoiceDetailInfoList": [
+  {
+   "orderMetaInfo": {
+    "parentOrderSn": "PO-167-1000000000000000",
+    "orderTimeMillis": 1786535686000,
+    "parentShippingTimeMillis": 1786652343000,
+    "financeParentOrderSn": "PO-167-1000000000000000",
+    "isCustomerServiceChargeOrder": false
+   },
+   "platformInfo": {
+    "platformName": "Temu",
+    "platformAddress": "-"
+   },
+   "shippingFee": {
+    "shippingAmountWithTax": 11.9,
+    "shippingAmountExcludeTax": 10.0
+   },
+   "goodsInfoList": [
+    {
+     "orderSn": "167-2000000000000001",
+     "description": "Produs test 21",
+     "skuSpec": "White",
+     "quantity": 2,
+     "unitPriceWithVAT": 56.525,
+     "unitPriceExcludeVAT": 47.5,
+     "vatRate": 19,
+     "vatRateBase": 100,
+     "totalGoodsAmount": 113.05
+    }
+   ],
+   "shippingInfoList": [],
+   "invoiceDetailType": 1,
+   "invoiceType": 1,
+   "currency": "RON",
+   "promotionInfo": {
+    "promotionAmountExcludeTax": 5.0,
+    "promotionAmountWithTax": 5.95
+   },
+   "addOrderInfoList": []
+  }
+ ]
+}

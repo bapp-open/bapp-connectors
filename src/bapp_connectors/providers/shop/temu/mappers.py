@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
 from bapp_connectors.core.dto import (
@@ -305,3 +305,125 @@ def sku_ids_from_stock_query(data: dict) -> list[tuple[int, str]]:
         if sku.get("skuId") is not None:
             pairs.append((int(sku["skuId"]), str(sku.get("skuSn") or sku.get("outSkuSn") or "")))
     return pairs
+
+
+# ───────────────────────────────────────────────────────────── order amounts
+
+Q2 = Decimal("0.01")
+
+
+def money(value) -> Decimal:
+    """``{"currency", "amount"}`` (or a bare number) → Decimal with 2 decimals.
+
+    The docs show ``amount`` as a plain number; treated as major currency units. Verify on the
+    first real order with the amount scope (if Temu sends minor units, divide by 100 here).
+    """
+    if isinstance(value, dict):
+        value = value.get("amount")
+    if value in (None, ""):
+        return Decimal("0")
+    try:
+        return Decimal(str(value)).quantize(Q2, rounding=ROUND_HALF_UP)
+    except ArithmeticError:
+        return Decimal("0")
+
+
+def _rate(value) -> Decimal:
+    try:
+        return Decimal(str(value if value is not None else 0))
+    except ArithmeticError:
+        return Decimal("0")
+
+
+def amounts_from_v2(data: dict, order_id: str) -> OrderAmounts:
+    """``temu.order.amount.v2.query`` → OrderAmounts (consumer prices + seller settlement)."""
+    from bapp_connectors.core.capabilities import OrderAmounts, OrderLineAmounts
+
+    head = data.get("parentOrderMap") or {}
+    paid = head.get("customerPaid") or {}
+    proceeds = head.get("salesProceeds") or {}
+    currency = ""
+    lines = []
+    for row in data.get("orderList") or []:
+        vat_rate = _rate(row.get("productTaxRate"))
+        unit_excl = money(row.get("unitRetailPriceTaxExcl"))
+        unit_incl = money(row.get("unitRetailPriceTaxIncl")) if row.get("unitRetailPriceTaxIncl") else (
+            unit_excl * (1 + vat_rate / 100)).quantize(Q2, rounding=ROUND_HALF_UP)
+        currency = currency or str((row.get("unitRetailPriceTaxExcl") or {}).get("currency") or "")
+        lines.append(OrderLineAmounts(
+            item_id=str(row.get("orderSn") or ""),
+            quantity=Decimal(str(row.get("quantity") or 1)),
+            unit_price_incl_vat=unit_incl,
+            unit_price_excl_vat=unit_excl,
+            vat_rate=vat_rate,
+            line_total_incl_vat=money(row.get("retailPriceTotalTaxIncl")),
+            base_price_total=money(row.get("basePriceDiscountedTotal") or row.get("basePriceTotal")),
+            discount_seller=money(row.get("retailPriceSellerDiscountTaxExcl")),
+            discount_platform=money(row.get("retailPriceTemuDiscountTaxExcl")),
+            estimated_settlement=money(row.get("estimatedSettlementTotal")),
+            extra={"unit_base_price": str(money(row.get("unitBasePrice"))), "estimated_deduction": str(money(row.get("estimatedDeduction")))},
+        ))
+    shipping_excl = money(paid.get("shippingCustomerTotalTaxExcl"))
+    shipping_tax = money(paid.get("shippingTaxCustomerTotal"))
+    product_tax = money(paid.get("productTaxCustomerTotal"))
+    currency = currency or str((paid.get("customerPaidTotal") or {}).get("currency") or "")
+    return OrderAmounts(
+        order_id=str(head.get("parentOrderSn") or order_id),
+        currency=currency,
+        lines=lines,
+        shipping_incl_vat=shipping_excl + shipping_tax,
+        shipping_excl_vat=shipping_excl,
+        tax_total=product_tax + shipping_tax,
+        customer_paid_total=money(paid.get("customerPaidTotal")),
+        estimated_revenue=money(proceeds.get("estimatedSettlementTotal")),
+        estimated_revenue_deduction=money(proceeds.get("estimatedDeduction")),
+        refunds_total=money(paid.get("productRefundsTotal")),
+        source="amount_query",
+        extra={"sales_proceeds": {k: str(money(v)) for k, v in proceeds.items() if isinstance(v, dict)},
+               "customer_paid": {k: str(money(v)) for k, v in paid.items() if isinstance(v, dict)}},
+    )
+
+
+def amounts_from_invoice_detail(data: dict, order_id: str) -> OrderAmounts:
+    """``temu.pay.tax.invoice.detail.query`` (self-billing invoice content) → OrderAmounts."""
+    from bapp_connectors.core.capabilities import OrderAmounts, OrderLineAmounts
+
+    infos = (data or {}).get("invoiceDetailInfoList") or []
+    info = infos[0] if infos else {}
+    currency = str(info.get("currency") or "")
+    lines = []
+    for row in info.get("goodsInfoList") or []:
+        quantity = Decimal(str(row.get("quantity") or 1))
+        total_incl = money(row.get("totalGoodsAmount"))
+        lines.append(OrderLineAmounts(
+            item_id=str(row.get("orderSn") or ""),
+            quantity=quantity,
+            unit_price_incl_vat=money(row.get("unitPriceWithVAT")),
+            unit_price_excl_vat=money(row.get("unitPriceExcludeVAT")),
+            vat_rate=_rate(row.get("vatRate")),
+            line_total_incl_vat=total_incl,
+            base_price_total=Decimal("0"),
+            discount_seller=Decimal("0"),
+            discount_platform=Decimal("0"),
+            estimated_settlement=Decimal("0"),
+            extra={"description": row.get("description") or "", "skuSpec": row.get("skuSpec") or ""},
+        ))
+    fee = info.get("shippingFee") or {}
+    shipping_incl = money(fee.get("shippingAmountWithTax"))
+    shipping_excl = money(fee.get("shippingAmountExcludeTax"))
+    lines_incl = sum((line.line_total_incl_vat for line in lines), Decimal("0"))
+    lines_excl = sum(((line.unit_price_excl_vat * line.quantity).quantize(Q2) for line in lines), Decimal("0"))
+    return OrderAmounts(
+        order_id=str((info.get("orderMetaInfo") or {}).get("parentOrderSn") or order_id),
+        currency=currency,
+        lines=lines,
+        shipping_incl_vat=shipping_incl,
+        shipping_excl_vat=shipping_excl,
+        tax_total=(lines_incl - lines_excl) + (shipping_incl - shipping_excl),
+        customer_paid_total=lines_incl + shipping_incl,
+        estimated_revenue=Decimal("0"),
+        estimated_revenue_deduction=Decimal("0"),
+        refunds_total=Decimal("0"),
+        source="invoice_detail",
+        extra={"invoice_type": info.get("invoiceType"), "promotion": info.get("promotionInfo") or {}},
+    )
