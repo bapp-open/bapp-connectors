@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import time
 import urllib.parse
 import uuid
 from decimal import Decimal
@@ -35,6 +36,7 @@ from bapp_connectors.core.dto import (
     Product,
     ProductUpdate,
 )
+from bapp_connectors.core.dto.financial import FinancialTransaction
 from bapp_connectors.core.dto.returns import ShopReturn
 from bapp_connectors.core.dto.webhook import WebhookEvent
 from bapp_connectors.core.errors import (
@@ -57,6 +59,7 @@ from bapp_connectors.providers.shop.temu.mappers import (
     product_from_goods,
     return_from_aftersales,
     sku_ids_from_stock_query,
+    transactions_from_statement,
 )
 from bapp_connectors.providers.shop.temu.models import SITE_CURRENCY, ShippingLabelStatus
 from bapp_connectors.providers.shop.temu.webhooks import parse_event
@@ -66,6 +69,10 @@ if TYPE_CHECKING:
     from bapp_connectors.core.dto import Contact
 
 logger = logging.getLogger(__name__)
+
+#: polling of ``temu.finance.mall.bill.task.get`` after a task is created
+BILL_POLL_ATTEMPTS = 10
+BILL_POLL_SECONDS = 3
 
 #: ``documentType`` of the shipping label PDF in ``bg.logistics.shipment.document.get`` (the doc only
 #: shows a placeholder; verify on the test shop and fix here if Temu rejects it)
@@ -481,11 +488,37 @@ class TemuShopAdapter(
                 raise first
             return amounts_from_invoice_detail(data, order_id)
 
-    def get_financial_transactions(self, *args, **kwargs):
-        raise NotImplementedError
+    # ── FinancialCapability ──
 
-    def get_invoices(self, *args, **kwargs):
-        raise NotImplementedError
+    _sleep = staticmethod(time.sleep)
+
+    def _await_bill_file(self, task_id: str) -> str:
+        """Poll the bill task until it is terminal; returns the signed file URL."""
+        for attempt in range(BILL_POLL_ATTEMPTS):
+            if attempt:
+                self._sleep(BILL_POLL_SECONDS)
+            task = self.client.get_bill_task(task_id)
+            status = str(task.get("status") or "").upper()
+            if task.get("fileUrl"):
+                return str(task["fileUrl"])
+            if "FAIL" in status or "ERROR" in status or task.get("errorCode"):
+                raise ProviderError(f"Temu bill task {task_id} failed: {task.get('errorMessage') or status}")
+        raise ProviderError(f"Temu bill task {task_id} not ready after {BILL_POLL_ATTEMPTS} polls", retryable=True)
+
+    def get_financial_transactions(self, start_date: datetime.datetime, end_date: datetime.datetime,
+                                   transaction_type: str | None = None, cursor: str | None = None) -> PaginatedResult[FinancialTransaction]:
+        file_type = transaction_type or "STATEMENT_REPORT"
+        task = self.client.create_bill_task(file_type, int(start_date.timestamp() * 1000), int(end_date.timestamp() * 1000))
+        task_id = str(task.get("taskId") or "")
+        if not task_id:
+            raise ProviderError(f"Temu bill task not created: {task}")
+        url = self._await_bill_file(task_id)
+        content = self.client.download_signed(url)
+        rows = transactions_from_statement(content, str(self.config.get("currency") or ""))
+        return PaginatedResult(items=rows, cursor=None, has_more=False, total=len(rows))
+
+    def get_invoices(self, start_date=None, end_date=None, category=None, cursor=None):
+        raise NotImplementedError("Temu does not expose its commission invoices through the API")
 
     # ── ReturnsCapability ──
 

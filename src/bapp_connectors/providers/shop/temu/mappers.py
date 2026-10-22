@@ -506,3 +506,19 @@ def return_from_aftersales(item: dict, detail: dict | None) -> ShopReturn:
         lines=lines,
         raw={"item": item, "detail": detail},
     )
+
+
+# ────────────────────────────────────────────────────────────── settlements
+
+def transactions_from_statement(content: bytes, currency: str) -> list:
+    """STATEMENT_REPORT file → FinancialTransaction rows.
+
+    The report format is not known yet (``temu.finance.mall.bill.task.create`` answered
+    "Service not supported" on every shop we could reach). Written when the first real file
+    exists; until then the caller gets an explicit UnsupportedFeatureError instead of guesses.
+    """
+    from bapp_connectors.core.errors import UnsupportedFeatureError
+
+    raise UnsupportedFeatureError(
+        f"Temu statement report format not yet known ({len(content)} bytes received, currency {currency or '?'})"
+    )

@@ -561,6 +561,9 @@ The registry will **reject registration** if you declare a capability but don't 
 | `DnsAllowlistCapability` | `get_dns_allowlist(segment_ref, config) -> DnsAllowlist`, `set_dns_allowlist(segment_ref, config, domains) -> DnsAllowlist` (network family) |
 | `OAuthCapability` | `get_authorize_url(redirect_uri, state) -> str`, `exchange_code_for_token(code, ...) -> OAuthTokens`, `refresh_token(refresh_token) -> OAuthTokens` |
 | `InvoiceAttachmentCapability` | `attach_invoice(order_id, invoice_url) -> bool` |
+| `FulfillmentCapability` | `list_carriers() -> list[Carrier]`, `confirm_shipment(order_id, tracking_number, carrier_id, items=None)`, `list_shipping_services(order_id, warehouse_id) -> list[ShippingService]`, `create_shipment(order_id, shipping_service_id, warehouse_id, items=None, ship_later=False) -> package_sn`, `get_shipment_result(package_sn) -> ShipmentResult`, `confirm_package_shipped(package_sn)` (shop; Temu) |
+| `OrderAmountCapability` | `get_order_amounts(order_id) -> OrderAmounts` — the money of an order when the order feed carries no prices (shop; Temu) |
+| `CustomerDetailsCapability` | `get_customer_details(order_id) -> Contact` — decrypted buyer on demand (shop; Temu) |
 | `ProductFeedCapability` | `generate_feed(products, format) -> str \| bytes` |
 | `EmbeddingCapability` | `embed(texts, model) -> EmbeddingResult` |
 | `TranscriptionCapability` | `transcribe(audio, model, language) -> TranscriptionResult` |
