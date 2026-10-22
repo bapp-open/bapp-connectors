@@ -10,7 +10,7 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 
 | Family | Port | Providers |
 |--------|------|-----------|
-| shop | `ShopPort` | CEL.ro, eMAG, Gomag, Okazii, PrestaShop, Trendyol, Vendigo, WooCommerce |
+| shop | `ShopPort` | CEL.ro, eMAG, Gomag, Okazii, PrestaShop, Temu, Trendyol, Vendigo, WooCommerce |
 | courier | `CourierPort` | Colete Online, GLS, Sameday |
 | payment | `PaymentPort` | Netopia, Stripe |
 | messaging | `MessagingPort` | GoIP, RoboSMS, Telegram, WhatsApp |
@@ -57,7 +57,7 @@ providers/{family}/{provider}/
 
 ### Optional Capabilities
 
-EmbeddingCapability, TranscriptionCapability, StreamingCapability, ImageGenerationCapability, BulkUpdateCapability, BulkImportCapability, WebhookCapability, OAuthCapability, InvoiceAttachmentCapability, ProductFeedCapability, FeedUploadCapability, CreativeUploadCapability (ads: media upload + creative creation), SocialPublishCapability (social: post publishing with async status polling), DnsAllowlistCapability (network: per-segment DNS allowlist, e.g. an Unbound view on pfSense)
+EmbeddingCapability, TranscriptionCapability, StreamingCapability, ImageGenerationCapability, BulkUpdateCapability, BulkImportCapability, WebhookCapability, OAuthCapability, InvoiceAttachmentCapability, ProductFeedCapability, FeedUploadCapability, CreativeUploadCapability (ads: media upload + creative creation), SocialPublishCapability (social: post publishing with async status polling), DnsAllowlistCapability (network: per-segment DNS allowlist, e.g. an Unbound view on pfSense), FulfillmentCapability (shop: confirm own-courier shipment or buy a marketplace label; Temu), OrderAmountCapability (shop: order money fetched separately from the order; Temu), CustomerDetailsCapability (shop: decrypted buyer on demand; Temu)
 
 ## Testing
 
