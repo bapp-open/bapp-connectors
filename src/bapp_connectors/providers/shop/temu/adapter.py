@@ -138,6 +138,12 @@ class TemuShopAdapter(
             site_id = 0
         return SITE_CURRENCY.get(site_id) or str(self.config.get("currency") or "RON")
 
+    def _shipping_or_none(self, order_id: str) -> dict | None:
+        try:
+            return self.client.shipping_info(order_id) or None
+        except ConnectorError:
+            return None
+
     def _amounts_or_none(self, order_id: str) -> OrderAmounts | None:
         try:
             return self.get_order_amounts(order_id)
@@ -145,7 +151,9 @@ class TemuShopAdapter(
             return None
 
     def get_orders(self, since: datetime.datetime | None = None, cursor: str | None = None) -> PaginatedResult[Order]:
-        """One list page per call; cheap pass: no shipping info, no amounts (`get_order` adds them)."""
+        """One list page per call. Every row is enriched with the shipping contact and the amounts
+        (2 extra calls per order): the host's pull channel feeds list rows straight into its
+        intake, so a bare row would create an order without buyer and without prices."""
         page = int(cursor) if cursor else 1
         data = self.client.list_orders(
             page_number=page,
@@ -154,7 +162,12 @@ class TemuShopAdapter(
             update_at_start=int(since.timestamp()) if since else None,
         )
         rows = data.get("pageItems") or []
-        items = [order_from_temu(row, None, self._site_currency(row.get("parentOrderMap") or {}), None) for row in rows]
+        items = []
+        for row in rows:
+            head = row.get("parentOrderMap") or {}
+            order_id = str(head.get("parentOrderSn") or "")
+            shipping = self._shipping_or_none(order_id)
+            items.append(order_from_temu(row, shipping, self._site_currency(head), self._amounts_or_none(order_id)))
         total = data.get("totalItemNum")
         has_more = bool(rows) and (page * DEFAULT_PAGE_SIZE < int(total) if total is not None else len(rows) == DEFAULT_PAGE_SIZE)
         return PaginatedResult(items=items, cursor=str(page + 1) if has_more else None, has_more=has_more, total=total)

@@ -61,25 +61,29 @@ def test_get_orders_paginates_by_page_number(fake):
     adapter = TemuShopAdapter(CREDS, http_client=fake, config={})
     page = load("order_list.json")
     page["totalItemNum"] = 120
-    fake.add("POST", "openapi/router", ok(page))
+    fake.add("POST", "openapi/router", lambda m, p, kw: ok(page) if kw["json"]["type"] == "bg.order.list.v2.get"
+             else ok(load("shipping_info.json")) if kw["json"]["type"] == "bg.order.shippinginfo.v2.get"
+             else {"success": False, "errorCode": 3000032, "errorMsg": "x", "requestId": "r"})
     since = datetime.datetime(2026, 10, 1, tzinfo=datetime.UTC)
     res = adapter.get_orders(since=since, cursor="2")
-    body = fake.last_call().kwargs["json"]
+    body = fake.calls[0].kwargs["json"]
     assert body["type"] == "bg.order.list.v2.get" and body["pageNumber"] == 2 and body["pageSize"] == 50
     assert body["parentOrderStatus"] == 0 and body["updateAtStart"] == int(since.timestamp())
     assert res.cursor == "3" and res.has_more and res.total == 120
     assert len(res.items) == 3 and res.items[0].provider_meta.provider == "temu"
-    assert res.items[0].extra["amounts_missing"] is True and res.items[0].shipping is None
-    assert len(fake.calls) == 1  # the list pass makes no per-order calls
+    assert res.items[0].extra["amounts_missing"] is True and res.items[0].shipping.name == "Client Test"
+    assert [c.kwargs["json"]["type"] for c in fake.calls[:2]] == ["bg.order.list.v2.get", "bg.order.shippinginfo.v2.get"]
 
 
 def test_get_orders_last_page(fake):
     adapter = TemuShopAdapter(CREDS, http_client=fake, config={})
     page = load("order_list.json")
     page["totalItemNum"] = 3
-    fake.add("POST", "openapi/router", ok(page))
+    fake.add("POST", "openapi/router", lambda m, p, kw: ok(page) if kw["json"]["type"] == "bg.order.list.v2.get"
+             else ok(load("shipping_info.json")) if kw["json"]["type"] == "bg.order.shippinginfo.v2.get"
+             else {"success": False, "errorCode": 3000032, "errorMsg": "x", "requestId": "r"})
     res = adapter.get_orders()
-    assert res.cursor is None and res.has_more is False and fake.last_call().kwargs["json"]["pageNumber"] == 1
+    assert res.cursor is None and res.has_more is False and fake.calls[0].kwargs["json"]["pageNumber"] == 1
 
 
 def test_get_order_combines_detail_shipping_and_amounts(fake):
