@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -20,9 +21,8 @@ from bapp_connectors.core.capabilities import (
     ShippingCapability,
     WebhookCapability,
 )
-import uuid
-
 from bapp_connectors.core.dto import BulkResult, ConnectionTestResult, Order, PaginatedResult, Product, ProductUpdate
+from bapp_connectors.core.dto.webhook import WebhookEvent
 from bapp_connectors.core.errors import ConnectorError, ValidationError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import ShopPort
@@ -36,6 +36,7 @@ from bapp_connectors.providers.shop.temu.mappers import (
     sku_ids_from_stock_query,
 )
 from bapp_connectors.providers.shop.temu.models import SITE_CURRENCY
+from bapp_connectors.providers.shop.temu.webhooks import parse_event
 
 if TYPE_CHECKING:
     from bapp_connectors.core.capabilities import OrderAmounts
@@ -267,17 +268,25 @@ class TemuShopAdapter(
                 result.errors.append({"product_id": update.product_id, "error": str(exc)})
         return result
 
-    def verify_webhook(self, headers, body, secret=""):
-        raise NotImplementedError
+    # ── WebhookCapability ──
 
-    def parse_webhook(self, headers, body):
-        raise NotImplementedError
+    def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
+        """`secret` is ignored: the scheme is keyed on the app secret this adapter already holds."""
+        event = parse_event(headers, body, self.app_secret, self.app_key)
+        return bool(event.signature_valid and event.extra.get("app_key_matches"))
 
-    def register_webhook(self, url, events=None):
-        raise NotImplementedError
+    def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
+        return parse_event(headers, body, self.app_secret, self.app_key)
 
-    def list_webhooks(self):
-        raise NotImplementedError
+    def register_webhook(self, url: str, events: list[str] | None = None) -> dict:
+        """Temu has no API for the callback URL (set it in Partner Platform); this activates the events on the shop."""
+        permitted = list(events or self.manifest.webhooks.events)
+        self.client.update_webhook_subscription(permit=permitted)
+        return {"url_note": "Set the callback URL in Partner Platform → Webhook; events activated on the shop.",
+                "url": url, "permitted": permitted}
+
+    def list_webhooks(self) -> list[dict]:
+        return [{"event": event} for event in self.manifest.webhooks.events]
 
     def attach_invoice(self, order_id, invoice_url, **kwargs):
         raise NotImplementedError

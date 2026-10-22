@@ -6,7 +6,16 @@ import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.dto import Address, Contact, Order, OrderItem, Product, ProductPhoto, ProductVariant, ProviderMeta
+from bapp_connectors.core.dto import (
+    Address,
+    Contact,
+    Order,
+    OrderItem,
+    Product,
+    ProductPhoto,
+    ProductVariant,
+    ProviderMeta,
+)
 from bapp_connectors.core.dto.order import OrderStatus, PaymentStatus, PaymentType
 from bapp_connectors.core.errors import ValidationError
 from bapp_connectors.providers.shop.temu.models import REGION_COUNTRY, ParentOrderStatus
