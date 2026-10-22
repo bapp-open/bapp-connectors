@@ -26,13 +26,28 @@ def _router(detail, extra=None):
     return route
 
 
-def test_list_carriers_maps_provider_fields(fake):
+def test_list_carriers_maps_provider_fields_and_sends_region(fake):
     adapter = _adapter(fake)
-    fake.add("POST", "openapi/router", ok([{"logisticsServiceProviderId": 699272611, "logisticsServiceProviderName": "Curier X",
-                                            "logisticsBrandName": "X"}]))
+
+    def route(method, path, kwargs):
+        t = kwargs["json"]["type"]
+        if t == "bg.open.accesstoken.info.get":
+            return ok({"mallId": 42, "regionId": 167, "apiScopeList": [], "expiredTime": 1})
+        assert kwargs["json"]["regionId"] == 167  # Temu answers BUSINESS_SERVICE_ERROR without it
+        return ok([{"logisticsServiceProviderId": 699272611, "logisticsServiceProviderName": "Curier X", "logisticsBrandName": "X"}])
+
+    fake.add("POST", "openapi/router", route)
     [carrier] = adapter.list_carriers()
     assert carrier.carrier_id == "699272611" and carrier.name == "Curier X" and carrier.extra["logisticsBrandName"] == "X"
     assert fake.last_call().kwargs["json"]["type"] == "bg.logistics.companies.get"
+    adapter.list_carriers()
+    assert sum(1 for c in fake.calls if c.kwargs["json"]["type"] == "bg.open.accesstoken.info.get") == 1  # region cached
+
+
+def test_list_carriers_uses_configured_region(fake):
+    adapter = _adapter(fake, region_id=167)
+    fake.add("POST", "openapi/router", lambda m, p, kw: ok([]) if kw["json"].get("regionId") == 167 else (_ for _ in ()).throw(AssertionError(kw["json"])))
+    assert adapter.list_carriers() == []
 
 
 def test_confirm_shipment_builds_send_request(fake):

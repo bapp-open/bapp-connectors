@@ -261,6 +261,21 @@ def goods_v3_payload(product: Product, cfg: dict) -> dict:
     return payload
 
 
+def publication_state(sub_status) -> str:
+    """``goodsShowSubStatus`` → on_sale (2xxx) / off_sale (3xxx) / incomplete (4xxx, drafts) / unknown."""
+    try:
+        code = int(sub_status)
+    except (TypeError, ValueError):
+        return "unknown"
+    if 2000 <= code < 3000:
+        return "on_sale"
+    if 3000 <= code < 4000:
+        return "off_sale"
+    if 4000 <= code < 5000:
+        return "incomplete"
+    return "unknown"
+
+
 def product_from_goods(item: dict) -> Product:
     """One row of ``bg.local.goods.list.query`` → Product DTO."""
     skus = item.get("skuInfoList") or []
@@ -285,6 +300,10 @@ def product_from_goods(item: dict) -> Product:
             except ArithmeticError:
                 continue
     photos = [ProductPhoto(url=item["thumbUrl"], position=0)] if item.get("thumbUrl") else []
+    status = publication_state(item.get("goodsShowSubStatus"))
+    extra = {k: item.get(k) for k in ("goodsStatus", "goodsShowSubStatus", "status4VO", "subStatus4VO", "catId",
+                                      "crtTime", "goodsStatusChangeTime", "outSkuSnList", "skuIdList") if k in item}
+    extra["status"] = status
     return Product(
         product_id=str(item.get("goodsId") or ""),
         sku=item.get("outGoodsSn") or None,
@@ -292,11 +311,10 @@ def product_from_goods(item: dict) -> Product:
         price=price,
         currency=str(item.get("currency") or ""),
         stock=sum(stocks) if stocks else None,
-        active=item.get("goodsShowSubStatus") not in (None, 0) if "goodsShowSubStatus" in item else True,
+        active=status in ("on_sale", "unknown"),
         photos=photos,
         variants=variants,
-        extra={k: item.get(k) for k in ("goodsStatus", "goodsShowSubStatus", "status4VO", "subStatus4VO", "catId",
-                                         "crtTime", "goodsStatusChangeTime", "outSkuSnList", "skuIdList") if k in item},
+        extra=extra,
         provider_meta=ProviderMeta(provider="temu", raw_id=str(item.get("goodsId") or ""), raw_payload=item),
     )
 

@@ -133,7 +133,7 @@ def test_get_products_maps_goods_list(fake):
     fake.add("POST", "openapi/router", ok(load("goods_list.json")))
     page = adapter.get_products(cursor="1")
     body = fake.last_call().kwargs["json"]
-    assert body["pageNo"] == 1 and body["goodsSearchType"] == 1 and body["statusFilterType"] == 1
+    assert body["pageNo"] == 1 and body["goodsSearchType"] == 1 and body["statusFilterType"] == 0
     product = page.items[0]
     assert product.product_id.isdigit() and product.name.startswith("Produs test")
     assert product.variants and product.variants[0].variant_id.isdigit() and product.provider_meta.provider == "temu"
@@ -166,3 +166,14 @@ def test_bulk_update_counts(fake):
                                         ProductUpdate(product_id="500", sku="SKU-1", price=Decimal("3"))])
     assert (res.total, res.succeeded, res.failed) == (3, 2, 1)
     assert res.errors[0]["product_id"] == "999" and "BUSINESS_SERVICE_ERROR" in res.errors[0]["error"]
+
+
+def test_product_from_goods_publication_state():
+    base = {"goodsId": 1, "goodsName": "X", "outGoodsSn": "X-1", "skuInfoList": []}
+    assert product_from_goods({**base, "goodsShowSubStatus": 2001}).active is True
+    assert product_from_goods({**base, "goodsShowSubStatus": 2001}).extra["status"] == "on_sale"
+    assert product_from_goods({**base, "goodsShowSubStatus": 3002}).active is False
+    assert product_from_goods({**base, "goodsShowSubStatus": 3002}).extra["status"] == "off_sale"
+    assert product_from_goods({**base, "goodsShowSubStatus": 4002}).active is False
+    assert product_from_goods({**base, "goodsShowSubStatus": 4002}).extra["status"] == "incomplete"
+    assert product_from_goods(base).active is True and product_from_goods(base).extra["status"] == "unknown"

@@ -137,7 +137,8 @@ class TemuApiClient:
 
     # ------------------------------------------------------------------- goods
     def list_goods(self, page_no: int, page_size: int = DEFAULT_PAGE_SIZE, **filters: Any) -> dict | None:
-        params = {"goodsSearchType": 1, "statusFilterType": 1, **filters}
+        # statusFilterType 0 = every status; 1 (on sale) answers `result: null` on a shop with drafts only
+        params = {"goodsSearchType": 1, "statusFilterType": 0, **filters}
         return self.call("bg.local.goods.list.query", pageNo=page_no, pageSize=page_size, **params)
 
     def goods_detail(self, goods_id: int) -> dict:
@@ -213,8 +214,10 @@ class TemuApiClient:
             createAtEnd=create_at_end,
         ) or {}
 
-    def aftersales_detail(self, parent_after_sales_sn: str) -> dict:
-        return self.call("temu.aftersales.parentaftersales.detail.get", parentAfterSalesSn=parent_after_sales_sn) or {}
+    def aftersales_detail(self, parent_after_sales_sn: str, parent_order_sn: str) -> dict:
+        # both ids are required: without parentOrderSn Temu answers 130010001 "parameter is illegal"
+        return self.call("temu.aftersales.parentaftersales.detail.get", parentAfterSalesSn=parent_after_sales_sn,
+                         parentOrderSn=parent_order_sn) or {}
 
     def list_cancellations(self, page_no: int, page_size: int) -> dict:
         return self.call("bg.aftersales.cancel.list.get", pageNo=page_no, pageSize=page_size) or {}

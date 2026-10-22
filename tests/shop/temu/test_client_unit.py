@@ -70,7 +70,7 @@ def test_list_goods_always_sends_search_filters(client, fake):
     assert client.list_goods(page_no=1) is None
     body = fake.last_call().kwargs["json"]
     assert body["type"] == "bg.local.goods.list.query"
-    assert body["goodsSearchType"] == 1 and body["statusFilterType"] == 1
+    assert body["goodsSearchType"] == 1 and body["statusFilterType"] == 0
     assert body["pageNo"] == 1 and body["pageSize"] == 50
 
 

@@ -59,6 +59,7 @@ def test_get_returns_pages_with_seconds_window_and_detail(fake):
             return ok(listing)
         if t == "temu.aftersales.parentaftersales.detail.get":
             sn = kwargs["json"]["parentAfterSalesSn"]
+            assert kwargs["json"]["parentOrderSn"] == sn.rsplit("-", 1)[0]  # Temu rejects the call without it (130010001)
             if sn.endswith("12-D02"):
                 return err(7000000, "BUSINESS_SERVICE_ERROR")
             return ok({**detail, "parentAfterSalesSn": sn})

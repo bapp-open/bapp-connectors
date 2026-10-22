@@ -363,8 +363,21 @@ class TemuShopAdapter(
             raise ValidationError(f"Temu: comanda {order_id} nu are linii de expediat")
         return lines
 
+    def _region_id(self) -> int | None:
+        """The mall's Temu region (167 = RO site family); from config, else from the token info (cached)."""
+        configured = self.config.get("region_id")
+        if configured not in (None, ""):
+            return int(configured)
+        if getattr(self, "_cached_region_id", None) is None:
+            try:
+                self._cached_region_id = int(self.client.token_info().get("regionId") or 0) or None
+            except ConnectorError:
+                self._cached_region_id = None
+        return self._cached_region_id
+
     def list_carriers(self) -> list[Carrier]:
-        raw = self.client.list_carriers()
+        # without regionId the test shop answers 7000000 BUSINESS_SERVICE_ERROR
+        raw = self.client.list_carriers(region_id=self._region_id())
         rows = raw if isinstance(raw, list) else (raw.get("logisticsServiceProviderList") or raw.get("list") or [])
         return [
             Carrier(carrier_id=str(row.get("logisticsServiceProviderId") or ""),
@@ -532,7 +545,7 @@ class TemuShopAdapter(
                 sn = str(row.get("parentAfterSalesSn") or "")
                 detail = None
                 try:
-                    detail = self.client.aftersales_detail(sn)
+                    detail = self.client.aftersales_detail(sn, str(row.get("parentOrderSn") or ""))
                 except ConnectorError as exc:
                     logger.warning("temu: after-sales detail %s failed: %s", sn, exc)
                     returns.append(return_from_aftersales(row, None).model_copy(update={"raw": {"item": row, "detail": {}, "detail_error": str(exc)}}))
