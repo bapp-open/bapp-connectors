@@ -114,5 +114,13 @@ def test_get_order_uses_amounts_for_line_prices(fake):
 
     fake.add("POST", "openapi/router", route)
     o = adapter.get_order(detail["parentOrderMap"]["parentOrderSn"])
-    assert o.extra["amounts_missing"] is False and o.items[0].unit_price == Decimal("59.50") and o.items[0].tax_rate == Decimal("19")
+    # host convention (shop_orders.intake._line_prices): unit_price is NET, extra["subtotal"] the exact gross line total
+    assert o.extra["amounts_missing"] is False and o.items[0].unit_price == Decimal("50.00") and o.items[0].tax_rate == Decimal("19")
+    assert o.items[0].extra["subtotal"] == "119.00" and o.items[0].extra["unit_price_incl_vat"] == "59.50"
     assert o.total == Decimal("124.95") and o.extra["amounts"]["estimated_revenue"] == "90.00"
+
+
+def test_amounts_line_with_zero_quantity_stays_zero():
+    data = load("amount_v2.json")
+    data["orderList"][0]["quantity"] = 0
+    assert amounts_from_v2(data, "PO-1").lines[0].quantity == Decimal("0")

@@ -31,7 +31,10 @@ def test_polls_task_then_downloads_then_parser_is_unavailable(fake, monkeypatch)
     polls = {"n": 0}
 
     class R:
+        ok = True
+        status_code = 200
         content = b"col1,col2\n"
+        headers = {}
 
     def route(method, path, kwargs):
         if method == "GET":

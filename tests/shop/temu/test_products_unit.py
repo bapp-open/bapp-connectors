@@ -180,3 +180,44 @@ def test_product_from_goods_publication_state():
     assert product_from_goods({**base, "goodsShowSubStatus": 4002}).active is False
     assert product_from_goods({**base, "goodsShowSubStatus": 4002}).extra["status"] == "incomplete"
     assert product_from_goods(base).active is True and product_from_goods(base).extra["status"] == "unknown"
+
+
+def _sku_query_router(calls):
+    def route(method, path, kwargs):
+        t = kwargs["json"]["type"]
+        calls.append(t)
+        if t == "temu.local.goods.sku.stock.query":
+            # by SKU (host stock push: product_id is the SKU) or by goods id (sku given only as a hint)
+            assert kwargs["json"].get("outSkuSnList") == ["SKU-2"] or kwargs["json"].get("goodsId") == 500
+            return ok({"stockList": [{"goodsId": 500, "skuStockInfoList": [{"skuId": 11, "outSkuSn": "SKU-1"}, {"skuId": 12, "outSkuSn": "SKU-2"}]}]})
+        return ok({})
+    return route
+
+
+def test_bulk_update_by_sku_resolves_goods_and_touches_only_that_sku(fake):
+    # the host's stock push sends ProductUpdate(product_id=<sku>, sku=<sku>, stock=qty)
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config=CFG)
+    calls = []
+    fake.add("POST", "openapi/router", _sku_query_router(calls))
+    res = adapter.bulk_update_products([ProductUpdate(product_id="SKU-2", sku="SKU-2", stock=4, price=Decimal("7"))])
+    assert (res.total, res.succeeded, res.failed) == (1, 1, 0)
+    assert calls == ["temu.local.goods.sku.stock.query", "bg.local.goods.stock.edit", "bg.local.goods.priceorder.change.sku.price"]
+    stock_body = fake.calls[1].kwargs["json"]
+    assert stock_body["goodsId"] == 500 and stock_body["skuStockTargetList"] == [{"skuId": 12, "stockTarget": 4}]
+    price_body = fake.calls[2].kwargs["json"]
+    assert price_body["goodsId"] == 500 and price_body["changeSkuPriceDTOList"][0]["skuChangePriceBaseDTOList"][0]["skuId"] == 12
+
+
+def test_update_stock_with_sku_hint_touches_only_that_sku(fake):
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config=CFG)
+    calls = []
+    fake.add("POST", "openapi/router", _sku_query_router(calls))
+    adapter.update_product(ProductUpdate(product_id="500", sku="SKU-2", stock=1))
+    assert fake.last_call().kwargs["json"]["skuStockTargetList"] == [{"skuId": 12, "stockTarget": 1}]
+
+
+def test_unknown_sku_is_a_failed_row(fake):
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config=CFG)
+    fake.add("POST", "openapi/router", ok({"stockList": []}))
+    res = adapter.bulk_update_products([ProductUpdate(product_id="NOPE", sku="NOPE", stock=1)])
+    assert res.failed == 1 and "NOPE" in res.errors[0]["error"]

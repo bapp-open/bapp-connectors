@@ -42,6 +42,39 @@ def test_status_map_covers_verified_codes():
         assert order_from_temu(parent, None, "RON").status == expected
 
 
+def test_cancelled_line_keeps_zero_quantity():
+    parent = load("order_detail.json")
+    parent["orderList"][0]["quantity"] = 0
+    parent["orderList"][0]["canceledQuantityBeforeShipment"] = 1
+    item = order_from_temu(parent, None, "RON").items[0]
+    assert item.quantity == Decimal("0") and item.extra["canceledQuantityBeforeShipment"] == 1
+
+
+def test_get_order_propagates_transient_amount_errors(fake):
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config={})
+    detail = load("order_detail.json")
+    fake.add("POST", "openapi/router", lambda m, p, kw: ok(detail) if kw["json"]["type"] == "bg.order.detail.v2.get"
+             else ok(load("shipping_info.json")) if kw["json"]["type"] == "bg.order.shippinginfo.v2.get"
+             else {"success": False, "errorCode": 7000000, "errorMsg": "BUSINESS_SERVICE_ERROR", "requestId": "r"})
+    import pytest
+
+    from bapp_connectors.core.errors import ProviderError
+    with pytest.raises(ProviderError):  # not a missing scope: the pull must fail and retry, not import a priceless order
+        adapter.get_order(detail["parentOrderMap"]["parentOrderSn"])
+
+
+def test_get_orders_propagates_shipping_errors(fake):
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config={})
+    page = load("order_list.json")
+    fake.add("POST", "openapi/router", lambda m, p, kw: ok(page) if kw["json"]["type"] == "bg.order.list.v2.get"
+             else {"success": False, "errorCode": 150010005, "errorMsg": "Try again later", "requestId": "r"})
+    import pytest
+
+    from bapp_connectors.core.errors import RateLimitError
+    with pytest.raises(RateLimitError):
+        adapter.get_orders()
+
+
 def test_order_without_shipping_info_has_no_contact():
     o = order_from_temu(load("order_detail.json"), None, "RON")
     assert o.shipping is None and o.shipping_address is None

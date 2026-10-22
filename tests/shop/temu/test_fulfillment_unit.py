@@ -141,7 +141,10 @@ def test_get_awb_pdf_downloads_signed_url(fake):
     adapter = _adapter(fake)
 
     class Resp:
+        ok = True
+        status_code = 200
         content = b"%PDF-1.4"
+        headers = {"Content-Type": "application/pdf"}
 
     def route(method, path, kwargs):
         if method == "GET":

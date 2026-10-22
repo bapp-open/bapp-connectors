@@ -84,24 +84,31 @@ def _item_from_order_line(line: dict, currency: str, amounts: OrderAmounts | Non
     products = line.get("productList") or []
     sku = str((products[0] or {}).get("extCode") or "") if products else ""
     packages = line.get("packageSnInfo") or []
+    # Host convention (shop_orders intake): `unit_price` is the NET unit price and `extra["subtotal"]`
+    # the exact gross line total the buyer paid; the gross unit price rides along for reference.
     unit_price = Decimal("0")
     tax_rate = None
+    price_extra: dict = {}
     if amounts is not None:
         for amount_line in amounts.lines:
             if amount_line.item_id == order_sn:
-                unit_price = amount_line.unit_price_incl_vat
+                unit_price = amount_line.unit_price_excl_vat
                 tax_rate = amount_line.vat_rate
+                price_extra = {"subtotal": str(amount_line.line_total_incl_vat),
+                               "unit_price_incl_vat": str(amount_line.unit_price_incl_vat)}
                 break
+    raw_quantity = line.get("quantity")
     return OrderItem(
         item_id=order_sn,
         product_id=str(line.get("goodsId") or ""),
         sku=sku,
         name=str(line.get("goodsName") or line.get("originalGoodsName") or ""),
-        quantity=Decimal(str(line.get("quantity") or 1)),
+        quantity=Decimal(str(raw_quantity)) if raw_quantity is not None else Decimal("1"),
         unit_price=unit_price,
         currency=currency,
         tax_rate=tax_rate,
         extra={
+            **price_extra,
             "skuId": line.get("skuId"),
             "productSkuId": (products[0] or {}).get("productSkuId") if products else None,
             "spec": line.get("spec") or "",
@@ -319,17 +326,23 @@ def product_from_goods(item: dict) -> Product:
     )
 
 
-def sku_ids_from_stock_query(data: dict) -> list[tuple[int, str]]:
-    """``temu.local.goods.sku.stock.query`` → [(skuId, outSkuSn), …] across all goods in the answer."""
-    pairs: list[tuple[int, str]] = []
+def skus_from_stock_query(data: dict) -> list[tuple[int, int, str]]:
+    """``temu.local.goods.sku.stock.query`` → [(goodsId, skuId, outSkuSn), …] across all goods in the answer."""
+    rows: list[tuple[int, int, str]] = []
     for goods in (data or {}).get("stockList") or []:
+        goods_id = int(goods.get("goodsId") or 0)
         for sku in goods.get("skuStockInfoList") or []:
             if sku.get("skuId") is not None:
-                pairs.append((int(sku["skuId"]), str(sku.get("outSkuSn") or "")))
+                rows.append((goods_id, int(sku["skuId"]), str(sku.get("outSkuSn") or "")))
     for sku in (data or {}).get("skuStockList") or []:  # tolerated alternative shape
         if sku.get("skuId") is not None:
-            pairs.append((int(sku["skuId"]), str(sku.get("skuSn") or sku.get("outSkuSn") or "")))
-    return pairs
+            rows.append((int(sku.get("goodsId") or 0), int(sku["skuId"]), str(sku.get("skuSn") or sku.get("outSkuSn") or "")))
+    return rows
+
+
+def sku_ids_from_stock_query(data: dict) -> list[tuple[int, str]]:
+    """[(skuId, outSkuSn), …] — kept for callers that only need the SKU side."""
+    return [(sku_id, out_sku) for _, sku_id, out_sku in skus_from_stock_query(data)]
 
 
 # ───────────────────────────────────────────────────────────── order amounts
@@ -375,9 +388,10 @@ def amounts_from_v2(data: dict, order_id: str) -> OrderAmounts:
         unit_incl = money(row.get("unitRetailPriceTaxIncl")) if row.get("unitRetailPriceTaxIncl") else (
             unit_excl * (1 + vat_rate / 100)).quantize(Q2, rounding=ROUND_HALF_UP)
         currency = currency or str((row.get("unitRetailPriceTaxExcl") or {}).get("currency") or "")
+        raw_quantity = row.get("quantity")
         lines.append(OrderLineAmounts(
             item_id=str(row.get("orderSn") or ""),
-            quantity=Decimal(str(row.get("quantity") or 1)),
+            quantity=Decimal(str(raw_quantity)) if raw_quantity is not None else Decimal("1"),
             unit_price_incl_vat=unit_incl,
             unit_price_excl_vat=unit_excl,
             vat_rate=vat_rate,

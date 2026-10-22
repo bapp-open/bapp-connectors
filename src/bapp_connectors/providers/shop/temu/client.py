@@ -44,7 +44,10 @@ class TemuApiClient:
         self.http = http_client or ResilientHttpClient(base_url=self.base_url, provider_name="temu")
 
     # ------------------------------------------------------------------ core
-    def call(self, api_type: str, retry: bool = True, **params: Any) -> Any:
+    def call(self, api_type: str, retry: bool = True, log_body: bool = False, **params: Any) -> Any:
+        """One signed POST. `log_body=True` keeps request+response in the host's execution log: used only
+        on writes (the answer is what we need when something goes wrong); never on calls that return the
+        buyer's personal data (shipping info, decrypted shipping info)."""
         body = {
             "type": api_type,
             "app_key": self.app_key,
@@ -55,7 +58,9 @@ class TemuApiClient:
             **{k: v for k, v in params.items() if v is not None},
         }
         body["sign"] = sign_params(self.app_secret, body)
-        kwargs: dict = {"json": body, "headers": {"Content-Type": "application/json"}, "log_body": True}
+        kwargs: dict = {"json": body, "headers": {"Content-Type": "application/json"}}
+        if log_body:
+            kwargs["log_body"] = True
         if not retry:
             kwargs["retry"] = False
         try:
@@ -84,6 +89,10 @@ class TemuApiClient:
             raise
         except requests.RequestException as exc:
             raise ProviderError(f"Temu document download: transport error: {exc}", retryable=True) from exc
+        if not getattr(response, "ok", False):
+            status = getattr(response, "status_code", None)
+            raise ProviderError(f"Temu document download failed with HTTP {status} (signed URL expired or refused)",
+                                status_code=status, retryable=status in (429, 500, 502, 503, 504))
         return response.content
 
     # ------------------------------------------------------------ authorization
@@ -133,7 +142,7 @@ class TemuApiClient:
         return self.call("temu.pay.tax.invoice.detail.query", parentOrderSn=parent_order_sn) or {}
 
     def upload_invoice(self, **fields: Any) -> dict:
-        return self.call("temu.pay.tax.merchant.upload.invoice", retry=False, **fields) or {}
+        return self.call("temu.pay.tax.merchant.upload.invoice", retry=False, log_body=True, **fields) or {}
 
     # ------------------------------------------------------------------- goods
     def list_goods(self, page_no: int, page_size: int = DEFAULT_PAGE_SIZE, **filters: Any) -> dict | None:
@@ -145,18 +154,19 @@ class TemuApiClient:
         return self.call("bg.local.goods.detail.query", goodsId=goods_id) or {}
 
     def add_goods_v3(self, payload: dict) -> dict:
-        return self.call("temu.local.goods.v3.add", retry=False, **payload) or {}
+        return self.call("temu.local.goods.v3.add", retry=False, log_body=True, **payload) or {}
 
     def delete_goods(self, goods_id: int) -> dict:
-        return self.call("temu.local.goods.delete", retry=False, goodsId=goods_id) or {}
+        return self.call("temu.local.goods.delete", retry=False, log_body=True, goodsId=goods_id) or {}
 
     def partial_update_goods(self, payload: dict) -> dict:
-        return self.call("bg.local.goods.partial.update", retry=False, **payload) or {}
+        return self.call("bg.local.goods.partial.update", retry=False, log_body=True, **payload) or {}
 
     def edit_stock(self, goods_id: int, sku_stock_target_list: list[dict], request_unique_key: str) -> dict:
         return self.call(
             "bg.local.goods.stock.edit",
             retry=False,
+            log_body=True,
             goodsId=goods_id,
             skuStockTargetList=sku_stock_target_list,
             requestUniqueKey=request_unique_key,
@@ -169,6 +179,7 @@ class TemuApiClient:
         return self.call(
             "bg.local.goods.priceorder.change.sku.price",
             retry=False,
+            log_body=True,
             goodsId=goods_id,
             changeSkuPriceDTOList=change_sku_price_dto_list,
         ) or {}
@@ -178,13 +189,13 @@ class TemuApiClient:
         return self.call("bg.logistics.companies.get", regionId=region_id) or {}
 
     def confirm_shipment_v2(self, payload: dict) -> dict:
-        return self.call("bg.logistics.shipment.v2.confirm", retry=False, **payload) or {}
+        return self.call("bg.logistics.shipment.v2.confirm", retry=False, log_body=True, **payload) or {}
 
     def shipping_services(self, payload: dict) -> dict:
         return self.call("bg.logistics.shippingservices.get", **payload) or {}
 
     def create_shipment(self, payload: dict) -> dict:
-        return self.call("bg.logistics.shipment.create", retry=False, **payload) or {}
+        return self.call("bg.logistics.shipment.create", retry=False, log_body=True, **payload) or {}
 
     def shipment_result(self, package_sn_list: list[str]) -> dict:
         return self.call("bg.logistics.shipment.result.get", packageSnList=package_sn_list) or {}
@@ -193,12 +204,12 @@ class TemuApiClient:
         return self.call("bg.logistics.shipment.document.get", packageSnList=package_sn_list, documentType=document_type) or {}
 
     def confirm_shipped_package(self, package_send_info_list: list[dict]) -> dict:
-        return self.call("bg.logistics.shipped.package.confirm", retry=False, packageSendInfoList=package_send_info_list) or {}
+        return self.call("bg.logistics.shipped.package.confirm", retry=False, log_body=True, packageSendInfoList=package_send_info_list) or {}
 
     # ----------------------------------------------------------------- finance
     def create_bill_task(self, file_type: str, start_ms: int, end_ms: int) -> dict:
         return self.call(
-            "temu.finance.mall.bill.task.create", retry=False, fileType=file_type, startTime=start_ms, endTime=end_ms
+            "temu.finance.mall.bill.task.create", retry=False, log_body=True, fileType=file_type, startTime=start_ms, endTime=end_ms
         ) or {}
 
     def get_bill_task(self, task_id: str) -> dict:
@@ -224,4 +235,4 @@ class TemuApiClient:
 
     # ---------------------------------------------------------------- webhooks
     def update_webhook_subscription(self, permit: list[str] | None = None, cancel: list[str] | None = None) -> dict:
-        return self.call("bg.tmc.message.update", retry=False, permitEventCodeList=permit, cancelEventCodeList=cancel) or {}
+        return self.call("bg.tmc.message.update", retry=False, log_body=True, permitEventCodeList=permit, cancelEventCodeList=cancel) or {}

@@ -95,7 +95,10 @@ def test_transport_error_is_wrapped(client, fake):
 
 def test_download_signed_uses_toa_headers(client, fake):
     class Resp:
+        ok = True
+        status_code = 200
         content = b"%PDF-1.4"
+        headers = {"Content-Type": "application/pdf"}
 
     def route(method, path, kwargs):
         assert method == "GET"
@@ -107,3 +110,27 @@ def test_download_signed_uses_toa_headers(client, fake):
     headers = fake.last_call().kwargs["headers"]
     assert set(headers) >= {"toa-app-key", "toa-access-token", "toa-random", "toa-timestamp", "toa-sign"}
     assert headers["toa-app-key"] == "f9d5cc9313893a20d5aa85c654e8f503" and headers["toa-access-token"] == "tok"
+
+
+def test_download_signed_rejects_error_response(client, fake):
+    class Resp:
+        ok = False
+        status_code = 403
+        content = b"<html>expired</html>"
+        headers = {"Content-Type": "text/html"}
+
+    fake.add("GET", "files.example.test", lambda m, p, kw: Resp())
+    with pytest.raises(ConnectorError):
+        client.download_signed("https://files.example.test/label.pdf")
+
+
+def test_log_body_only_on_write_calls(client, fake):
+    fake.add("POST", "openapi/router", ok({"goodsId": 1}))
+    client.shipping_info("PO-1")
+    assert "log_body" not in fake.last_call().kwargs
+    client.decrypt_shipping_info("PO-1")
+    assert "log_body" not in fake.last_call().kwargs
+    client.add_goods_v3({"goodsBasic": {}})
+    assert fake.last_call().kwargs.get("log_body") is True
+    client.upload_invoice(parentOrderSn="PO-1")
+    assert fake.last_call().kwargs.get("log_body") is True

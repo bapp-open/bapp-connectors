@@ -58,7 +58,7 @@ from bapp_connectors.providers.shop.temu.mappers import (
     order_from_temu,
     product_from_goods,
     return_from_aftersales,
-    sku_ids_from_stock_query,
+    skus_from_stock_query,
     transactions_from_statement,
 )
 from bapp_connectors.providers.shop.temu.models import SITE_CURRENCY, ShippingLabelStatus
@@ -185,15 +185,16 @@ class TemuShopAdapter(
         return SITE_CURRENCY.get(site_id) or str(self.config.get("currency") or "RON")
 
     def _shipping_or_none(self, order_id: str) -> dict | None:
-        try:
-            return self.client.shipping_info(order_id) or None
-        except ConnectorError:
-            return None
+        """Shipping contact; errors propagate — an order without its buyer must not reach the host."""
+        return self.client.shipping_info(order_id) or None
 
     def _amounts_or_none(self, order_id: str) -> OrderAmounts | None:
+        """Amounts, or None ONLY when the token lacks the scope / the API is unsupported (the known,
+        stable state the host reports as "autorizați API-ul de sume"). Transient errors (rate limit,
+        transport, 7000000) propagate so the pull fails and retries instead of importing a priceless order."""
         try:
             return self.get_order_amounts(order_id)
-        except (ConnectorError, NotImplementedError):
+        except (AuthenticationError, UnsupportedFeatureError):
             return None
 
     def get_orders(self, since: datetime.datetime | None = None, cursor: str | None = None) -> PaginatedResult[Order]:
@@ -235,11 +236,26 @@ class TemuShopAdapter(
 
     # ── ShopPort: products ──
 
+    def _resolve_skus(self, product_id: str, sku: str | None = None) -> tuple[int, list[int]]:
+        """(goodsId, [skuId…]) for an update. `product_id` is the Temu goods id, or — as the host's stock
+        push sends it — the SKU itself; with a `sku` hint only that SKU is touched, otherwise every SKU of
+        the goods."""
+        if str(product_id).isdigit():
+            rows = skus_from_stock_query(self.client.sku_stock_query(goods_id=int(product_id)))
+            goods_id = int(product_id)
+        else:
+            sku = sku or str(product_id)
+            rows = skus_from_stock_query(self.client.sku_stock_query(out_sku_sn_list=[sku]))
+            goods_id = next((g for g, _, out in rows if out == sku), rows[0][0] if rows else 0)
+        if sku:
+            rows = [r for r in rows if r[2] == sku]
+        sku_ids = [sku_id for g, sku_id, _ in rows if not goods_id or g in (0, goods_id)]
+        if not goods_id or not sku_ids:
+            raise ValidationError(f"Temu: nu am găsit SKU-ul {sku or product_id} (produs {product_id})")
+        return goods_id, sku_ids
+
     def _sku_ids(self, product_id: str) -> list[int]:
-        pairs = sku_ids_from_stock_query(self.client.sku_stock_query(goods_id=int(product_id)))
-        if not pairs:
-            raise ValidationError(f"Temu: produsul {product_id} nu are SKU-uri")
-        return [sku_id for sku_id, _ in pairs]
+        return self._resolve_skus(product_id)[1]
 
     def get_products(self, cursor: str | None = None, since: datetime.datetime | None = None) -> PaginatedResult[Product]:
         page = int(cursor) if cursor else 1
@@ -251,19 +267,26 @@ class TemuShopAdapter(
         return PaginatedResult(items=items, cursor=str(page + 1) if has_more else None, has_more=has_more,
                                total=(data or {}).get("total"))
 
-    def update_product_stock(self, product_id: str, quantity: int) -> None:
-        targets = [{"skuId": sku_id, "stockTarget": int(quantity)} for sku_id in self._sku_ids(product_id)]
-        self.client.edit_stock(int(product_id), targets, uuid.uuid4().hex)
+    def _edit_stock(self, goods_id: int, sku_ids: list[int], quantity: int) -> None:
+        self.client.edit_stock(goods_id, [{"skuId": sku_id, "stockTarget": int(quantity)} for sku_id in sku_ids], uuid.uuid4().hex)
 
-    def update_product_price(self, product_id: str, price: Decimal, currency: str) -> None:
+    def _change_price(self, goods_id: int, sku_ids: list[int], price: Decimal, currency: str) -> None:
         """Asks Temu for a base-price change (it opens a price order Temu reviews; see the Price Management Guide)."""
         amount = f"{Decimal(price).quantize(Decimal('0.01'))}"
         currency = currency or str(self.config.get("currency") or "RON")
-        self.client.change_sku_price(int(product_id), [{
+        self.client.change_sku_price(goods_id, [{
             "reason": "Actualizare preț din BAPP",
             "skuChangePriceBaseDTOList": [{"skuId": sku_id, "newSupplierPrice": {"amount": amount, "currency": currency}}
-                                          for sku_id in self._sku_ids(product_id)],
+                                          for sku_id in sku_ids],
         }])
+
+    def update_product_stock(self, product_id: str, quantity: int) -> None:
+        goods_id, sku_ids = self._resolve_skus(product_id)
+        self._edit_stock(goods_id, sku_ids, quantity)
+
+    def update_product_price(self, product_id: str, price: Decimal, currency: str) -> None:
+        goods_id, sku_ids = self._resolve_skus(product_id)
+        self._change_price(goods_id, sku_ids, price, currency)
 
     def update_order_status(self, order_id, status):
         raise NotImplementedError("Temu does not expose a generic order status update; use FulfillmentCapability.")
@@ -291,19 +314,24 @@ class TemuShopAdapter(
             payload.setdefault("goodsBasic", {})["goodsCarouselImage"] = [p.url for p in update.photos if p.url][:10]
         if len(payload) > 1:
             self.client.partial_update_goods(payload)
+        self._apply_stock_and_price(update)
+
+    def _apply_stock_and_price(self, update: ProductUpdate) -> None:
+        """One SKU resolution for stock + price; the `sku` hint narrows the update to that SKU."""
+        if update.stock is None and update.price is None:
+            return
+        goods_id, sku_ids = self._resolve_skus(update.product_id, update.sku)
         if update.stock is not None:
-            self.update_product_stock(update.product_id, update.stock)
+            self._edit_stock(goods_id, sku_ids, update.stock)
         if update.price is not None:
-            self.update_product_price(update.product_id, update.price, update.currency or "")
+            self._change_price(goods_id, sku_ids, update.price, update.currency or "")
 
     def bulk_update_products(self, updates: list[ProductUpdate]) -> BulkResult:
+        """Stock/price per row; `product_id` may be the goods id or (host stock push) the SKU itself."""
         result = BulkResult(total=len(updates))
         for update in updates:
             try:
-                if update.stock is not None:
-                    self.update_product_stock(update.product_id, update.stock)
-                if update.price is not None:
-                    self.update_product_price(update.product_id, update.price, update.currency or "")
+                self._apply_stock_and_price(update)
                 result.succeeded += 1
             except (ConnectorError, ValueError) as exc:
                 result.failed += 1
