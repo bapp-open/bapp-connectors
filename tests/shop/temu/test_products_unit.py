@@ -98,7 +98,8 @@ def test_update_stock_resolves_sku_ids_then_edits(fake):
     adapter.update_product_stock("500", 3)
     body = fake.last_call().kwargs["json"]
     assert body["type"] == "bg.local.goods.stock.edit" and body["goodsId"] == 500
-    assert body["skuStockTargetList"] == [{"skuId": 11, "targetStockAvailable": 3}] and len(body["requestUniqueKey"]) == 32
+    assert body["skuStockTargetList"] == [{"skuId": 11, "stockTarget": 3}] and len(body["requestUniqueKey"]) == 32
+    assert "stockType" not in body
     assert fake.calls[0].kwargs["json"]["goodsId"] == 500
 
 
@@ -108,7 +109,9 @@ def test_update_price_resolves_sku_ids(fake):
     adapter.update_product_price("500", Decimal("12.5"), "RON")
     body = fake.last_call().kwargs["json"]
     assert body["type"] == "bg.local.goods.priceorder.change.sku.price" and body["goodsId"] == 500
-    assert body["changeSkuPriceDTOList"] == [{"skuId": 11, "price": "12.50"}]
+    [dto] = body["changeSkuPriceDTOList"]
+    assert dto["skuChangePriceBaseDTOList"] == [{"skuId": 11, "newSupplierPrice": {"amount": "12.50", "currency": "RON"}}]
+    assert dto["reason"]
 
 
 def test_update_product_only_sends_given_fields(fake):

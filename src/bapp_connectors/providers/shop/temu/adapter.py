@@ -252,12 +252,18 @@ class TemuShopAdapter(
                                total=(data or {}).get("total"))
 
     def update_product_stock(self, product_id: str, quantity: int) -> None:
-        targets = [{"skuId": sku_id, "targetStockAvailable": int(quantity)} for sku_id in self._sku_ids(product_id)]
+        targets = [{"skuId": sku_id, "stockTarget": int(quantity)} for sku_id in self._sku_ids(product_id)]
         self.client.edit_stock(int(product_id), targets, uuid.uuid4().hex)
 
     def update_product_price(self, product_id: str, price: Decimal, currency: str) -> None:
+        """Asks Temu for a base-price change (it opens a price order Temu reviews; see the Price Management Guide)."""
         amount = f"{Decimal(price).quantize(Decimal('0.01'))}"
-        self.client.change_sku_price(int(product_id), [{"skuId": sku_id, "price": amount} for sku_id in self._sku_ids(product_id)])
+        currency = currency or str(self.config.get("currency") or "RON")
+        self.client.change_sku_price(int(product_id), [{
+            "reason": "Actualizare preț din BAPP",
+            "skuChangePriceBaseDTOList": [{"skuId": sku_id, "newSupplierPrice": {"amount": amount, "currency": currency}}
+                                          for sku_id in self._sku_ids(product_id)],
+        }])
 
     def update_order_status(self, order_id, status):
         raise NotImplementedError("Temu does not expose a generic order status update; use FulfillmentCapability.")
