@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from bapp_connectors.core.capabilities import (
     BulkUpdateCapability,
+    Carrier,
     CustomerDetailsCapability,
     FinancialCapability,
     FulfillmentCapability,
@@ -18,12 +19,22 @@ from bapp_connectors.core.capabilities import (
     ProductCreationCapability,
     ProductFullUpdateCapability,
     ReturnsCapability,
+    ShipmentResult,
     ShippingCapability,
+    ShippingService,
     WebhookCapability,
 )
-from bapp_connectors.core.dto import BulkResult, ConnectionTestResult, Order, PaginatedResult, Product, ProductUpdate
+from bapp_connectors.core.dto import (
+    AWBLabel,
+    BulkResult,
+    ConnectionTestResult,
+    Order,
+    PaginatedResult,
+    Product,
+    ProductUpdate,
+)
 from bapp_connectors.core.dto.webhook import WebhookEvent
-from bapp_connectors.core.errors import ConnectorError, ValidationError
+from bapp_connectors.core.errors import ConnectorError, ProviderError, ValidationError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.providers.shop.temu.client import DEFAULT_PAGE_SIZE, TemuApiClient
@@ -35,12 +46,16 @@ from bapp_connectors.providers.shop.temu.mappers import (
     product_from_goods,
     sku_ids_from_stock_query,
 )
-from bapp_connectors.providers.shop.temu.models import SITE_CURRENCY
+from bapp_connectors.providers.shop.temu.models import SITE_CURRENCY, ShippingLabelStatus
 from bapp_connectors.providers.shop.temu.webhooks import parse_event
 
 if TYPE_CHECKING:
     from bapp_connectors.core.capabilities import OrderAmounts
     from bapp_connectors.core.dto import Contact
+
+#: ``documentType`` of the shipping label PDF in ``bg.logistics.shipment.document.get`` (the doc only
+#: shows a placeholder; verify on the test shop and fix here if Temu rejects it)
+LABEL_DOCUMENT_TYPE = "SHIPPING_LABEL_PDF"
 
 #: every API this adapter calls; `test_connection` reports the ones the token lacks
 REQUIRED_SCOPES = frozenset({
@@ -291,29 +306,133 @@ class TemuShopAdapter(
     def attach_invoice(self, order_id, invoice_url, **kwargs):
         raise NotImplementedError
 
-    def get_order_awbs(self, order_id):
-        raise NotImplementedError
+    # ── FulfillmentCapability / ShippingCapability ──
 
-    def get_awb_pdf(self, awb_id):
-        raise NotImplementedError
+    def _order_send_info(self, order_id: str, items: list[str] | None = None) -> list[dict]:
+        """``orderSendInfoList`` for a parent order: every child line, or only ``items`` (orderSn list)."""
+        detail = self.client.order_detail(order_id)
+        wanted = set(items or [])
+        lines = [
+            {"orderSn": str(line.get("orderSn") or ""), "parentOrderSn": order_id, "goodsId": line.get("goodsId"),
+             "skuId": line.get("skuId"), "quantity": int(line.get("quantity") or 0)}
+            for line in (detail.get("orderList") or [])
+            if not wanted or str(line.get("orderSn") or "") in wanted
+        ]
+        if not lines:
+            raise ValidationError(f"Temu: comanda {order_id} nu are linii de expediat")
+        return lines
 
-    def list_carriers(self):
-        raise NotImplementedError
+    def list_carriers(self) -> list[Carrier]:
+        raw = self.client.list_carriers()
+        rows = raw if isinstance(raw, list) else (raw.get("logisticsServiceProviderList") or raw.get("list") or [])
+        return [
+            Carrier(carrier_id=str(row.get("logisticsServiceProviderId") or ""),
+                    name=str(row.get("logisticsServiceProviderName") or row.get("logisticsBrandName") or ""), extra=row)
+            for row in rows
+        ]
 
-    def confirm_shipment(self, order_id, tracking_number, carrier_id, items=None):
-        raise NotImplementedError
+    def confirm_shipment(self, order_id: str, tracking_number: str, carrier_id: str, items: list[str] | None = None) -> None:
+        self.client.confirm_shipment_v2({
+            "sendType": 0,
+            "sendRequestList": [{"trackingNumber": tracking_number, "carrierId": str(carrier_id),
+                                 "orderSendInfoList": self._order_send_info(order_id, items)}],
+        })
 
-    def list_shipping_services(self, order_id, warehouse_id):
-        raise NotImplementedError
+    def _services(self, order_id: str, warehouse_id: str, items: list[str] | None = None) -> list[ShippingService]:
+        lines = self._order_send_info(order_id, items)
+        data = self.client.shipping_services({
+            "warehouseId": warehouse_id,
+            "shipOrderInfoList": [{"orderSn": line["orderSn"], "parentOrderSn": order_id, "quantity": line["quantity"]}
+                                  for line in lines],
+        })
+        services = []
+        for channel in data.get("onlineChannelDtoList") or []:
+            services.append(ShippingService(
+                service_id=str(channel.get("channelId") or ""),
+                name=str(channel.get("shippingCompanyName") or channel.get("channelId") or ""),
+                carrier_id=str(channel.get("shipCompanyId") or ""),
+                currency=str(channel.get("estimatedCurrencyCode") or ""),
+                extra=channel,
+            ))
+        return services
 
-    def create_shipment(self, order_id, shipping_service_id, warehouse_id, items=None, ship_later=False):
-        raise NotImplementedError
+    def list_shipping_services(self, order_id: str, warehouse_id: str) -> list[ShippingService]:
+        return self._services(order_id, warehouse_id)
 
-    def get_shipment_result(self, package_sn):
-        raise NotImplementedError
+    def create_shipment(self, order_id: str, shipping_service_id: str, warehouse_id: str,
+                        items: list[str] | None = None, ship_later: bool = False) -> str:
+        service = next((s for s in self._services(order_id, warehouse_id, items) if s.service_id == str(shipping_service_id)), None)
+        if service is None:
+            raise ValidationError(f"Temu: serviciul de transport {shipping_service_id} nu e disponibil pentru comanda {order_id}")
+        request: dict = {
+            "channelId": int(service.service_id),
+            "warehouseId": warehouse_id,
+            "orderSendInfoList": self._order_send_info(order_id, items),
+        }
+        if service.carrier_id:
+            request["shipCompanyId"] = int(service.carrier_id)
+        if service.extra.get("shipLogisticsType"):
+            request["shipLogisticsType"] = service.extra["shipLogisticsType"]
+        result = self.client.create_shipment({"sendType": 0, "sendRequestList": [request], "shipLater": bool(ship_later)})
+        packages = result.get("packageSnList") or []
+        if not packages:
+            raise ProviderError(f"Temu: nu a întors packageSn pentru comanda {order_id}: {result.get('warningMessage')}")
+        return str(packages[0])
 
-    def confirm_package_shipped(self, package_sn):
-        raise NotImplementedError
+    @staticmethod
+    def _shipment_result_from(row: dict, package_sn: str) -> ShipmentResult:
+        try:
+            status_code = ShippingLabelStatus(int(row.get("shippingLabelStatus")))
+        except (TypeError, ValueError):
+            status_code = ShippingLabelStatus.IN_APPLICATION
+        status = {ShippingLabelStatus.SUCCESS: "success", ShippingLabelStatus.FAILED: "failed"}.get(status_code, "pending")
+        companies = row.get("interlineShipCompanyList") or []
+        carrier = str((companies[0] or {}).get("shippingCompanyName") or "") if companies else ""
+        return ShipmentResult(
+            package_sn=str(row.get("packageSn") or package_sn),
+            status=status,
+            tracking_number=str(row.get("trackingNumber") or ""),
+            carrier=carrier,
+            error=str(row.get("failReasonText") or "") if status == "failed" else "",
+            extra={k: v for k, v in row.items() if k not in ("interlineShipCompanyList",)},
+        )
+
+    def get_shipment_result(self, package_sn: str) -> ShipmentResult:
+        rows = self.client.shipment_result([package_sn]).get("packageInfoResultList") or []
+        row = next((r for r in rows if str(r.get("packageSn") or "") == package_sn), rows[0] if rows else None)
+        if row is None:
+            return ShipmentResult(package_sn=package_sn, status="pending")
+        return self._shipment_result_from(row, package_sn)
+
+    def confirm_package_shipped(self, package_sn: str) -> None:
+        self.client.confirm_shipped_package([{"packageSn": package_sn}])
+
+    def get_order_awbs(self, order_id: str) -> list[AWBLabel]:
+        detail = self.client.order_detail(order_id)
+        package_sns = []
+        for line in detail.get("orderList") or []:
+            for package in line.get("packageSnInfo") or []:
+                sn = str(package.get("packageSn") or "")
+                if sn and package.get("callSuccess", True) and sn not in package_sns:
+                    package_sns.append(sn)
+        if not package_sns:
+            return []
+        rows = {str(r.get("packageSn") or ""): r for r in self.client.shipment_result(package_sns).get("packageInfoResultList") or []}
+        labels = []
+        for sn in package_sns:
+            result = self._shipment_result_from(rows[sn], sn) if sn in rows else ShipmentResult(package_sn=sn, status="pending")
+            labels.append(AWBLabel(tracking_number=result.tracking_number or sn,
+                                   extra={"package_sn": sn, "status": result.status, "carrier": result.carrier}))
+        return labels
+
+    def get_awb_pdf(self, awb_id: str) -> bytes:
+        """`awb_id` is the package sn; the label URL is signed and expires after 10 minutes."""
+        data = self.client.shipment_document([awb_id], LABEL_DOCUMENT_TYPE)
+        urls = data.get("shippingLabelUrlList") or []
+        url = next((u.get("url") for u in urls if str(u.get("packageSn") or awb_id) == awb_id and u.get("url")), None)
+        if not url:
+            raise ProviderError(f"Temu: nu există etichetă pentru pachetul {awb_id}: {data.get('warningMessage')}")
+        return self.client.download_signed(str(url))
 
     def get_order_amounts(self, order_id):
         raise NotImplementedError

@@ -185,14 +185,14 @@ class TemuApiClient:
     def create_shipment(self, payload: dict) -> dict:
         return self.call("bg.logistics.shipment.create", retry=False, **payload) or {}
 
-    def shipment_result(self, package_sn: str) -> dict:
-        return self.call("bg.logistics.shipment.result.get", packageSn=package_sn) or {}
+    def shipment_result(self, package_sn_list: list[str]) -> dict:
+        return self.call("bg.logistics.shipment.result.get", packageSnList=package_sn_list) or {}
 
-    def shipment_document(self, package_sn: str) -> dict:
-        return self.call("bg.logistics.shipment.document.get", packageSn=package_sn) or {}
+    def shipment_document(self, package_sn_list: list[str], document_type: str) -> dict:
+        return self.call("bg.logistics.shipment.document.get", packageSnList=package_sn_list, documentType=document_type) or {}
 
-    def confirm_shipped_package(self, package_sn: str) -> dict:
-        return self.call("bg.logistics.shipped.package.confirm", retry=False, packageSn=package_sn) or {}
+    def confirm_shipped_package(self, package_send_info_list: list[dict]) -> dict:
+        return self.call("bg.logistics.shipped.package.confirm", retry=False, packageSendInfoList=package_send_info_list) or {}
 
     # ----------------------------------------------------------------- finance
     def create_bill_task(self, file_type: str, start_ms: int, end_ms: int) -> dict:
