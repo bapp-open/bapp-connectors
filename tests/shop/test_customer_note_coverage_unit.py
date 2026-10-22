@@ -22,6 +22,7 @@ SHOP_PROVIDERS = pathlib.Path(__file__).resolve().parents[2] / "src/bapp_connect
 WITHOUT_A_NOTE_FIELD = {
     "okazii": "payload-ul comenzii n-are nicio cheie de nota (verificat pe conexiunea 29)",
     "trendyol": "payload-ul comenzii n-are nicio cheie de nota (verificat pe conexiunile 28, 42, 43)",
+    "temu": "bg.order.list/detail.v2.get n-au nicio cheie de nota a clientului (verificat pe magazinul de test RO, 2026-10-22)",
 }
 
 
