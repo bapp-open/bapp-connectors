@@ -1,0 +1,61 @@
+{
+ "parentAfterSalesSn": "PO-167-1000000000000010-D02",
+ "availableOperateList": [],
+ "createAtMillis": 1792323496000,
+ "parentAfterSalesStatus": 5,
+ "parentOrderSn": "PO-167-1000000000000010",
+ "lastUpdateAtMillis": 1792323601000,
+ "afterSalesType": 1,
+ "refundSummary": {
+  "buyerTotalRefund": {
+   "currency": "RON",
+   "amount": 59.5
+  },
+  "retailPriceRefundTaxExcl": {
+   "currency": "RON",
+   "amount": 50.0
+  },
+  "taxTotalRefund": {
+   "currency": "RON",
+   "amount": 9.5
+  },
+  "shippingAmountRefundTaxExcl": {
+   "currency": "RON",
+   "amount": 0
+  },
+  "discountFromSellerRefund": {
+   "currency": "RON",
+   "amount": 0
+  },
+  "discountFromTEMURefund": {
+   "currency": "RON",
+   "amount": 0
+  }
+ },
+ "afterSalesList": [
+  {
+   "afterSalesSn": "PO-167-1000000000000010-D02-1",
+   "orderSn": "167-2000000000000001",
+   "applyAfterSalesGoodsNumber": 1,
+   "applyRefundAmount": {
+    "currency": "RON",
+    "amount": 59.5
+   },
+   "afterSalesReasonCode": 24,
+   "afterSalesReasonDesc": "Damaged item",
+   "buyerComment": "ambalaj rupt",
+   "afterSalesStatus": 5,
+   "afterSalesGoodsInfo": {
+    "productSkuId": 251124173453,
+    "goodsId": 604156035228767,
+    "skuId": 69296881420960,
+    "productList": [
+     {
+      "productSkuId": 251124173453,
+      "extCode": "TEST11"
+     }
+    ]
+   }
+  }
+ ]
+}

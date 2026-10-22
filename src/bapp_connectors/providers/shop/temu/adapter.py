@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import urllib.parse
 import uuid
 from decimal import Decimal
@@ -34,6 +35,7 @@ from bapp_connectors.core.dto import (
     Product,
     ProductUpdate,
 )
+from bapp_connectors.core.dto.returns import ShopReturn
 from bapp_connectors.core.dto.webhook import WebhookEvent
 from bapp_connectors.core.errors import (
     AuthenticationError,
@@ -53,6 +55,7 @@ from bapp_connectors.providers.shop.temu.mappers import (
     goods_v3_payload,
     order_from_temu,
     product_from_goods,
+    return_from_aftersales,
     sku_ids_from_stock_query,
 )
 from bapp_connectors.providers.shop.temu.models import SITE_CURRENCY, ShippingLabelStatus
@@ -61,6 +64,8 @@ from bapp_connectors.providers.shop.temu.webhooks import parse_event
 if TYPE_CHECKING:
     from bapp_connectors.core.capabilities import OrderAmounts
     from bapp_connectors.core.dto import Contact
+
+logger = logging.getLogger(__name__)
 
 #: ``documentType`` of the shipping label PDF in ``bg.logistics.shipment.document.get`` (the doc only
 #: shows a placeholder; verify on the test shop and fix here if Temu rejects it)
@@ -482,6 +487,30 @@ class TemuShopAdapter(
     def get_invoices(self, *args, **kwargs):
         raise NotImplementedError
 
-    def get_returns(self, since, until):
-        raise NotImplementedError
+    # ── ReturnsCapability ──
+
+    def get_returns(self, since: datetime.datetime, until: datetime.datetime) -> list[ShopReturn]:
+        start, end = int(since.timestamp()), int(until.timestamp())
+        page, returns = 1, []
+        while True:
+            data = self.client.list_aftersales(page, DEFAULT_PAGE_SIZE, start, end)
+            rows = data.get("data") or []
+            for row in rows:
+                sn = str(row.get("parentAfterSalesSn") or "")
+                detail = None
+                try:
+                    detail = self.client.aftersales_detail(sn)
+                except ConnectorError as exc:
+                    logger.warning("temu: after-sales detail %s failed: %s", sn, exc)
+                    returns.append(return_from_aftersales(row, None).model_copy(update={"raw": {"item": row, "detail": {}, "detail_error": str(exc)}}))
+                    continue
+                returns.append(return_from_aftersales(row, detail))
+            total = data.get("total")
+            if not rows or (total is not None and page * DEFAULT_PAGE_SIZE >= int(total)):
+                break
+            page += 1
+        return returns
+
+    def resolve_return_awb(self, awb_ref: str) -> str:
+        return awb_ref
 

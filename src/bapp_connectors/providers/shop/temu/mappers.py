@@ -17,8 +17,15 @@ from bapp_connectors.core.dto import (
     ProviderMeta,
 )
 from bapp_connectors.core.dto.order import OrderStatus, PaymentStatus, PaymentType
+from bapp_connectors.core.dto.returns import ReturnKind, ReturnReason, ShopReturn, ShopReturnLine, ShopReturnRefund
 from bapp_connectors.core.errors import ValidationError
-from bapp_connectors.providers.shop.temu.models import REGION_COUNTRY, ParentOrderStatus
+from bapp_connectors.providers.shop.temu.models import (
+    REASON_CODES,
+    REGION_COUNTRY,
+    RETURN_STATUSES,
+    AfterSalesStatus,
+    ParentOrderStatus,
+)
 
 if TYPE_CHECKING:
     from bapp_connectors.core.capabilities import OrderAmounts
@@ -426,4 +433,76 @@ def amounts_from_invoice_detail(data: dict, order_id: str) -> OrderAmounts:
         refunds_total=Decimal("0"),
         source="invoice_detail",
         extra={"invoice_type": info.get("invoiceType"), "promotion": info.get("promotionInfo") or {}},
+    )
+
+
+# ──────────────────────────────────────────────────────────────────── returns
+
+def _ms(value) -> datetime.datetime | None:
+    try:
+        millis = int(value)
+    except (TypeError, ValueError):
+        return None
+    return datetime.datetime.fromtimestamp(millis / 1000, tz=datetime.UTC) if millis > 0 else None
+
+
+def return_from_aftersales(item: dict, detail: dict | None) -> ShopReturn:
+    """One ``bg.aftersales.parentaftersales.list.get`` row (+ its detail) → ShopReturn.
+
+    Temu never names the buyer here; `customer_name` stays empty. A request whose status implies a
+    parcel coming back is a RETURN, anything else (refund-only, cancelled, rejected) a REFUND.
+    """
+    detail = detail or {}
+    raw_status = item.get("parentAfterSalesStatus", detail.get("parentAfterSalesStatus"))
+    try:
+        status = AfterSalesStatus(int(raw_status))
+        label = status.name.lower()
+    except (TypeError, ValueError):
+        status = None
+        label = ""
+    kind = ReturnKind.RETURN if status in RETURN_STATUSES else ReturnKind.REFUND
+    lines = []
+    comments = []
+    for row in detail.get("afterSalesList") or []:
+        goods = row.get("afterSalesGoodsInfo") or {}
+        products = goods.get("productList") or []
+        sku = str((products[0] or {}).get("extCode") or "") if products else ""
+        code = row.get("afterSalesReasonCode")
+        note = str(row.get("buyerComment") or "")
+        if note:
+            comments.append(note)
+        quantity = Decimal(str(row.get("applyAfterSalesGoodsNumber") or 1))
+        amount = money(row.get("applyRefundAmount"))
+        lines.append(ShopReturnLine(
+            external_line_id=str(row.get("afterSalesSn") or ""),
+            sku=sku,
+            quantity=quantity,
+            unit_price=(amount / quantity).quantize(Q2, rounding=ROUND_HALF_UP) if amount and quantity else None,
+            reason_code="" if code is None else str(code),
+            reason_label=str(row.get("afterSalesReasonDesc") or ""),
+            reason=ReturnReason(REASON_CODES.get(int(code), "other")) if isinstance(code, int) else ReturnReason.OTHER,
+            customer_note=note,
+            unit_statuses=[str(row.get("afterSalesStatus"))] if row.get("afterSalesStatus") is not None else [],
+        ))
+    summary = detail.get("refundSummary") or {}
+    refund = None
+    if summary.get("buyerTotalRefund"):
+        refund = ShopReturnRefund(
+            amount=money(summary.get("buyerTotalRefund")),
+            currency=str((summary.get("buyerTotalRefund") or {}).get("currency") or ""),
+            type="refund",
+            status="refunded" if status == AfterSalesStatus.REFUNDED else (label or "pending"),
+            estimated=status != AfterSalesStatus.REFUNDED,
+        )
+    return ShopReturn(
+        external_id=str(item.get("parentAfterSalesSn") or detail.get("parentAfterSalesSn") or ""),
+        external_order_id=str(item.get("parentOrderSn") or detail.get("parentOrderSn") or ""),
+        kind=kind,
+        status_raw="" if raw_status is None else str(raw_status),
+        status_label=label,
+        requested_at=_ts(item.get("createAt")) or _ms(detail.get("createAtMillis")),
+        comment=" | ".join(comments),
+        refund=refund,
+        lines=lines,
+        raw={"item": item, "detail": detail},
     )

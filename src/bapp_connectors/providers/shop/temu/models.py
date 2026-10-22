@@ -77,3 +77,19 @@ REGION_COUNTRY: dict[str, str] = {
     "japan": "JP", "korea": "KR", "south korea": "KR", "brazil": "BR", "türkiye": "TR", "turkey": "TR",
     "united arab emirates": "AE", "saudi arabia": "SA",
 }
+
+
+#: ``afterSalesReasonCode`` (Return and Refund Guide) → normalised reason; everything else is OTHER
+REASON_CODES: dict[int, str] = {
+    2: "ordered_by_mistake", 49: "ordered_by_mistake", 53: "ordered_by_mistake",
+    4: "changed_mind", 17: "changed_mind", 26: "changed_mind", 27: "changed_mind", 28: "changed_mind",
+    34: "changed_mind", 40: "changed_mind", 41: "changed_mind", 42: "changed_mind", 59: "changed_mind",
+    8: "not_as_described", 11: "not_as_described", 18: "not_as_described", 44: "not_as_described",
+    52: "not_as_described", 58: "not_as_described",
+    14: "defective", 51: "defective", 57: "defective",
+    15: "wrong_item", 60: "wrong_item",
+    19: "not_delivered", 25: "not_delivered", 40007: "not_delivered", 40010: "not_delivered", 40018: "not_delivered",
+    22: "missing_parts", 36: "missing_parts", 56: "missing_parts",
+    23: "damaged", 24: "damaged",
+    54: "size_fit", 55: "size_fit",
+}
