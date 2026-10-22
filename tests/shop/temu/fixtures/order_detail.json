@@ -1,0 +1,427 @@
+{
+ "parentOrderMap": {
+  "regionName3": "White",
+  "parentOrderLabel": [
+   {
+    "name": "soon_to_be_overdue",
+    "value": 0
+   },
+   {
+    "name": "past_due",
+    "value": 0
+   },
+   {
+    "name": "pending_buyer_cancellation",
+    "value": 0
+   },
+   {
+    "name": "pending_buyer_address_change",
+    "value": 0
+   },
+   {
+    "name": "pending_risk_control_alert",
+    "value": 0
+   },
+   {
+    "name": "signature_required_on_delivery",
+    "value": 0
+   }
+  ],
+  "regionName1": "Romania",
+  "regionName2": "Oraș Test",
+  "shippingMethod": 1,
+  "parentShippingTime": 1786652343,
+  "latestDeliveryTime": 1787086799,
+  "parentConfirmTime": 1786535687,
+  "fulfillmentWarning": [],
+  "parentOrderTime": 1786535686,
+  "orderPaymentType": "PPD",
+  "batchOrderNumberList": null,
+  "regionId": 167,
+  "parentOrderSn": "PO-167-1000000000000000",
+  "parentOrderPendingFinishTime": 1786536647,
+  "siteId": 140,
+  "totalExportDeclaredValue": null,
+  "expectShipLatestTime": 1786742159,
+  "parentOrderStatus": 4,
+  "hasShippingFee": true
+ },
+ "orderList": [
+  {
+   "orderSn": "167-2000000000000001",
+   "goodsId": 604156035228767,
+   "orderLabel": [
+    {
+     "name": "customized_products",
+     "value": 0
+    },
+    {
+     "name": "US_to_CA",
+     "value": 0
+    },
+    {
+     "name": "EU_to_UK",
+     "value": 0
+    },
+    {
+     "name": "TR_to_SA",
+     "value": 0
+    },
+    {
+     "name": "pre_sale_order",
+     "value": 0
+    },
+    {
+     "name": "extended_pre_sale_order",
+     "value": 0
+    },
+    {
+     "name": "second_hand_luxury_order",
+     "value": 0
+    },
+    {
+     "name": "second_hand_collectible_order",
+     "value": 0
+    },
+    {
+     "name": "made_to_order",
+     "value": 0
+    },
+    {
+     "name": "vacation_order",
+     "value": 0
+    },
+    {
+     "name": "smart_shipping_order",
+     "value": 0
+    }
+   ],
+   "orderStatus": 4,
+   "exportDeclaredValue": null,
+   "isCancelledDuringPending": false,
+   "fulfillmentType": "fulfillBySeller",
+   "spec": "White",
+   "packageAbnormalTypeList": [
+    "OVERTIME_COLLECTION"
+   ],
+   "orderPaymentType": "PPD",
+   "thumbUrl": "https://img.example.test/goods.jpg",
+   "goodsName": "Produs test 21",
+   "skuId": 69296881420960,
+   "canceledQuantityBeforeShipment": 0,
+   "quantity": 1,
+   "earliestTimeGetShippingDocument": null,
+   "scheduledDeliveryTime": null,
+   "orderCreateTime": 1786535716,
+   "inventoryDeductionWarehouseId": null,
+   "originalGoodsName": "Produs test 21",
+   "qualificationUploadEndTime": null,
+   "fulfillmentWarning": [],
+   "hasUploadedEvidence": null,
+   "originalSpecName": "White",
+   "hsCode": null,
+   "originalOrderQuantity": 1,
+   "packageSnInfo": [
+    {
+     "applySn": null,
+     "callSuccess": true,
+     "packageSn": "PK-3000000000000002",
+     "packageDeliveryType": 2,
+     "needPod": false
+    }
+   ],
+   "inventoryDeductionWarehouseName": null,
+   "productList": [
+    {
+     "productSkuId": 251124173453,
+     "extCode": "TEST11",
+     "soldFactor": 1,
+     "productId": 26973810625
+    }
+   ],
+   "orderShippingTime": 1786652343
+  },
+  {
+   "orderSn": "167-2000000000000003",
+   "goodsId": 604156035228767,
+   "orderLabel": [
+    {
+     "name": "customized_products",
+     "value": 0
+    },
+    {
+     "name": "US_to_CA",
+     "value": 0
+    },
+    {
+     "name": "EU_to_UK",
+     "value": 0
+    },
+    {
+     "name": "TR_to_SA",
+     "value": 0
+    },
+    {
+     "name": "pre_sale_order",
+     "value": 0
+    },
+    {
+     "name": "extended_pre_sale_order",
+     "value": 0
+    },
+    {
+     "name": "second_hand_luxury_order",
+     "value": 0
+    },
+    {
+     "name": "second_hand_collectible_order",
+     "value": 0
+    },
+    {
+     "name": "made_to_order",
+     "value": 0
+    },
+    {
+     "name": "vacation_order",
+     "value": 0
+    },
+    {
+     "name": "smart_shipping_order",
+     "value": 0
+    }
+   ],
+   "orderStatus": 4,
+   "exportDeclaredValue": null,
+   "isCancelledDuringPending": false,
+   "fulfillmentType": "fulfillBySeller",
+   "spec": "White",
+   "packageAbnormalTypeList": [
+    "OVERTIME_COLLECTION"
+   ],
+   "orderPaymentType": "PPD",
+   "thumbUrl": "https://img.example.test/goods.jpg",
+   "goodsName": "Produs test 21",
+   "skuId": 69296881420960,
+   "canceledQuantityBeforeShipment": 0,
+   "quantity": 1,
+   "earliestTimeGetShippingDocument": null,
+   "scheduledDeliveryTime": null,
+   "orderCreateTime": 1786535707,
+   "inventoryDeductionWarehouseId": null,
+   "originalGoodsName": "Produs test 21",
+   "qualificationUploadEndTime": null,
+   "fulfillmentWarning": [],
+   "hasUploadedEvidence": null,
+   "originalSpecName": "White",
+   "hsCode": null,
+   "originalOrderQuantity": 1,
+   "packageSnInfo": [
+    {
+     "applySn": null,
+     "callSuccess": true,
+     "packageSn": "PK-3000000000000002",
+     "packageDeliveryType": 2,
+     "needPod": false
+    }
+   ],
+   "inventoryDeductionWarehouseName": null,
+   "productList": [
+    {
+     "productSkuId": 251124173453,
+     "extCode": "TEST11",
+     "soldFactor": 1,
+     "productId": 26973810625
+    }
+   ],
+   "orderShippingTime": 1786652343
+  },
+  {
+   "orderSn": "167-2000000000000004",
+   "goodsId": 604156035228767,
+   "orderLabel": [
+    {
+     "name": "customized_products",
+     "value": 0
+    },
+    {
+     "name": "US_to_CA",
+     "value": 0
+    },
+    {
+     "name": "EU_to_UK",
+     "value": 0
+    },
+    {
+     "name": "TR_to_SA",
+     "value": 0
+    },
+    {
+     "name": "pre_sale_order",
+     "value": 0
+    },
+    {
+     "name": "extended_pre_sale_order",
+     "value": 0
+    },
+    {
+     "name": "second_hand_luxury_order",
+     "value": 0
+    },
+    {
+     "name": "second_hand_collectible_order",
+     "value": 0
+    },
+    {
+     "name": "made_to_order",
+     "value": 0
+    },
+    {
+     "name": "vacation_order",
+     "value": 0
+    },
+    {
+     "name": "smart_shipping_order",
+     "value": 0
+    }
+   ],
+   "orderStatus": 4,
+   "exportDeclaredValue": null,
+   "isCancelledDuringPending": false,
+   "fulfillmentType": "fulfillBySeller",
+   "spec": "White",
+   "packageAbnormalTypeList": [
+    "OVERTIME_COLLECTION"
+   ],
+   "orderPaymentType": "PPD",
+   "thumbUrl": "https://img.example.test/goods.jpg",
+   "goodsName": "Produs test 21",
+   "skuId": 69296881420960,
+   "canceledQuantityBeforeShipment": 0,
+   "quantity": 1,
+   "earliestTimeGetShippingDocument": null,
+   "scheduledDeliveryTime": null,
+   "orderCreateTime": 1786535807,
+   "inventoryDeductionWarehouseId": null,
+   "originalGoodsName": "Produs test 21",
+   "qualificationUploadEndTime": null,
+   "fulfillmentWarning": [],
+   "hasUploadedEvidence": null,
+   "originalSpecName": "White",
+   "hsCode": null,
+   "originalOrderQuantity": 1,
+   "packageSnInfo": [
+    {
+     "applySn": null,
+     "callSuccess": true,
+     "packageSn": "PK-3000000000000002",
+     "packageDeliveryType": 2,
+     "needPod": false
+    }
+   ],
+   "inventoryDeductionWarehouseName": null,
+   "productList": [
+    {
+     "productSkuId": 251124173453,
+     "extCode": "TEST11",
+     "soldFactor": 1,
+     "productId": 26973810625
+    }
+   ],
+   "orderShippingTime": 1786652343
+  },
+  {
+   "orderSn": "167-2000000000000005",
+   "goodsId": 604156035228767,
+   "orderLabel": [
+    {
+     "name": "customized_products",
+     "value": 0
+    },
+    {
+     "name": "US_to_CA",
+     "value": 0
+    },
+    {
+     "name": "EU_to_UK",
+     "value": 0
+    },
+    {
+     "name": "TR_to_SA",
+     "value": 0
+    },
+    {
+     "name": "pre_sale_order",
+     "value": 0
+    },
+    {
+     "name": "extended_pre_sale_order",
+     "value": 0
+    },
+    {
+     "name": "second_hand_luxury_order",
+     "value": 0
+    },
+    {
+     "name": "second_hand_collectible_order",
+     "value": 0
+    },
+    {
+     "name": "made_to_order",
+     "value": 0
+    },
+    {
+     "name": "vacation_order",
+     "value": 0
+    },
+    {
+     "name": "smart_shipping_order",
+     "value": 0
+    }
+   ],
+   "orderStatus": 4,
+   "exportDeclaredValue": null,
+   "isCancelledDuringPending": false,
+   "fulfillmentType": "fulfillBySeller",
+   "spec": "White",
+   "packageAbnormalTypeList": [
+    "OVERTIME_COLLECTION"
+   ],
+   "orderPaymentType": "PPD",
+   "thumbUrl": "https://img.example.test/goods.jpg",
+   "goodsName": "Produs test 21",
+   "skuId": 69296881420960,
+   "canceledQuantityBeforeShipment": 0,
+   "quantity": 1,
+   "earliestTimeGetShippingDocument": null,
+   "scheduledDeliveryTime": null,
+   "orderCreateTime": 1786535686,
+   "inventoryDeductionWarehouseId": null,
+   "originalGoodsName": "Produs test 21",
+   "qualificationUploadEndTime": null,
+   "fulfillmentWarning": [],
+   "hasUploadedEvidence": null,
+   "originalSpecName": "White",
+   "hsCode": null,
+   "originalOrderQuantity": 1,
+   "packageSnInfo": [
+    {
+     "applySn": null,
+     "callSuccess": true,
+     "packageSn": "PK-3000000000000002",
+     "packageDeliveryType": 2,
+     "needPod": false
+    }
+   ],
+   "inventoryDeductionWarehouseName": null,
+   "productList": [
+    {
+     "productSkuId": 251124173453,
+     "extCode": "TEST11",
+     "soldFactor": 1,
+     "productId": 26973810625
+    }
+   ],
+   "orderShippingTime": 1786652343
+  }
+ ]
+}

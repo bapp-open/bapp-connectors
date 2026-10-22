@@ -19,14 +19,18 @@ from bapp_connectors.core.capabilities import (
     ShippingCapability,
     WebhookCapability,
 )
-from bapp_connectors.core.dto import ConnectionTestResult
+from bapp_connectors.core.dto import ConnectionTestResult, Order, PaginatedResult
+from bapp_connectors.core.errors import ConnectorError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import ShopPort
-from bapp_connectors.providers.shop.temu.client import TemuApiClient
+from bapp_connectors.providers.shop.temu.client import DEFAULT_PAGE_SIZE, TemuApiClient
 from bapp_connectors.providers.shop.temu.manifest import manifest
+from bapp_connectors.providers.shop.temu.mappers import contact_from_shipping_info, order_from_temu
+from bapp_connectors.providers.shop.temu.models import SITE_CURRENCY
 
 if TYPE_CHECKING:
-    pass
+    from bapp_connectors.core.capabilities import OrderAmounts
+    from bapp_connectors.core.dto import Contact
 
 #: every API this adapter calls; `test_connection` reports the ones the token lacks
 REQUIRED_SCOPES = frozenset({
@@ -125,13 +129,52 @@ class TemuShopAdapter(
                 return str(warehouse.get("warehouseId") or "")
         return str(warehouses[0].get("warehouseId") or "") if warehouses else ""
 
-    # ── ShopPort ──
+    # ── ShopPort: orders ──
 
-    def get_orders(self, since=None, cursor=None):
-        raise NotImplementedError
+    def _site_currency(self, head: dict) -> str:
+        try:
+            site_id = int(head.get("siteId") or 0)
+        except (TypeError, ValueError):
+            site_id = 0
+        return SITE_CURRENCY.get(site_id) or str(self.config.get("currency") or "RON")
 
-    def get_order(self, order_id):
-        raise NotImplementedError
+    def _amounts_or_none(self, order_id: str) -> OrderAmounts | None:
+        try:
+            return self.get_order_amounts(order_id)
+        except (ConnectorError, NotImplementedError):
+            return None
+
+    def get_orders(self, since: datetime.datetime | None = None, cursor: str | None = None) -> PaginatedResult[Order]:
+        """One list page per call; cheap pass: no shipping info, no amounts (`get_order` adds them)."""
+        page = int(cursor) if cursor else 1
+        data = self.client.list_orders(
+            page_number=page,
+            page_size=DEFAULT_PAGE_SIZE,
+            parent_order_status=0,
+            update_at_start=int(since.timestamp()) if since else None,
+        )
+        rows = data.get("pageItems") or []
+        items = [order_from_temu(row, None, self._site_currency(row.get("parentOrderMap") or {}), None) for row in rows]
+        total = data.get("totalItemNum")
+        has_more = bool(rows) and (page * DEFAULT_PAGE_SIZE < int(total) if total is not None else len(rows) == DEFAULT_PAGE_SIZE)
+        return PaginatedResult(items=items, cursor=str(page + 1) if has_more else None, has_more=has_more, total=total)
+
+    def get_order(self, order_id: str) -> Order:
+        detail = self.client.order_detail(order_id)
+        shipping = self.client.shipping_info(order_id)
+        amounts = self._amounts_or_none(order_id)
+        return order_from_temu(detail, shipping, self._site_currency(detail.get("parentOrderMap") or {}), amounts)
+
+    def get_customer_details(self, order_id: str) -> Contact:
+        return contact_from_shipping_info(self.client.decrypt_shipping_info(order_id))
+
+    def find_order_by_reference(self, reference: str) -> Order | None:
+        """Only a parent order sn (``PO-…``) can be looked up; a child ``orderSn`` has no detail API."""
+        if not str(reference).startswith("PO-"):
+            return None
+        return self.get_order(str(reference))
+
+    # ── ShopPort: products ──
 
     def get_products(self, cursor=None, since=None):
         raise NotImplementedError
@@ -201,9 +244,6 @@ class TemuShopAdapter(
     def get_order_amounts(self, order_id):
         raise NotImplementedError
 
-    def get_customer_details(self, order_id):
-        raise NotImplementedError
-
     def get_financial_transactions(self, *args, **kwargs):
         raise NotImplementedError
 
@@ -213,5 +253,3 @@ class TemuShopAdapter(
     def get_returns(self, since, until):
         raise NotImplementedError
 
-    def find_order_by_reference(self, reference):
-        raise NotImplementedError
