@@ -1,0 +1,184 @@
+{
+ "total": 1,
+ "pageNo": 1,
+ "goodsList": [
+  {
+   "marketPrice": null,
+   "outSkuSnList": [
+    "TEST11"
+   ],
+   "goodsId": 604156035228767,
+   "goodsStatusChangeTime": "1787193551000",
+   "crtTime": 1773977884951,
+   "multiSiteInfo": {
+    "multiSiteGoodsInfoList": [
+     {
+      "goodsId": 604156035216479,
+      "siteId": 102,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603468840441910,
+      "siteId": 105,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603468840421705,
+      "siteId": 106,
+      "siteType": 2
+     },
+     {
+      "goodsId": 604156035198812,
+      "siteId": 107,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603468840419320,
+      "siteId": 108,
+      "siteType": 2
+     },
+     {
+      "goodsId": 604156035219220,
+      "siteId": 109,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603468840413513,
+      "siteId": 111,
+      "siteType": 2
+     },
+     {
+      "goodsId": 604156035202836,
+      "siteId": 112,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603468840414373,
+      "siteId": 113,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603468840438938,
+      "siteId": 114,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603468840447251,
+      "siteId": 115,
+      "siteType": 2
+     },
+     {
+      "goodsId": 604156035180658,
+      "siteId": 137,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603468840457370,
+      "siteId": 138,
+      "siteType": 2
+     },
+     {
+      "goodsId": 604156035223905,
+      "siteId": 139,
+      "siteType": 2
+     },
+     {
+      "goodsId": 604156035228767,
+      "siteId": 140,
+      "siteType": 2
+     },
+     {
+      "goodsId": 604156035170485,
+      "siteId": 141,
+      "siteType": 2
+     },
+     {
+      "goodsId": 604156035214795,
+      "siteId": 142,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603468840435767,
+      "siteId": 143,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603468840449189,
+      "siteId": 144,
+      "siteType": 2
+     },
+     {
+      "goodsId": 604156035188014,
+      "siteId": 145,
+      "siteType": 2
+     },
+     {
+      "goodsId": 604156035200646,
+      "siteId": 147,
+      "siteType": 2
+     },
+     {
+      "goodsId": 603554739788750,
+      "siteId": 156,
+      "siteType": 1
+     }
+    ],
+    "siteType": 2
+   },
+   "skuInfoList": [
+    {
+     "specList": [
+      {
+       "specId": 72537029,
+       "parentSpecName": "Color",
+       "specName": "White",
+       "parentSpecId": 1001
+      }
+     ],
+     "stock": 96,
+     "skuSn": "TEST11",
+     "skuId": 69296881420960
+    },
+    {
+     "specList": [
+      {
+       "specId": 72537181,
+       "parentSpecName": "Color",
+       "specName": "Blue",
+       "parentSpecId": 1001
+      }
+     ],
+     "stock": 100,
+     "skuSn": "",
+     "skuId": 69296881453728
+    }
+   ],
+   "goodsShowSubStatus": 3002,
+   "lowTrafficTag": 1,
+   "outGoodsSn": "",
+   "price": "0.0",
+   "currency": "RON",
+   "thumbUrl": "https://img.example.test/goods.jpg",
+   "goodsName": "Produs test 21",
+   "skuIdList": [
+    69296881420960,
+    69296881453728
+   ],
+   "status4VO": null,
+   "quantity": 0,
+   "subStatus4VO": null,
+   "restrictedTrafficTag": 2,
+   "shipmentLimitSecond": 172800,
+   "costTemplateId": "LFT-14020901943132222433",
+   "catId": 879,
+   "specName": "",
+   "trademarkId": null,
+   "brandId": null,
+   "retailPrice": {
+    "amount": "0.00",
+    "currency": "RON"
+   },
+   "listPrice": null
+  }
+ ]
+}

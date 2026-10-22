@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from bapp_connectors.core.capabilities import (
@@ -19,13 +20,21 @@ from bapp_connectors.core.capabilities import (
     ShippingCapability,
     WebhookCapability,
 )
-from bapp_connectors.core.dto import ConnectionTestResult, Order, PaginatedResult
-from bapp_connectors.core.errors import ConnectorError
+import uuid
+
+from bapp_connectors.core.dto import BulkResult, ConnectionTestResult, Order, PaginatedResult, Product, ProductUpdate
+from bapp_connectors.core.errors import ConnectorError, ValidationError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.providers.shop.temu.client import DEFAULT_PAGE_SIZE, TemuApiClient
 from bapp_connectors.providers.shop.temu.manifest import manifest
-from bapp_connectors.providers.shop.temu.mappers import contact_from_shipping_info, order_from_temu
+from bapp_connectors.providers.shop.temu.mappers import (
+    contact_from_shipping_info,
+    goods_v3_payload,
+    order_from_temu,
+    product_from_goods,
+    sku_ids_from_stock_query,
+)
 from bapp_connectors.providers.shop.temu.models import SITE_CURRENCY
 
 if TYPE_CHECKING:
@@ -189,31 +198,74 @@ class TemuShopAdapter(
 
     # ── ShopPort: products ──
 
-    def get_products(self, cursor=None, since=None):
-        raise NotImplementedError
+    def _sku_ids(self, product_id: str) -> list[int]:
+        pairs = sku_ids_from_stock_query(self.client.sku_stock_query(goods_id=int(product_id)))
+        if not pairs:
+            raise ValidationError(f"Temu: produsul {product_id} nu are SKU-uri")
+        return [sku_id for sku_id, _ in pairs]
 
-    def update_product_stock(self, product_id, quantity):
-        raise NotImplementedError
+    def get_products(self, cursor: str | None = None, since: datetime.datetime | None = None) -> PaginatedResult[Product]:
+        page = int(cursor) if cursor else 1
+        filters = {"crtFrom": int(since.timestamp() * 1000)} if since else {}
+        data = self.client.list_goods(page_no=page, page_size=DEFAULT_PAGE_SIZE, **filters)
+        rows = (data or {}).get("goodsList") or []
+        items = [product_from_goods(row) for row in rows]
+        has_more = len(rows) == DEFAULT_PAGE_SIZE
+        return PaginatedResult(items=items, cursor=str(page + 1) if has_more else None, has_more=has_more,
+                               total=(data or {}).get("total"))
 
-    def update_product_price(self, product_id, price, currency):
-        raise NotImplementedError
+    def update_product_stock(self, product_id: str, quantity: int) -> None:
+        targets = [{"skuId": sku_id, "targetStockAvailable": int(quantity)} for sku_id in self._sku_ids(product_id)]
+        self.client.edit_stock(int(product_id), targets, uuid.uuid4().hex)
+
+    def update_product_price(self, product_id: str, price: Decimal, currency: str) -> None:
+        amount = f"{Decimal(price).quantize(Decimal('0.01'))}"
+        self.client.change_sku_price(int(product_id), [{"skuId": sku_id, "price": amount} for sku_id in self._sku_ids(product_id)])
 
     def update_order_status(self, order_id, status):
         raise NotImplementedError("Temu does not expose a generic order status update; use FulfillmentCapability.")
 
     # ── capabilities (implemented task by task) ──
 
-    def create_product(self, product):
-        raise NotImplementedError
+    def create_product(self, product: Product) -> Product:
+        result = self.client.add_goods_v3(goods_v3_payload(product, self.config))
+        return Product(product_id=str(result.get("goodsId") or ""), sku=product.sku, name=product.name,
+                       extra={"status": "draft", "externalGoodsId": result.get("externalGoodsId")})
 
-    def delete_product(self, product_id):
-        raise NotImplementedError
+    def delete_product(self, product_id: str) -> None:
+        self.client.delete_goods(int(product_id))
 
-    def update_product(self, update):
-        raise NotImplementedError
+    def update_product(self, update: ProductUpdate) -> None:
+        basic: dict = {}
+        if update.name is not None:
+            basic["goodsName"] = update.name[:500]
+        payload: dict = {"goodsId": int(update.product_id)}
+        if basic:
+            payload["goodsBasic"] = basic
+        if update.description is not None:
+            payload["goodsDesc"] = update.description[:10000]
+        if update.photos:
+            payload.setdefault("goodsBasic", {})["goodsCarouselImage"] = [p.url for p in update.photos if p.url][:10]
+        if len(payload) > 1:
+            self.client.partial_update_goods(payload)
+        if update.stock is not None:
+            self.update_product_stock(update.product_id, update.stock)
+        if update.price is not None:
+            self.update_product_price(update.product_id, update.price, update.currency or "")
 
-    def bulk_update_products(self, updates):
-        raise NotImplementedError
+    def bulk_update_products(self, updates: list[ProductUpdate]) -> BulkResult:
+        result = BulkResult(total=len(updates))
+        for update in updates:
+            try:
+                if update.stock is not None:
+                    self.update_product_stock(update.product_id, update.stock)
+                if update.price is not None:
+                    self.update_product_price(update.product_id, update.price, update.currency or "")
+                result.succeeded += 1
+            except (ConnectorError, ValueError) as exc:
+                result.failed += 1
+                result.errors.append({"product_id": update.product_id, "error": str(exc)})
+        return result
 
     def verify_webhook(self, headers, body, secret=""):
         raise NotImplementedError

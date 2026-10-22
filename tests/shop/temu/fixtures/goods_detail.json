@@ -1,0 +1,333 @@
+{
+ "skuList": [
+  {
+   "images": [
+    "https://img.example.test/goods.jpg"
+   ],
+   "externalProductType": null,
+   "multiplePackage": null,
+   "productExpressInfo": {
+    "weightInfo": {
+     "unit": "g",
+     "weight": "100"
+    },
+    "volumeInfo": {
+     "unit": "cm",
+     "width": "1",
+     "length": "1",
+     "height": "1"
+    }
+   },
+   "barCodeList": null,
+   "referenceLink": null,
+   "specIdList": [
+    72537029
+   ],
+   "specNameList": [
+    "White"
+   ],
+   "price": {
+    "retailPrice": {
+     "amount": "9.53",
+     "currency": "RON"
+    },
+    "listPrice": {
+     "amount": "9.53",
+     "currency": "RON"
+    }
+   },
+   "outSkuSn": "TEST11",
+   "externalProductId": null,
+   "retailPrice": {
+    "amount": "953",
+    "currency": "RON"
+   },
+   "skuId": 69296881420960,
+   "listPrice": {
+    "amount": "953",
+    "currency": "RON"
+   }
+  },
+  {
+   "images": [
+    "https://img.example.test/goods.jpg"
+   ],
+   "externalProductType": null,
+   "multiplePackage": null,
+   "productExpressInfo": {
+    "weightInfo": {
+     "unit": "g",
+     "weight": "100"
+    },
+    "volumeInfo": {
+     "unit": "cm",
+     "width": "4",
+     "length": "5",
+     "height": "3"
+    }
+   },
+   "barCodeList": null,
+   "referenceLink": null,
+   "specIdList": [
+    72537181
+   ],
+   "specNameList": [
+    "Blue"
+   ],
+   "price": {
+    "retailPrice": {
+     "amount": "10.48",
+     "currency": "RON"
+    },
+    "listPrice": {
+     "amount": "10.65",
+     "currency": "RON"
+    }
+   },
+   "outSkuSn": "",
+   "externalProductId": null,
+   "retailPrice": {
+    "amount": "1048",
+    "currency": "RON"
+   },
+   "skuId": 69296881453728,
+   "listPrice": {
+    "amount": "1065",
+    "currency": "RON"
+   }
+  }
+ ],
+ "customized": false,
+ "goodsServicePromise": {
+  "shipmentLimitDay": 2,
+  "costTemplateName": "test rmny",
+  "costTemplateId": "LFT-14020901943132222433",
+  "fulfillmentType": 1
+ },
+ "goodsId": 604156035228767,
+ "goodsSizeChartList": null,
+ "goodsOriginInfo": {
+  "originRegionName1": "Germany",
+  "originRegionName2": null,
+  "manufacturingLocations": null
+ },
+ "targetSiteInfo": [
+  {
+   "goodsId": 603468840413513,
+   "siteId": 111
+  },
+  {
+   "goodsId": 603468840414373,
+   "siteId": 113
+  },
+  {
+   "goodsId": 603468840419320,
+   "siteId": 108
+  },
+  {
+   "goodsId": 603468840421705,
+   "siteId": 106
+  },
+  {
+   "goodsId": 603468840435767,
+   "siteId": 143
+  },
+  {
+   "goodsId": 603468840438938,
+   "siteId": 114
+  },
+  {
+   "goodsId": 603468840441910,
+   "siteId": 105
+  },
+  {
+   "goodsId": 603468840447251,
+   "siteId": 115
+  },
+  {
+   "goodsId": 603468840449189,
+   "siteId": 144
+  },
+  {
+   "goodsId": 603468840457370,
+   "siteId": 138
+  },
+  {
+   "goodsId": 604156035170485,
+   "siteId": 141
+  },
+  {
+   "goodsId": 604156035180658,
+   "siteId": 137
+  },
+  {
+   "goodsId": 604156035188014,
+   "siteId": 145
+  },
+  {
+   "goodsId": 604156035198812,
+   "siteId": 107
+  },
+  {
+   "goodsId": 604156035200646,
+   "siteId": 147
+  },
+  {
+   "goodsId": 604156035202836,
+   "siteId": 112
+  },
+  {
+   "goodsId": 604156035214795,
+   "siteId": 142
+  },
+  {
+   "goodsId": 604156035216479,
+   "siteId": 102
+  },
+  {
+   "goodsId": 604156035219220,
+   "siteId": 109
+  },
+  {
+   "goodsId": 604156035223905,
+   "siteId": 139
+  },
+  {
+   "goodsId": 604156035228767,
+   "siteId": 140
+  }
+ ],
+ "outGoodsSn": "",
+ "catName": "Office Products / Office & School Supplies / Tape, Adhesives & Fasteners / Tape / Packing Tape",
+ "bulletPoints": null,
+ "goodsName": "Produs test 21",
+ "productType": 1,
+ "goodsDesc": null,
+ "goodsSizeImage": null,
+ "sourceSiteInfo": {
+  "goodsId": 603554739788750,
+  "siteId": 156
+ },
+ "itemTaxCode": "GEN_STANDARD",
+ "goodsProperties": [
+  {
+   "specId": null,
+   "templateModuleId": null,
+   "note": null,
+   "parentSpecId": null,
+   "groupId": null,
+   "valueUnit": null,
+   "pid": 1,
+   "templatePid": 962418,
+   "imgUrl": null,
+   "vid": 62793,
+   "parentSpecName": null,
+   "subGroupId": null,
+   "valueUnitId": null,
+   "attributeName": "Major Material",
+   "numberInputValue": null,
+   "multiLineInputValue": null,
+   "value": "Wood",
+   "refPid": 1920
+  },
+  {
+   "specId": null,
+   "templateModuleId": null,
+   "note": null,
+   "parentSpecId": null,
+   "groupId": null,
+   "valueUnit": null,
+   "pid": 2230,
+   "templatePid": 1432852,
+   "imgUrl": null,
+   "vid": 213321,
+   "parentSpecName": null,
+   "subGroupId": null,
+   "valueUnitId": null,
+   "attributeName": "Wood Type",
+   "numberInputValue": null,
+   "multiLineInputValue": null,
+   "value": "Log",
+   "refPid": 7317
+  },
+  {
+   "specId": null,
+   "templateModuleId": null,
+   "note": null,
+   "parentSpecId": null,
+   "groupId": null,
+   "valueUnit": null,
+   "pid": 2231,
+   "templatePid": 1441989,
+   "imgUrl": null,
+   "vid": 213348,
+   "parentSpecName": null,
+   "subGroupId": null,
+   "valueUnitId": null,
+   "attributeName": "Wood Species",
+   "numberInputValue": null,
+   "multiLineInputValue": null,
+   "value": "Aloe vera",
+   "refPid": 7318
+  },
+  {
+   "specId": 72537029,
+   "templateModuleId": null,
+   "note": null,
+   "parentSpecId": 1001,
+   "groupId": null,
+   "valueUnit": null,
+   "pid": null,
+   "templatePid": null,
+   "imgUrl": null,
+   "vid": null,
+   "parentSpecName": "颜色",
+   "subGroupId": null,
+   "valueUnitId": null,
+   "attributeName": null,
+   "numberInputValue": null,
+   "multiLineInputValue": null,
+   "value": "White",
+   "refPid": null
+  },
+  {
+   "specId": 72537181,
+   "templateModuleId": null,
+   "note": null,
+   "parentSpecId": 1001,
+   "groupId": null,
+   "valueUnit": null,
+   "pid": null,
+   "templatePid": null,
+   "imgUrl": null,
+   "vid": null,
+   "parentSpecName": "颜色",
+   "subGroupId": null,
+   "valueUnitId": null,
+   "attributeName": null,
+   "numberInputValue": null,
+   "multiLineInputValue": null,
+   "value": "Blue",
+   "refPid": null
+  }
+ ],
+ "importDesignation": null,
+ "subStatus": 303,
+ "catId": 879,
+ "hsCode": null,
+ "saveModeStatus": null,
+ "secondHand": null,
+ "goodsGallery": {
+  "detailVideo": null,
+  "goodsCarouselImage": null,
+  "carouselVideo": null,
+  "detailImage": null
+ },
+ "goodsTrademark": {
+  "trademarkBizId": null,
+  "brandName": null,
+  "trademarkId": null,
+  "brandId": null,
+  "trademarkName": null
+ }
+}
