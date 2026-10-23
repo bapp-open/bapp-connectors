@@ -38,9 +38,15 @@ _PIPELINE_STATUSES = {
 
 
 def _dt(value: Any) -> datetime | None:
-    """Parse a GitLab ISO timestamp (`...Z` or `+hh:mm`) into an aware datetime; None when absent or invalid."""
+    """Parse a GitLab timestamp into an aware datetime; None when absent or invalid.
+
+    REST sends ISO 8601 (`...Z` or `+hh:mm`); webhooks send `YYYY-MM-DD HH:MM:SS UTC`
+    (or `... +hhmm`), whose ` UTC` suffix `fromisoformat` does not accept.
+    """
     if not value or not isinstance(value, str):
         return None
+    if value.endswith(" UTC"):
+        value = value[: -len(" UTC")] + "+00:00"
     try:
         parsed = datetime.fromisoformat(value)
     except ValueError:

@@ -66,7 +66,7 @@ manifest = ProviderManifest(
                 label="Groups",
                 field_type=FieldType.STR,
                 default="",
-                help_text="Comma-separated group paths to index, e.g. bapp-cloud,cbsoft; "
+                help_text="Comma-separated group paths to index, e.g. platform,platform/tools; "
                 "empty = everything the token can see",
                 colspan=24,
             ),

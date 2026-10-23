@@ -225,3 +225,19 @@ def test_webhook_unknown():
     assert event.provider == "gitlab"
     assert event.provider_event_type == "Wiki Page Hook:"
     assert event.idempotency_key == "wiki_page::"
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["2026-10-23 06:51:31 UTC", "2026-10-23T06:51:31Z", "2026-10-23T09:51:31+03:00", "2026-10-23 09:51:31 +0300"],
+)
+def test_dt_parses_rest_and_webhook_timestamps(value):
+    from bapp_connectors.providers.devops.gitlab.mappers import _dt
+
+    assert _dt(value) == datetime(2026, 10, 23, 6, 51, 31, tzinfo=UTC)
+
+
+def test_dt_rejects_garbage():
+    from bapp_connectors.providers.devops.gitlab.mappers import _dt
+
+    assert _dt("yesterday UTC") is None

@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 import requests
 
+from bapp_connectors.core.errors import ValidationError
 from bapp_connectors.core.http.retry import execute_with_retry
 from bapp_connectors.providers.devops.gitlab.errors import GitLabError, GitLabUnreachableError, raise_for_status
 
@@ -32,6 +33,20 @@ def _iso(value: datetime | str | None) -> str | None:
 
 def _bool(value: bool) -> str:
     return "true" if value else "false"
+
+
+def _parse_group_cursor(cursor: str, group_count: int) -> tuple[int, str]:
+    """Split a `"{group_index}:{page}"` cursor; ValidationError when malformed or out of range."""
+    index, sep, number = str(cursor).partition(":")
+    if not (sep and str(cursor).isascii() and index.isdigit() and number.isdigit()):
+        raise ValidationError(
+            f"Invalid GitLab group cursor {cursor!r}: expected '<group>:<page>'; restart with cursor=None"
+        )
+    if int(index) >= group_count:
+        raise ValidationError(
+            f"Stale GitLab group cursor {cursor!r}: only {group_count} group(s) configured; restart with cursor=None"
+        )
+    return int(index), number
 
 
 class GitLabClient:
@@ -110,12 +125,12 @@ class GitLabClient:
             # An HTTPError raised by the transport still carries the status: map it like any other.
             failed = getattr(exc, "response", None)
             if failed is not None and getattr(failed, "status_code", None):
-                raise_for_status(failed.status_code, getattr(failed, "text", ""), url)
+                raise_for_status(failed.status_code, getattr(failed, "text", ""), url, getattr(failed, "headers", None))
             # ResilientHttpClient re-raises transport failures unwrapped (DNS, refused
             # connection, TLS, timeout); left raw they escape the framework's hierarchy.
             raise GitLabUnreachableError(f"Could not reach {self.host}: {exc}") from exc
 
-        raise_for_status(response.status_code, getattr(response, "text", ""), url)
+        raise_for_status(response.status_code, getattr(response, "text", ""), url, response.headers)
         # Kept as-is: on a real response it is a case-insensitive mapping.
         headers = response.headers if response.headers is not None else {}
         if response.status_code == 204 or not getattr(response, "text", ""):
@@ -132,7 +147,11 @@ class GitLabClient:
         next_page = (headers.get("X-Next-Page") or headers.get("x-next-page") or "").strip()
         total = str(headers.get("X-Total") or headers.get("x-total") or "").strip()
         self.last_total = int(total) if total.isdigit() else None
-        return list(data or []), next_page or None
+        if data is None:
+            return [], next_page or None
+        if not isinstance(data, list):
+            raise GitLabError(f"GitLab answered a list endpoint with {type(data).__name__}: {path}")
+        return data, next_page or None
 
     # ── endpoints ──
 
@@ -153,6 +172,9 @@ class GitLabClient:
 
         Without groups the cursor is GitLab's page number. With groups it is
         `"{group_index}:{page}"`: each group is walked to its last page before the next one.
+
+        A group cursor that is malformed, or points past the configured groups (the `groups`
+        setting changed since it was stored), raises `ValidationError`; restart with `page=None`.
         """
         params: dict[str, Any] = {"order_by": "last_activity_at", "search": search or None}
         if not include_archived:
@@ -165,8 +187,7 @@ class GitLabClient:
 
         group_index, group_page = 0, None
         if page:
-            index, _, number = page.partition(":")
-            group_index, group_page = int(index), number or None
+            group_index, group_page = _parse_group_cursor(page, len(groups))
         params["include_subgroups"] = "true"
         params["page"] = group_page
         items, next_page = self.paged(f"groups/{encode_ref(groups[group_index])}/projects", params)
@@ -248,4 +269,9 @@ class GitLabClient:
         return self.request("POST", f"projects/{encode_ref(ref)}/hooks", json=data, retry=False)[0]
 
     def list_hooks(self, ref: int | str) -> list[dict]:
-        return list(self.request("GET", f"projects/{encode_ref(ref)}/hooks", params={"per_page": PER_PAGE})[0] or [])
+        hooks = self.request("GET", f"projects/{encode_ref(ref)}/hooks", params={"per_page": PER_PAGE})[0]
+        if hooks is None:
+            return []
+        if not isinstance(hooks, list):
+            raise GitLabError(f"GitLab answered the hooks list with {type(hooks).__name__}: {ref}")
+        return hooks

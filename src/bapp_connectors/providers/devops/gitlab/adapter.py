@@ -137,6 +137,9 @@ class GitLabAdapter(DevOpsPort, IssueManagementCapability, WebhookCapability):
         Pages have no guaranteed minimum size: with groups set, a group without projects still
         yields an empty page whose cursor moves on to the next group. Stop on `has_more=False`,
         never on empty `items`. `total` is reported only without groups (it would be per group).
+
+        A stored cursor that no longer fits the configured groups (or is malformed) raises
+        `ValidationError`: the caller drops it and restarts with `cursor=None`.
         """
         items, next_cursor = self.client.list_projects(cursor, search, self.groups, self.include_archived)
         total = None if self.groups else self.client.last_total
@@ -216,10 +219,18 @@ class GitLabAdapter(DevOpsPort, IssueManagementCapability, WebhookCapability):
     def register_webhook(self, url: str, events: list[str] | None = None, *, ref: str = "") -> dict:
         """Create a project hook on `ref` for push, issue, merge request, pipeline and note events.
 
-        `events` is ignored: every event the manifest maps is subscribed.
+        `events` is ignored: every event the manifest maps is subscribed. `webhook_secret` is
+        required: without it GitLab would send no token and `verify_webhook` rejects every
+        delivery. When the project already has a hook with the same `url`, nothing is created
+        and that existing hook is returned (its secret and events are left as they are).
         """
         if not ref:
             raise ValidationError("ref is required")
+        if not self.webhook_secret:
+            raise ValidationError("webhook_secret is required to register a webhook")
+        existing = next((hook for hook in self.client.list_hooks(ref) if hook.get("url") == url), None)
+        if existing is not None:
+            return existing
         payload = {
             "url": url,
             "token": self.webhook_secret,

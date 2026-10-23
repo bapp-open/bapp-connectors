@@ -210,3 +210,68 @@ def test_paged_records_total():
     http.responses[0] = ("GET", "/projects", fake_response([], {"X-Next-Page": ""}))
     client.paged("projects", {})
     assert client.last_total is None
+
+
+# ── final-review fix wave ──
+
+
+def test_429_carries_retry_after_seconds():
+    http = FakeHttpClient()
+    http.add("GET", "/version", fake_response({"message": "slow down"}, {"Retry-After": "7"}, status=429))
+    with pytest.raises(RateLimitError) as info:
+        make(http).get_version()
+    assert info.value.retry_after == 7
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        None,
+        {"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+        {"Retry-After": "x"},
+        {"Retry-After": "-5"},
+        {"Retry-After": "²"},
+    ],
+)
+def test_429_without_usable_retry_after_has_none(headers):
+    http = FakeHttpClient()
+    http.add("GET", "/version", fake_response({"message": "slow down"}, headers, status=429))
+    with pytest.raises(RateLimitError) as info:
+        make(http).get_version()
+    assert info.value.retry_after is None
+
+
+def test_raise_for_status_keeps_positional_signature():
+    from bapp_connectors.providers.devops.gitlab.errors import raise_for_status
+
+    with pytest.raises(RateLimitError) as info:
+        raise_for_status(429, "", "u")
+    assert info.value.retry_after is None
+    with pytest.raises(RateLimitError) as info:
+        raise_for_status(429, "", "u", {"retry-after": "3"})
+    assert info.value.retry_after == 3
+
+
+@pytest.mark.parametrize("cursor", ["abc", "5:1", "2", "-1:1", "1:x", "²:1"])
+def test_malformed_or_stale_group_cursor_is_a_validation_error(cursor):
+    from bapp_connectors.core.errors import ValidationError
+
+    http = FakeHttpClient()
+    http.add("GET", "/groups/", fake_response([], {"X-Next-Page": ""}))
+    with pytest.raises(ValidationError, match=cursor):
+        make(http).list_projects(cursor, None, ["a", "b"], False)
+    assert http.calls == []
+
+
+def test_paged_rejects_a_non_list_body():
+    http = FakeHttpClient()
+    http.add("GET", "/projects", fake_response({"message": "not a list"}, {"X-Next-Page": ""}))
+    with pytest.raises(GitLabError, match="dict"):
+        make(http).paged("projects", {})
+
+
+def test_list_hooks_rejects_a_non_list_body():
+    http = FakeHttpClient()
+    http.add("GET", "/hooks", fake_response({"message": "not a list"}))
+    with pytest.raises(GitLabError):
+        make(http).list_hooks("g/p")

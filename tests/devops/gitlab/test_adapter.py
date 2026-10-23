@@ -238,6 +238,7 @@ def test_register_webhook(http):
     adapter = GitLabAdapter(
         credentials={**CREDENTIALS, "webhook_secret": "s3"}, http_client=http, config={"verify_ssl": False}
     )
+    _hooks_first(http, [{"id": 54, "url": "https://other.example.net/y"}])
     http.add("POST", "/projects/382/hooks", fake_response({"id": 77, "url": "https://hooks.example.net/x"}, status=201))
     result = adapter.register_webhook("https://hooks.example.net/x", ref="382")
     assert result["id"] == 77
@@ -275,3 +276,37 @@ def test_registry():
     assert registry.is_registered("devops", "gitlab")
     assert any(m.name == "gitlab" for m in registry.list_providers(capability=IssueManagementCapability))
     assert any(m.name == "gitlab" for m in registry.list_providers(capability=WebhookCapability))
+
+
+# ── final-review fix wave ──
+
+
+def _hooks_first(http, hooks):
+    """GET /projects/382/hooks must win over the generic GET /projects/382 rule."""
+    http.responses.insert(0, ("GET", "/projects/382/hooks", fake_response(hooks)))
+
+
+def test_register_webhook_without_secret_is_rejected_before_any_call(adapter, http):
+    with pytest.raises(ValidationError, match="webhook_secret is required"):
+        adapter.register_webhook("https://hooks.example.net/x", ref="382")
+    assert http.calls == []
+
+
+def test_register_webhook_reuses_an_existing_hook_with_the_same_url(http):
+    adapter = GitLabAdapter(credentials={**CREDENTIALS, "webhook_secret": "s3"}, http_client=http)
+    existing = {"id": 55, "url": "https://hooks.example.net/x"}
+    _hooks_first(http, [{"id": 54, "url": "https://other.example.net/y"}, existing])
+    http.add("POST", "/projects/382/hooks", fake_response({"id": 77}, status=201))
+    assert adapter.register_webhook("https://hooks.example.net/x", ref="382") == existing
+    assert [c.method for c in http.calls] == ["GET"]
+
+
+def test_list_projects_with_a_stale_group_cursor_is_a_validation_error(http):
+    adapter = GitLabAdapter(credentials=CREDENTIALS, http_client=http, config={"groups": "platform,platform/tools"})
+    with pytest.raises(ValidationError, match="7:1"):
+        adapter.list_projects(cursor="7:1")
+
+
+def test_verify_webhook_non_ascii_token_is_false(http):
+    adapter = GitLabAdapter(credentials={**CREDENTIALS, "webhook_secret": "s3"}, http_client=http)
+    assert adapter.verify_webhook({"X-Gitlab-Token": "ț" * 8}, b"{}") is False

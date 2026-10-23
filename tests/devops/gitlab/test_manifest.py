@@ -21,3 +21,8 @@ def test_manifest_endpoint_and_settings():
 def test_manifest_capabilities():
     assert manifest.capabilities == [DevOpsPort, IssueManagementCapability, WebhookCapability]
     assert "issue.commented" in manifest.webhooks.events
+
+
+def test_groups_help_text_uses_generic_example():
+    field = next(f for f in manifest.settings.fields if f.name == "groups")
+    assert "platform,platform/tools" in field.help_text
