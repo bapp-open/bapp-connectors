@@ -41,10 +41,11 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Hosting** | cPanel | 1 |
 | **ERP** | BAPP | 1 |
 | **DevOps** | GitLab | 1 |
+| **Monitoring** | Sentry | 1 |
 | **Ads** | Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads | 6 |
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
 | **Social** | Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts | 7 |
-| | **Total** | **74** |
+| | **Total** | **75** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -255,6 +256,7 @@ packages/connectors/
 │       ├── hosting/       # cPanel
 │       ├── erp/           # BAPP
 │       ├── devops/        # GitLab
+│       ├── monitoring/    # Sentry
 │       ├── ads/           # Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads
 │       ├── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
 │       └── social/        # Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts
