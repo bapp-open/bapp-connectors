@@ -1,0 +1,70 @@
+{
+  "id": "3",
+  "slug": "aio-backend",
+  "name": "aio-backend",
+  "platform": "python-django",
+  "platforms": [
+    "python"
+  ],
+  "dateCreated": "2024-07-08T14:12:42.394503Z",
+  "firstEvent": "2024-07-08T14:37:40.073606Z",
+  "isBookmarked": true,
+  "isMember": true,
+  "hasAccess": true,
+  "team": {
+    "id": "3",
+    "slug": "example-team",
+    "name": "example-team"
+  },
+  "teams": [
+    {
+      "id": "3",
+      "slug": "example-team",
+      "name": "example-team"
+    }
+  ],
+  "latestRelease": null,
+  "access": [
+    "team:admin",
+    "event:read",
+    "team:read",
+    "team:write",
+    "org:read",
+    "member:read",
+    "project:releases",
+    "event:write",
+    "alerts:write",
+    "alerts:read",
+    "org:integrations",
+    "project:read",
+    "project:admin",
+    "event:admin",
+    "project:write"
+  ],
+  "features": [
+    "rate-limits",
+    "custom-inbound-filters",
+    "discard-groups",
+    "servicehooks",
+    "span-metrics-extraction",
+    "span-metrics-extraction-addons"
+  ],
+  "status": "active",
+  "isPublic": false,
+  "color": "#bf3f58",
+  "avatar": {
+    "avatarType": "letter_avatar",
+    "avatarUuid": null
+  },
+  "organization": {
+    "id": "1",
+    "slug": "example-org",
+    "name": "Example Org",
+    "status": {
+      "id": "active",
+      "name": "active"
+    }
+  },
+  "subjectPrefix": "[Sentry]",
+  "resolveAge": 0
+}

@@ -1,0 +1,299 @@
+{
+  "id": "23296",
+  "shareId": null,
+  "shortId": "AIO-BACKEND-3XK",
+  "title": "ExampleError: example message 1",
+  "culprit": "example.module1 in handler",
+  "permalink": "https://sentry.example.net/organizations/example-org/issues/23296/",
+  "logger": null,
+  "level": "error",
+  "status": "unresolved",
+  "statusDetails": {},
+  "substatus": "new",
+  "isPublic": false,
+  "platform": "python",
+  "project": {
+    "id": "3",
+    "name": "aio-backend",
+    "slug": "aio-backend",
+    "platform": "python-django"
+  },
+  "type": "error",
+  "metadata": {
+    "value": "example message 1",
+    "type": "ExampleError",
+    "filename": "example/module1.py",
+    "function": "handler",
+    "in_app_frame_mix": "mixed",
+    "sdk": {
+      "name": "sentry.python.django",
+      "name_normalized": "sentry.python"
+    },
+    "initial_priority": 75,
+    "title": null
+  },
+  "numComments": 0,
+  "assignedTo": {
+    "type": "user",
+    "id": "1",
+    "name": "Example User",
+    "email": "user@example.com"
+  },
+  "isBookmarked": false,
+  "isSubscribed": false,
+  "subscriptionDetails": null,
+  "hasSeen": false,
+  "annotations": [],
+  "issueType": "error",
+  "issueCategory": "error",
+  "priority": "high",
+  "priorityLockedAt": null,
+  "seerFixabilityScore": null,
+  "seerAutofixLastTriggered": null,
+  "seerExplorerAutofixLastTriggered": null,
+  "isUnhandled": true,
+  "count": "3",
+  "userCount": 1,
+  "firstSeen": "2026-10-23T07:57:53.537894Z",
+  "lastSeen": "2026-10-23T07:58:07Z",
+  "firstRelease": null,
+  "lastRelease": null,
+  "tags": [],
+  "activity": [],
+  "seenBy": [],
+  "pluginActions": [],
+  "pluginIssues": [],
+  "pluginContexts": [],
+  "userReportCount": 0,
+  "stats": {
+    "24h": [
+      [
+        1792656000,
+        0
+      ],
+      [
+        1792659600,
+        0
+      ],
+      [
+        1792663200,
+        0
+      ],
+      [
+        1792666800,
+        0
+      ],
+      [
+        1792670400,
+        0
+      ],
+      [
+        1792674000,
+        0
+      ],
+      [
+        1792677600,
+        0
+      ],
+      [
+        1792681200,
+        0
+      ],
+      [
+        1792684800,
+        0
+      ],
+      [
+        1792688400,
+        0
+      ],
+      [
+        1792692000,
+        0
+      ],
+      [
+        1792695600,
+        0
+      ],
+      [
+        1792699200,
+        0
+      ],
+      [
+        1792702800,
+        0
+      ],
+      [
+        1792706400,
+        0
+      ],
+      [
+        1792710000,
+        0
+      ],
+      [
+        1792713600,
+        0
+      ],
+      [
+        1792717200,
+        0
+      ],
+      [
+        1792720800,
+        0
+      ],
+      [
+        1792724400,
+        0
+      ],
+      [
+        1792728000,
+        0
+      ],
+      [
+        1792731600,
+        0
+      ],
+      [
+        1792735200,
+        0
+      ],
+      [
+        1792738800,
+        3
+      ],
+      [
+        1792742400,
+        0
+      ]
+    ],
+    "30d": [
+      [
+        1790121600,
+        0
+      ],
+      [
+        1790208000,
+        0
+      ],
+      [
+        1790294400,
+        0
+      ],
+      [
+        1790380800,
+        0
+      ],
+      [
+        1790467200,
+        0
+      ],
+      [
+        1790553600,
+        0
+      ],
+      [
+        1790640000,
+        0
+      ],
+      [
+        1790726400,
+        0
+      ],
+      [
+        1790812800,
+        0
+      ],
+      [
+        1790899200,
+        0
+      ],
+      [
+        1790985600,
+        0
+      ],
+      [
+        1791072000,
+        0
+      ],
+      [
+        1791158400,
+        0
+      ],
+      [
+        1791244800,
+        0
+      ],
+      [
+        1791331200,
+        0
+      ],
+      [
+        1791417600,
+        0
+      ],
+      [
+        1791504000,
+        0
+      ],
+      [
+        1791590400,
+        0
+      ],
+      [
+        1791676800,
+        0
+      ],
+      [
+        1791763200,
+        0
+      ],
+      [
+        1791849600,
+        0
+      ],
+      [
+        1791936000,
+        0
+      ],
+      [
+        1792022400,
+        0
+      ],
+      [
+        1792108800,
+        0
+      ],
+      [
+        1792195200,
+        0
+      ],
+      [
+        1792281600,
+        0
+      ],
+      [
+        1792368000,
+        0
+      ],
+      [
+        1792454400,
+        0
+      ],
+      [
+        1792540800,
+        0
+      ],
+      [
+        1792627200,
+        0
+      ],
+      [
+        1792713600,
+        3
+      ]
+    ]
+  },
+  "participants": []
+}
