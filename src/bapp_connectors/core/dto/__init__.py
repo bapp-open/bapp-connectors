@@ -74,6 +74,7 @@ from .message import (
     MessageLocation,
     OutboundMessage,
 )
+from .monitoring import ErrorIssue, MonitoredProject, MonitoredProjectStats
 from .network import DetectedDnsAllowlist, DnsAllowlist, NetworkClient, NetworkDeviceInfo, NetworkSegment
 from .order import Order, OrderItem, OrderStatus, PaymentStatus, PaymentType
 from .partner import Address, Contact
@@ -158,6 +159,7 @@ __all__ = [
     "EmailDetail",
     "EmailSummary",
     "EmbeddingResult",
+    "ErrorIssue",
     "FeedResult",
     "FeedUploadResult",
     "FeedValidationError",
@@ -188,6 +190,8 @@ __all__ = [
     "MessageLocation",
     "ModelInfo",
     "ModelPricing",
+    "MonitoredProject",
+    "MonitoredProjectStats",
     "NetworkClient",
     "NetworkDeviceInfo",
     "NetworkSegment",

@@ -10,6 +10,7 @@ from .image_generation import ImageGenerationCapability
 from .inbox import InboxCapability
 from .invoice_attach import InvoiceAttachmentCapability
 from .issue_management import IssueManagementCapability
+from .issue_triage import IssueTriageCapability
 from .mailbox import MailboxCapability
 from .oauth import OAuthCapability, OAuthTokens
 from .order_lookup import OrderLookupCapability
@@ -55,6 +56,7 @@ __all__ = [
     "InboxCapability",
     "InvoiceAttachmentCapability",
     "IssueManagementCapability",
+    "IssueTriageCapability",
     "MailboxCapability",
     "OAuthCapability",
     "OAuthTokens",

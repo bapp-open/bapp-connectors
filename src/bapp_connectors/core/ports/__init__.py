@@ -12,6 +12,7 @@ from .feed import FeedPort
 from .hosting import HostingPort
 from .llm import LLMPort
 from .messaging import MessagingPort
+from .monitoring import MonitoringPort
 from .network import NetworkPort
 from .payment import PaymentPort
 from .shop import ShopPort
@@ -32,6 +33,7 @@ __all__ = [
     "HostingPort",
     "LLMPort",
     "MessagingPort",
+    "MonitoringPort",
     "NetworkPort",
     "PaymentPort",
     "ShopPort",
