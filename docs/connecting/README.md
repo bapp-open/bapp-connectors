@@ -1,6 +1,6 @@
-# Connecting Social & Ads Providers
+# Connecting providers
 
-Step-by-step connection guides for the `social` and `ads` provider families:
+Step-by-step connection guides, by provider family:
 
 | Family | Provider | Guide |
 |--------|----------|-------|
@@ -17,6 +17,8 @@ Step-by-step connection guides for the `social` and `ads` provider families:
 | ads | Microsoft Ads | [ads/microsoft.md](ads/microsoft.md) |
 | ads | LinkedIn Ads | [ads/linkedin.md](ads/linkedin.md) |
 | ads | Pinterest Ads | [ads/pinterest.md](ads/pinterest.md) |
+| devops | GitLab | [gitlab.md](gitlab.md) |
+| monitoring | Sentry | [sentry.md](sentry.md) |
 
 Note: Instagram *advertising* runs through `ads/facebook` (Meta placements),
 and YouTube *advertising* through `ads/google` (VIDEO campaigns) — no separate

@@ -1,0 +1,164 @@
+[
+  {
+    "id": "3",
+    "slug": "aio-backend",
+    "name": "aio-backend",
+    "platform": "python-django",
+    "platforms": [
+      "python"
+    ],
+    "dateCreated": "2024-07-08T14:12:42.394503Z",
+    "firstEvent": "2024-07-08T14:37:40.073606Z",
+    "isBookmarked": true,
+    "isMember": true,
+    "hasAccess": true,
+    "team": {
+      "id": "3",
+      "slug": "example-team",
+      "name": "example-team"
+    },
+    "teams": [
+      {
+        "id": "3",
+        "slug": "example-team",
+        "name": "example-team"
+      }
+    ],
+    "latestRelease": null,
+    "latestDeploys": null,
+    "access": [
+      "team:admin",
+      "event:read",
+      "team:read",
+      "team:write",
+      "org:read",
+      "member:read",
+      "project:releases",
+      "event:write",
+      "alerts:write",
+      "alerts:read",
+      "org:integrations",
+      "project:read",
+      "project:admin",
+      "event:admin",
+      "project:write"
+    ],
+    "features": [
+      "rate-limits",
+      "custom-inbound-filters",
+      "discard-groups",
+      "servicehooks",
+      "span-metrics-extraction",
+      "span-metrics-extraction-addons"
+    ]
+  },
+  {
+    "id": "30",
+    "slug": "example-api",
+    "name": "example-api",
+    "platform": "python-fastapi",
+    "platforms": [
+      "python"
+    ],
+    "dateCreated": "2025-02-28T19:44:36.147837Z",
+    "firstEvent": "2025-03-05T07:23:07.706915Z",
+    "isBookmarked": false,
+    "isMember": true,
+    "hasAccess": true,
+    "team": {
+      "id": "3",
+      "slug": "example-team",
+      "name": "example-team"
+    },
+    "teams": [
+      {
+        "id": "3",
+        "slug": "example-team",
+        "name": "example-team"
+      }
+    ],
+    "latestRelease": null,
+    "latestDeploys": null,
+    "access": [
+      "team:admin",
+      "event:read",
+      "team:read",
+      "team:write",
+      "org:read",
+      "member:read",
+      "project:releases",
+      "event:write",
+      "alerts:write",
+      "alerts:read",
+      "org:integrations",
+      "project:read",
+      "project:admin",
+      "event:admin",
+      "project:write"
+    ],
+    "features": [
+      "rate-limits",
+      "custom-inbound-filters",
+      "discard-groups",
+      "servicehooks",
+      "span-metrics-extraction",
+      "span-metrics-extraction-addons"
+    ]
+  },
+  {
+    "id": "28",
+    "slug": "example-web",
+    "name": "example-web",
+    "platform": "python-django",
+    "platforms": [
+      "python"
+    ],
+    "dateCreated": "2025-02-07T13:01:45.242385Z",
+    "firstEvent": "2025-02-07T13:02:52.942274Z",
+    "isBookmarked": false,
+    "isMember": false,
+    "hasAccess": true,
+    "team": {
+      "id": "3",
+      "slug": "example-team",
+      "name": "example-team"
+    },
+    "teams": [
+      {
+        "id": "3",
+        "slug": "example-team",
+        "name": "example-team"
+      }
+    ],
+    "latestRelease": {
+      "version": "aa5cfa9f71b26a83ed2f2e69b5b80d86e0ae635f"
+    },
+    "latestDeploys": null,
+    "access": [
+      "team:admin",
+      "project:releases",
+      "event:read",
+      "team:read",
+      "project:admin",
+      "team:write",
+      "org:integrations",
+      "org:read",
+      "member:read",
+      "project:read",
+      "project:write",
+      "alerts:write",
+      "event:admin",
+      "event:write",
+      "alerts:read"
+    ],
+    "features": [
+      "rate-limits",
+      "custom-inbound-filters",
+      "discard-groups",
+      "servicehooks",
+      "span-metrics-extraction",
+      "span-metrics-extraction-addons",
+      "releases"
+    ]
+  }
+]

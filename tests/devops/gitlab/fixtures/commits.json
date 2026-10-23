@@ -1,0 +1,59 @@
+[
+  {
+    "id": "4d4de956331efdbcc1770bc47e8b1710af46e59a",
+    "short_id": "4d4de956",
+    "created_at": "2026-10-23T09:40:37.000+03:00",
+    "parent_ids": [
+      "2f0f1c137f5fbf9f43f5dada6d56fd8b8eb4af00"
+    ],
+    "title": "fix: example change 1",
+    "message": "fix: example change 1\n",
+    "author_name": "Example User",
+    "author_email": "user@example.com",
+    "authored_date": "2026-10-23T09:40:37.000+03:00",
+    "committer_name": "Example User",
+    "committer_email": "user@example.com",
+    "committed_date": "2026-10-23T09:40:37.000+03:00",
+    "trailers": {},
+    "extended_trailers": {},
+    "web_url": "https://gitlab.example.net/bapp-cloud/application/aio-backend/-/commit/4d4de956331efdbcc1770bc47e8b1710af46e59a"
+  },
+  {
+    "id": "2f0f1c137f5fbf9f43f5dada6d56fd8b8eb4af00",
+    "short_id": "2f0f1c13",
+    "created_at": "2026-10-23T08:43:52.000+03:00",
+    "parent_ids": [
+      "b994563917f197730bb556be0aa5da7d7031b7f9"
+    ],
+    "title": "fix: example change 2",
+    "message": "fix: example change 2\n",
+    "author_name": "Example User",
+    "author_email": "user@example.com",
+    "authored_date": "2026-10-23T08:43:52.000+03:00",
+    "committer_name": "Example User",
+    "committer_email": "user@example.com",
+    "committed_date": "2026-10-23T08:43:52.000+03:00",
+    "trailers": {},
+    "extended_trailers": {},
+    "web_url": "https://gitlab.example.net/bapp-cloud/application/aio-backend/-/commit/2f0f1c137f5fbf9f43f5dada6d56fd8b8eb4af00"
+  },
+  {
+    "id": "b994563917f197730bb556be0aa5da7d7031b7f9",
+    "short_id": "b9945639",
+    "created_at": "2026-10-22T22:15:22.000+03:00",
+    "parent_ids": [
+      "cb078956a4de4aa386cac59afbb498f55a6726bb"
+    ],
+    "title": "fix: example change 3",
+    "message": "fix: example change 3\n",
+    "author_name": "Example User",
+    "author_email": "user@example.com",
+    "authored_date": "2026-10-22T22:15:22.000+03:00",
+    "committer_name": "Example User",
+    "committer_email": "user@example.com",
+    "committed_date": "2026-10-22T22:15:22.000+03:00",
+    "trailers": {},
+    "extended_trailers": {},
+    "web_url": "https://gitlab.example.net/bapp-cloud/application/aio-backend/-/commit/b994563917f197730bb556be0aa5da7d7031b7f9"
+  }
+]

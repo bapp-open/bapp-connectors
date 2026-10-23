@@ -1,0 +1,32 @@
+{
+  "action": "resolved",
+  "installation": {"uuid": "7a485448-a9e2-4c85-8a3c-4f44175783c9"},
+  "data": {
+    "issue": {
+      "id": "23296",
+      "shortId": "AIO-BACKEND-3XK",
+      "title": "ExampleError: example message 1",
+      "culprit": "example.module1 in handler",
+      "level": "error",
+      "status": "resolved",
+      "statusDetails": {},
+      "substatus": null,
+      "platform": "python",
+      "type": "error",
+      "metadata": {"type": "ExampleError", "value": "example message 1", "filename": "example/module1.py", "function": "handler"},
+      "logger": null,
+      "isUnhandled": true,
+      "count": "3",
+      "userCount": 1,
+      "firstSeen": "2026-10-23T07:57:53.537894Z",
+      "lastSeen": "2026-10-23T07:58:07.627162Z",
+      "assignedTo": {"type": "user", "id": "1", "name": "Example User", "email": "user@example.com"},
+      "permalink": "https://sentry.example.net/organizations/example-org/issues/23296/",
+      "web_url": "https://sentry.example.net/organizations/example-org/issues/23296/",
+      "url": "https://sentry.example.net/api/0/organizations/example-org/issues/23296/",
+      "project_url": "https://sentry.example.net/organizations/example-org/issues/?project=3",
+      "project": {"id": "3", "name": "aio-backend", "slug": "aio-backend", "platform": "python-django"}
+    }
+  },
+  "actor": {"type": "user", "id": "1", "name": "Example User"}
+}

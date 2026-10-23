@@ -72,7 +72,8 @@ class AdapterOnlyVerifier(SignatureVerifier):
 # Signature methods whose verification lives in the adapter, not in a shared secret.
 # "apple-jws": App Store Server Notifications V2 (JWS cu lant x5c).
 # "google-pubsub-oidc": Google Play RTDN prin Pub/Sub push (token OIDC optional).
-ADAPTER_VERIFIED_METHODS = frozenset({"netopia-jwt", "apple-jws", "google-pubsub-oidc"})
+# "plain-token": GitLab: shared secret compared by the adapter.
+ADAPTER_VERIFIED_METHODS = frozenset({"netopia-jwt", "apple-jws", "google-pubsub-oidc", "plain-token"})
 
 
 class NoopVerifier(SignatureVerifier):

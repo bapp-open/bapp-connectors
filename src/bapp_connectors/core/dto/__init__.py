@@ -35,6 +35,7 @@ from .base import (
     PaginatedResult,
     ProviderMeta,
 )
+from .devops import Commit, Issue, IssueComment, IssueDraft, MergeRequest, Pipeline, Repository
 from .dns import DnsRecord, DnsZone, DnsZoneSnapshot
 from .email import (
     EmailAddress,
@@ -73,6 +74,7 @@ from .message import (
     MessageLocation,
     OutboundMessage,
 )
+from .monitoring import ErrorIssue, MonitoredProject, MonitoredProjectStats
 from .network import DetectedDnsAllowlist, DnsAllowlist, NetworkClient, NetworkDeviceInfo, NetworkSegment
 from .order import Order, OrderItem, OrderStatus, PaymentStatus, PaymentType
 from .partner import Address, Contact
@@ -139,6 +141,7 @@ __all__ = [
     "ChatMessage",
     "ChatRole",
     "CheckoutSession",
+    "Commit",
     "ConnectionTestResult",
     "Contact",
     "CustomerPricing",
@@ -156,6 +159,7 @@ __all__ = [
     "EmailDetail",
     "EmailSummary",
     "EmbeddingResult",
+    "ErrorIssue",
     "FeedResult",
     "FeedUploadResult",
     "FeedValidationError",
@@ -173,15 +177,21 @@ __all__ = [
     "InboundMessage",
     "InboxAction",
     "InboxActionType",
+    "Issue",
+    "IssueComment",
+    "IssueDraft",
     "LLMChunk",
     "LLMResponse",
     "Mailbox",
+    "MergeRequest",
     "MessageAttachment",
     "MessageChannel",
     "MessageContact",
     "MessageLocation",
     "ModelInfo",
     "ModelPricing",
+    "MonitoredProject",
+    "MonitoredProjectStats",
     "NetworkClient",
     "NetworkDeviceInfo",
     "NetworkSegment",
@@ -197,6 +207,7 @@ __all__ = [
     "PaymentResult",
     "PaymentStatus",
     "PaymentType",
+    "Pipeline",
     "Product",
     "ProductAttribute",
     "ProductCategory",
@@ -208,6 +219,7 @@ __all__ = [
     "PublishStatus",
     "Refund",
     "RelatedProductLink",
+    "Repository",
     "ReturnKind",
     "ReturnReason",
     "SavedPaymentMethod",

@@ -1,0 +1,31 @@
+{
+  "object_kind": "push",
+  "event_name": "push",
+  "before": "830ced667047fbfa76b4c77e7bd0b760c5089599",
+  "after": "4d4de956331efdbcc1770bc47e8b1710af46e59a",
+  "ref": "refs/heads/master",
+  "checkout_sha": "4d4de956331efdbcc1770bc47e8b1710af46e59a",
+  "user_id": 3,
+  "user_name": "Example User",
+  "user_username": "exampleuser",
+  "user_email": "user@example.com",
+  "project_id": 382,
+  "project": {
+    "id": 382,
+    "name": "aio-backend",
+    "web_url": "https://gitlab.example.net/bapp-cloud/application/aio-backend",
+    "path_with_namespace": "bapp-cloud/application/aio-backend",
+    "default_branch": "master"
+  },
+  "commits": [
+    {
+      "id": "4d4de956331efdbcc1770bc47e8b1710af46e59a",
+      "message": "fix: example change 1\n",
+      "title": "fix: example change 1",
+      "timestamp": "2026-10-23T09:40:37+03:00",
+      "url": "https://gitlab.example.net/bapp-cloud/application/aio-backend/-/commit/4d4de956331efdbcc1770bc47e8b1710af46e59a",
+      "author": {"name": "Example User", "email": "user@example.com"}
+    }
+  ],
+  "total_commits_count": 1
+}

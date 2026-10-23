@@ -1,0 +1,16 @@
+{
+  "id": 3,
+  "username": "exampleuser",
+  "name": "Example User",
+  "state": "active",
+  "locked": false,
+  "avatar_url": null,
+  "web_url": "https://gitlab.example.net/exampleuser",
+  "created_at": "2015-11-02T13:40:29.072Z",
+  "bio": "",
+  "bot": false,
+  "public_email": "user@example.com",
+  "email": "user@example.com",
+  "commit_email": "user@example.com",
+  "last_activity_on": "2026-10-23"
+}
