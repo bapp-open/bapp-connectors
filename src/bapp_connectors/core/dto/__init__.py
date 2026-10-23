@@ -35,6 +35,7 @@ from .base import (
     PaginatedResult,
     ProviderMeta,
 )
+from .devops import Commit, Issue, IssueComment, IssueDraft, MergeRequest, Pipeline, Repository
 from .dns import DnsRecord, DnsZone, DnsZoneSnapshot
 from .email import (
     EmailAddress,
@@ -139,6 +140,7 @@ __all__ = [
     "ChatMessage",
     "ChatRole",
     "CheckoutSession",
+    "Commit",
     "ConnectionTestResult",
     "Contact",
     "CustomerPricing",
@@ -173,9 +175,13 @@ __all__ = [
     "InboundMessage",
     "InboxAction",
     "InboxActionType",
+    "Issue",
+    "IssueComment",
+    "IssueDraft",
     "LLMChunk",
     "LLMResponse",
     "Mailbox",
+    "MergeRequest",
     "MessageAttachment",
     "MessageChannel",
     "MessageContact",
@@ -197,6 +203,7 @@ __all__ = [
     "PaymentResult",
     "PaymentStatus",
     "PaymentType",
+    "Pipeline",
     "Product",
     "ProductAttribute",
     "ProductCategory",
@@ -208,6 +215,7 @@ __all__ = [
     "PublishStatus",
     "Refund",
     "RelatedProductLink",
+    "Repository",
     "ReturnKind",
     "ReturnReason",
     "SavedPaymentMethod",

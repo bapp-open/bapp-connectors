@@ -4,6 +4,7 @@ from .ads import AdsPort
 from .appstore import AppStorePort
 from .base import BasePort
 from .courier import CourierPort
+from .devops import DevOpsPort
 from .dns import DnsPort
 from .email import EmailPort
 from .erp import ErpPort
@@ -22,6 +23,7 @@ __all__ = [
     "AppStorePort",
     "BasePort",
     "CourierPort",
+    "DevOpsPort",
     "DnsPort",
     "EmailPort",
     "ErpPort",
