@@ -18,6 +18,7 @@ Step-by-step connection guides, by provider family:
 | ads | LinkedIn Ads | [ads/linkedin.md](ads/linkedin.md) |
 | ads | Pinterest Ads | [ads/pinterest.md](ads/pinterest.md) |
 | devops | GitLab | [gitlab.md](gitlab.md) |
+| monitoring | Sentry | [sentry.md](sentry.md) |
 
 Note: Instagram *advertising* runs through `ads/facebook` (Meta placements),
 and YouTube *advertising* through `ads/google` (VIDEO campaigns) — no separate
