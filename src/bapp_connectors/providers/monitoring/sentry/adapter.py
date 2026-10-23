@@ -162,15 +162,19 @@ class SentryAdapter(MonitoringPort, IssueTriageCapability, WebhookCapability):
     def verify_webhook(self, headers: dict, body: bytes, secret: str = "") -> bool:
         """Hex HMAC-SHA256 of the raw body with the integration's client secret, in `Sentry-Hook-Signature`.
 
-        False (never an exception) when no secret is configured or the header is missing.
+        False (never an exception) when no secret is configured or the header is missing or malformed.
         """
         expected_secret = secret or self.webhook_secret
         signature = next(
             (str(v or "") for k, v in (headers or {}).items() if str(k).lower() == WEBHOOK_SIGNATURE_HEADER), ""
         )
-        if not expected_secret or not signature:
+        # The header is attacker-controlled: `hmac.compare_digest` raises TypeError on non-ASCII str.
+        if not expected_secret or not signature or not signature.isascii():
             return False
-        return HmacSha256Verifier().verify(body or b"", signature, expected_secret)
+        try:
+            return HmacSha256Verifier().verify(body or b"", signature, expected_secret)
+        except (TypeError, ValueError):
+            return False
 
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
         return webhook_event_from_sentry(headers, json.loads(body or b"{}"))

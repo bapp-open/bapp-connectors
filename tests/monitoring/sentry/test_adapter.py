@@ -218,6 +218,12 @@ def test_verify_webhook_without_secret_is_false(adapter):
     assert adapter.verify_webhook({"Sentry-Hook-Signature": signature}, body) is False
 
 
+@pytest.mark.parametrize("signature", ["\u00e9" * 64, "t=1616346610,v1=" + "\u00e9" * 64, "t=\u00e9,v1=abc"])
+def test_verify_webhook_non_ascii_signature_is_false(http, signature):
+    adapter = SentryAdapter(credentials={**CREDENTIALS, "webhook_secret": "sec"}, http_client=http)
+    assert adapter.verify_webhook({"Sentry-Hook-Signature": signature}, b"{}") is False
+
+
 def test_parse_webhook(adapter):
     body = json.dumps(load("hook_issue_created")).encode()
     event = adapter.parse_webhook({"Sentry-Hook-Resource": "issue", "Request-ID": "r-1"}, body)
