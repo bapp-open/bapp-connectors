@@ -15,6 +15,7 @@ from bapp_connectors.core.http.retry import RetryPolicy
 from bapp_connectors.core.ports import MonitoringPort
 from bapp_connectors.core.webhooks.signatures import HmacSha256Verifier
 from bapp_connectors.providers.monitoring.sentry.client import SentryClient
+from bapp_connectors.providers.monitoring.sentry.errors import SentryError
 from bapp_connectors.providers.monitoring.sentry.manifest import manifest
 from bapp_connectors.providers.monitoring.sentry.mappers import (
     map_issue,
@@ -140,6 +141,9 @@ class SentryAdapter(MonitoringPort, IssueTriageCapability, WebhookCapability):
     def get_project_stats(self, ref: str, period: str = "24h") -> MonitoredProjectStats:
         """Error outcomes of project `ref`; stats_v2 wants the numeric id, so the slug is resolved first."""
         project_id = (self.client.get_project(ref) or {}).get("id")
+        if project_id in (None, ""):
+            # Without `project`, stats_v2 would silently answer for the whole organization.
+            raise SentryError(f"Sentry project {ref!r} has no numeric id; refusing an organization-wide stats query")
         return map_stats(self.client.project_stats(project_id, period), ref, period)
 
     # ── IssueTriageCapability ──

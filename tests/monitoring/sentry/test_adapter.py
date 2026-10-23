@@ -245,3 +245,13 @@ def test_registry():
     assert registry.is_registered("monitoring", "sentry")
     assert any(m.name == "sentry" for m in registry.list_providers(capability=IssueTriageCapability))
     assert any(m.name == "sentry" for m in registry.list_providers(capability=WebhookCapability))
+
+
+def test_get_project_stats_without_project_id_never_queries_the_whole_org(http):
+    from bapp_connectors.providers.monitoring.sentry.errors import SentryError
+
+    http.responses.insert(0, ("GET", "/projects/example-org/ghost/", fake_response({"slug": "ghost"})))
+    adapter = SentryAdapter(credentials=CREDENTIALS, http_client=http)
+    with pytest.raises(SentryError, match="ghost"):
+        adapter.get_project_stats("ghost")
+    assert not any("stats_v2" in c.path for c in http.calls)

@@ -66,8 +66,10 @@ manifest = ProviderManifest(
             SettingsField(
                 name="stats_period",
                 label="Stats period",
-                field_type=FieldType.STR,
+                field_type=FieldType.SELECT,
+                choices=["24h", "14d"],
                 default="14d",
+                help_text="Issue stats window; Sentry's issues endpoint accepts only '' (none), '24h' and '14d'",
                 colspan=12,
             ),
             SettingsField(

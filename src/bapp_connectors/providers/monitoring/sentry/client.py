@@ -114,12 +114,12 @@ class SentryClient:
             # An HTTPError raised by the transport still carries the status: map it like any other.
             failed = getattr(exc, "response", None)
             if failed is not None and getattr(failed, "status_code", None):
-                raise_for_status(failed.status_code, getattr(failed, "text", ""), url)
+                raise_for_status(failed.status_code, getattr(failed, "text", ""), url, getattr(failed, "headers", None))
             # ResilientHttpClient re-raises transport failures unwrapped (DNS, refused
             # connection, TLS, timeout); left raw they escape the framework's hierarchy.
             raise SentryUnreachableError(f"Could not reach {self.host}: {exc}") from exc
 
-        raise_for_status(response.status_code, getattr(response, "text", ""), url)
+        raise_for_status(response.status_code, getattr(response, "text", ""), url, response.headers)
         # Kept as-is: on a real response it is a case-insensitive mapping.
         headers = response.headers if response.headers is not None else {}
         if response.status_code == 204 or not getattr(response, "text", ""):

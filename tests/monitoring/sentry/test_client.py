@@ -224,3 +224,43 @@ def test_internal_error_body_is_retried():
     items, nxt = make(http).list_issues("aio", "is:unresolved", "14d", "date", "", None)
     assert items == [{"id": "9"}] and nxt is None
     assert len(http.calls) == 2
+
+
+# ── final-review fix wave ──
+
+
+def test_429_carries_retry_after_seconds():
+    http = FakeHttpClient()
+    http.add("GET", "/issues/", fake_response({"detail": "slow down"}, {"Retry-After": "7"}, status=429))
+    with pytest.raises(RateLimitError) as info:
+        make(http).get_issue("1")
+    assert info.value.retry_after == 7
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        None,
+        {"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+        {"Retry-After": "x"},
+        {"Retry-After": "-5"},
+        {"Retry-After": "²"},
+    ],
+)
+def test_429_without_usable_retry_after_has_none(headers):
+    http = FakeHttpClient()
+    http.add("GET", "/issues/", fake_response({"detail": "slow down"}, headers, status=429))
+    with pytest.raises(RateLimitError) as info:
+        make(http).get_issue("1")
+    assert info.value.retry_after is None
+
+
+def test_raise_for_status_keeps_positional_signature():
+    from bapp_connectors.providers.monitoring.sentry.errors import raise_for_status
+
+    with pytest.raises(RateLimitError) as info:
+        raise_for_status(429, "", "u")
+    assert info.value.retry_after is None
+    with pytest.raises(RateLimitError) as info:
+        raise_for_status(429, "", "u", {"retry-after": "3"})
+    assert info.value.retry_after == 3

@@ -30,3 +30,12 @@ def test_manifest_capabilities_and_events():
         "error_issue.assigned",
     ]
     assert (manifest.rate_limit.requests_per_second, manifest.rate_limit.burst) == (5, 10)
+
+
+def test_stats_period_is_a_select_of_the_values_the_issues_endpoint_accepts():
+    from bapp_connectors.core.types import FieldType
+
+    field = next(f for f in manifest.settings.fields if f.name == "stats_period")
+    assert field.field_type == FieldType.SELECT
+    assert field.choices == ["24h", "14d"] and field.default == "14d"
+    assert "24h" in field.help_text and "14d" in field.help_text
