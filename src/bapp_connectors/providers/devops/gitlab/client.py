@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 import requests
 
+from bapp_connectors.core.http.retry import execute_with_retry
 from bapp_connectors.providers.devops.gitlab.errors import GitLabError, GitLabUnreachableError, raise_for_status
 
 if TYPE_CHECKING:
@@ -70,20 +71,37 @@ class GitLabClient:
         path: str,
         params: dict | None = None,
         json: dict | None = None,
+        retry: bool = True,
     ) -> tuple[Any, Mapping[str, str]]:
-        """Send one request; return `(parsed_json, response_headers)` or raise a mapped error."""
+        """Send one request; return `(parsed_json, response_headers)` or raise a mapped error.
+
+        The HTTP client's retry policy wraps the call AND the status check: with
+        `direct_response=True` the HTTP client returns a 429/5xx instead of raising, so its
+        own retry loop would never see it. The inner call therefore runs with `retry=False`
+        and the mapped error (RateLimitError, GitLabError, GitLabUnreachableError — all
+        retryable) is raised inside the retried callable.
+
+        Pass `retry=False` for non-idempotent writes (creates): a timeout after GitLab
+        processed the request must not replay it.
+        """
         url = f"{self.base_url()}{path.lstrip('/')}"
         kwargs: dict[str, Any] = {"timeout": self.timeout, "verify": self.verify_ssl}
         if params:
             kwargs["params"] = {k: v for k, v in params.items() if v is not None}
         if json is not None:
             kwargs["json"] = json
+        policy = getattr(self.http, "retry_policy", None) if retry else None
+        return execute_with_retry(lambda: self._send(method.upper(), url, kwargs), retry_policy=policy)
+
+    def _send(self, method: str, url: str, kwargs: dict[str, Any]) -> tuple[Any, Mapping[str, str]]:
+        """One attempt: no retry here, the caller's policy decides."""
         try:
             response = self.http.call(
-                method.upper(),
+                method,
                 url,
                 direct_response=True,
                 headers={"PRIVATE-TOKEN": self.token},
+                retry=False,
                 **kwargs,
             )
         except requests.RequestException as exc:
@@ -212,16 +230,18 @@ class GitLabClient:
         return self.paged(f"projects/{encode_ref(ref)}/pipelines", params)
 
     def create_issue(self, ref: int | str, data: dict) -> dict:
-        return self.request("POST", f"projects/{encode_ref(ref)}/issues", json=data)[0]
+        return self.request("POST", f"projects/{encode_ref(ref)}/issues", json=data, retry=False)[0]
 
     def update_issue(self, ref: int | str, iid: int | str, data: dict) -> dict:
         return self.request("PUT", f"projects/{encode_ref(ref)}/issues/{iid}", json=data)[0]
 
     def create_issue_note(self, ref: int | str, iid: int | str, body: str) -> dict:
-        return self.request("POST", f"projects/{encode_ref(ref)}/issues/{iid}/notes", json={"body": body})[0]
+        return self.request("POST", f"projects/{encode_ref(ref)}/issues/{iid}/notes", json={"body": body}, retry=False)[
+            0
+        ]
 
     def create_hook(self, ref: int | str, data: dict) -> dict:
-        return self.request("POST", f"projects/{encode_ref(ref)}/hooks", json=data)[0]
+        return self.request("POST", f"projects/{encode_ref(ref)}/hooks", json=data, retry=False)[0]
 
     def list_hooks(self, ref: int | str) -> list[dict]:
         return list(self.request("GET", f"projects/{encode_ref(ref)}/hooks", params={"per_page": PER_PAGE})[0] or [])

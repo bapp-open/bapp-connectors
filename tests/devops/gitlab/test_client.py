@@ -136,3 +136,66 @@ def test_http_error_raised_by_transport_still_maps_status():
     http.add("GET", "/user", boom)
     with pytest.raises(AuthenticationError):
         make(http).get_user()
+
+
+def _retrying_http():
+    from bapp_connectors.core.http.retry import RetryPolicy
+    from bapp_connectors.core.types import BackoffStrategy
+
+    http = FakeHttpClient()
+    http.retry_policy = RetryPolicy(max_retries=3, backoff=BackoffStrategy.NONE)
+    return http
+
+
+def _sequence(*responses):
+    queue = list(responses)
+
+    def respond(method, path, kwargs):
+        item = queue.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    return respond
+
+
+def test_502_then_200_is_retried_by_the_policy():
+    http = _retrying_http()
+    http.add("GET", "/version", _sequence(fake_response({"m": "bad"}, status=502), fake_response({"version": "17"})))
+    assert make(http).get_version() == {"version": "17"}
+    assert len(http.calls) == 2
+    assert all(c.kwargs["retry"] is False for c in http.calls)  # the HTTP client never retries on its own
+
+
+def test_429_is_retried():
+    http = _retrying_http()
+    http.add("GET", "/user", _sequence(fake_response({}, status=429), fake_response({"id": 1})))
+    assert make(http).get_user() == {"id": 1}
+    assert len(http.calls) == 2
+
+
+def test_401_is_not_retried():
+    http = _retrying_http()
+    http.add("GET", "/user", fake_response({"message": "401"}, status=401))
+    with pytest.raises(AuthenticationError):
+        make(http).get_user()
+    assert len(http.calls) == 1
+
+
+def test_create_issue_is_not_replayed_after_a_timeout():
+    http = _retrying_http()
+    http.add("POST", "/issues", _sequence(requests.ReadTimeout("slow"), fake_response({"iid": 1}, status=201)))
+    with pytest.raises(GitLabUnreachableError):
+        make(http).create_issue("g/p", {"title": "x"})
+    assert len(http.calls) == 1
+    assert http.calls[0].kwargs["retry"] is False
+
+
+@pytest.mark.parametrize("call", ["note", "hook"])
+def test_other_creates_are_not_replayed(call):
+    http = _retrying_http()
+    http.add("POST", "/", fake_response({"m": "bad"}, status=502))
+    client = make(http)
+    with pytest.raises(GitLabError):
+        client.create_issue_note("g/p", 1, "hi") if call == "note" else client.create_hook("g/p", {"url": "u"})
+    assert len(http.calls) == 1
