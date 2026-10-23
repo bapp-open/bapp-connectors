@@ -574,7 +574,7 @@ The registry will **reject registration** if you declare a capability but don't 
 
 ## Creating a New Provider Family
 
-If the existing families (shop, courier, payment, messaging, storage, llm) don't fit, you can create a new one.
+If the existing families (shop, courier, payment, messaging, storage, llm, devops, monitoring) don't fit, you can create a new one.
 
 ### Step 1: Add the family to the enum
 

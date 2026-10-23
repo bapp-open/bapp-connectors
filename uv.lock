@@ -44,7 +44,7 @@ wheels = [
 
 [[package]]
 name = "bapp-connectors"
-version = "0.41.8"
+version = "0.43.0"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
@@ -654,7 +654,7 @@ wheels = [
 
 [[package]]
 name = "django-bapp-connectors"
-version = "0.26.0"
+version = "0.26.2"
 source = { editable = "packages/django" }
 dependencies = [
     { name = "bapp-connectors" },
