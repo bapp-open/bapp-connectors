@@ -59,6 +59,8 @@ class GitLabClient:
         self.token = token
         self.timeout = timeout
         self.verify_ssl = verify_ssl
+        self.last_total: int | None = None
+        """`X-Total` of the last `paged` call; None when GitLab omitted it (it does above 10k rows)."""
 
     # ── transport ──
 
@@ -128,6 +130,8 @@ class GitLabClient:
         query = {"per_page": PER_PAGE, **(params or {})}
         data, headers = self.request("GET", path, params=query)
         next_page = (headers.get("X-Next-Page") or headers.get("x-next-page") or "").strip()
+        total = str(headers.get("X-Total") or headers.get("x-total") or "").strip()
+        self.last_total = int(total) if total.isdigit() else None
         return list(data or []), next_page or None
 
     # ── endpoints ──

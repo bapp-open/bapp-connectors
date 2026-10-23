@@ -199,3 +199,14 @@ def test_other_creates_are_not_replayed(call):
     with pytest.raises(GitLabError):
         client.create_issue_note("g/p", 1, "hi") if call == "note" else client.create_hook("g/p", {"url": "u"})
     assert len(http.calls) == 1
+
+
+def test_paged_records_total():
+    http = FakeHttpClient()
+    http.add("GET", "/projects", fake_response([], {"X-Next-Page": "", "X-Total": "150"}))
+    client = make(http)
+    client.paged("projects", {})
+    assert client.last_total == 150
+    http.responses[0] = ("GET", "/projects", fake_response([], {"X-Next-Page": ""}))
+    client.paged("projects", {})
+    assert client.last_total is None
