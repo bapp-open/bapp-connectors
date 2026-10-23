@@ -44,3 +44,33 @@ def pipelines_raw():
 @pytest.fixture
 def user_raw():
     return load("user")
+
+
+@pytest.fixture
+def project_raw():
+    return load("project")
+
+
+@pytest.fixture
+def hook_push():
+    return load("hook_push")
+
+
+@pytest.fixture
+def hook_issue():
+    return load("hook_issue")
+
+
+@pytest.fixture
+def hook_merge_request():
+    return load("hook_merge_request")
+
+
+@pytest.fixture
+def hook_pipeline():
+    return load("hook_pipeline")
+
+
+@pytest.fixture
+def hook_note():
+    return load("hook_note")
