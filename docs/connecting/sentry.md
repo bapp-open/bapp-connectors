@@ -23,11 +23,12 @@ Merge si un **User Auth Token** personal (User Settings > Auth Tokens) cu scope-
 | `host` | Doar hostname-ul, fara `https://` si fara cale: `sentry.io` pentru serviciul gazduit sau `sentry.example.net` pentru o instanta self-hosted |
 | `organization` | Slug-ul organizatiei, cel din URL (`https://sentry.example.net/organizations/example-org/`): `example-org` |
 | `token` | Token-ul de mai sus |
-| `webhook_secret` | Optional. *Client Secret*-ul integrarii. Obligatoriu pentru webhook-uri: orice livrare nesemnata sau semnata cu alt secret e respinsa |
+| `webhook_secret` | Optional. *Client Secret*-ul integrarii. Cu el, orice livrare nesemnata sau semnata cu alt secret e respinsa; fara webhook_secret, livrarile NU sunt verificate — seteaza-l intotdeauna cand folosesti webhook-uri |
 
 ## Setari
-- `stats_period`: fereastra pe care aplicatia o foloseste cand listeaza issue-urile nerezolvate (implicit `14d`;
-  exemple: `24h`, `7d`, `14d`).
+- `stats_period`: fereastra pe care aplicatia o foloseste cand listeaza issue-urile nerezolvate: `24h` sau `14d`
+  (implicit `14d`). Endpoint-ul de issue-uri al Sentry accepta doar `''` (fara fereastra), `24h` si `14d`; alte valori
+  (`7d`, `30d`) dau eroarea 400 "Invalid stats_period".
 - `environment`: optional, filtreaza issue-urile pe un singur mediu (de ex. `production`). Gol = toate mediile.
 - `verify_ssl`: verifica certificatul TLS (implicit da; dezactiveaza doar pentru instante interne cu certificat propriu).
 - `timeout`: secunde per cerere (implicit 30).
@@ -35,11 +36,11 @@ Merge si un **User Auth Token** personal (User Settings > Auth Tokens) cu scope-
 ## Webhook
 1. Pe internal integration-ul de mai sus: **Webhook URL** = cel din popover-ul conexiunii in aplicatie.
 2. La *Webhooks*, activeaza resursa **issue** (creat, rezolvat, asignat, ignorat).
-3. Pune *Client Secret*-ul integrarii in `webhook_secret` al conexiunii. Fara el, toate livrarile sunt respinse.
+3. Pune *Client Secret*-ul integrarii in `webhook_secret` al conexiunii. Fara webhook_secret, livrarile NU sunt verificate — seteaza-l intotdeauna cand folosesti webhook-uri.
 
 Webhook-urile Sentry se configureaza doar pe integrare; conectorul nu le poate inregistra singur prin API.
 
 ## Limite
 Sentry aplica limite pe organizatie si pe token. Conectorul isi limiteaza singur ritmul la 5 cereri pe secunda si
-reincearca automat cu backoff la 429, la erorile 5xx si la raspunsul sporadic `{"detail": "Internal Error"}` pe care
+reincearca automat cu backoff la 429 (respectand `Retry-After`), la erorile 5xx si la raspunsul sporadic `{"detail": "Internal Error"}` pe care
 unele instante il dau la cereri valide.

@@ -20,7 +20,7 @@ Merge si un **personal access token** (User Settings > Access tokens) sau un **p
 |------|--------|
 | `host` | Doar hostname-ul, fara `https://` si fara cale: `gitlab.com` sau `git.example.net` |
 | `token` | Token-ul de mai sus |
-| `webhook_secret` | Optional. *Secret token*-ul pus pe webhook-ul GitLab (vezi mai jos) |
+| `webhook_secret` | Optional pentru API, **obligatoriu pentru webhook-uri**: *Secret token*-ul pus pe webhook-ul GitLab (vezi mai jos). Fara el, orice livrare e respinsa |
 
 ## Setari
 - `groups`: grupurile indexate, separate prin virgula, cu calea completa (subgrupurile merg: `platform,platform/tools`).
@@ -32,14 +32,15 @@ Merge si un **personal access token** (User Settings > Access tokens) sau un **p
 ## Webhook
 1. Proiectul > Settings > **Webhooks** > Add new webhook.
 2. URL: cel din popover-ul conexiunii in aplicatie.
-3. *Secret token*: acelasi sir ca in `webhook_secret` al conexiunii. Daca difera, evenimentele sunt respinse.
+3. *Secret token*: acelasi sir ca in `webhook_secret` al conexiunii (obligatoriu). Daca lipseste sau difera, evenimentele sunt respinse.
 4. Evenimente: **Push**, **Issues**, **Merge requests**, **Pipelines**, **Comments**.
 5. Lasa "Enable SSL verification" bifat.
 
 Cu un token de rol Maintainer, conectorul poate inregistra webhook-ul singur (`register_webhook`, per proiect), cu
-aceleasi evenimente si cu secretul din conexiune.
+aceleasi evenimente si cu secretul din conexiune. Refuza fara `webhook_secret`, iar daca proiectul are deja un webhook
+cu acelasi URL nu creeaza altul: il intoarce pe cel existent.
 
 ## Limite
 Instantele self-managed au implicit limite generoase (configurabile de admin in Admin > Settings > Network);
 gitlab.com aplica limitele lui pe utilizator. Conectorul isi limiteaza singur ritmul la 10 cereri pe secunda si
-reincearca automat cu backoff la 429 si la erorile temporare.
+reincearca automat cu backoff la 429 (respectand `Retry-After`) si la erorile temporare.
