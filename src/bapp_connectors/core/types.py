@@ -25,6 +25,8 @@ class ProviderFamily(StrEnum):
     DNS = "dns"
     APPSTORE = "appstore"
     ERP = "erp"
+    DEVOPS = "devops"
+    MONITORING = "monitoring"
 
 
 class BackoffStrategy(StrEnum):
