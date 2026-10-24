@@ -74,7 +74,7 @@ from .message import (
     MessageLocation,
     OutboundMessage,
 )
-from .monitoring import ErrorIssue, MonitoredProject, MonitoredProjectStats
+from .monitoring import ErrorIssue, MonitoredProject, MonitoredProjectStats, MonitoringTeam, ProjectKey
 from .network import DetectedDnsAllowlist, DnsAllowlist, NetworkClient, NetworkDeviceInfo, NetworkSegment
 from .order import Order, OrderItem, OrderStatus, PaymentStatus, PaymentType
 from .partner import Address, Contact
@@ -192,6 +192,7 @@ __all__ = [
     "ModelPricing",
     "MonitoredProject",
     "MonitoredProjectStats",
+    "MonitoringTeam",
     "NetworkClient",
     "NetworkDeviceInfo",
     "NetworkSegment",
@@ -214,6 +215,7 @@ __all__ = [
     "ProductPhoto",
     "ProductUpdate",
     "ProductVariant",
+    "ProjectKey",
     "ProviderMeta",
     "PublishResult",
     "PublishStatus",

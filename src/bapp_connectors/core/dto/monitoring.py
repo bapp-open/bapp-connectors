@@ -57,3 +57,25 @@ class MonitoredProjectStats(BaseDTO):
     events: int = 0
     errors_received: int = 0
     errors_rejected: int = 0
+
+
+class MonitoringTeam(BaseDTO):
+    """A team on the error-tracking provider; teams own projects."""
+
+    ref: str
+    """Provider-side identifier passed as `team` to `create_project` (e.g. the team slug)."""
+    slug: str
+    name: str
+
+
+class ProjectKey(BaseDTO):
+    """A client key (DSN) of a monitored project."""
+
+    id: str
+    label: str = ""
+    dsn_public: str = ""
+    """DSN the SDKs are configured with."""
+    dsn_secret: str = ""
+    """Legacy DSN including the secret key; empty when the provider does not return it."""
+    is_active: bool = True
+    extra: dict = {}
