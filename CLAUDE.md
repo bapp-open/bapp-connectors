@@ -26,7 +26,7 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 | appstore | `AppStorePort` (sales, refunds, reviews, stats) | Apple App Store, Google Play, Steam |
 | erp | `ErpPort` (capabilities, print a file, send SMS; also `MessagingPort`) | BAPP |
 | devops | `DevOpsPort` (+ `IssueManagementCapability`) | GitLab |
-| monitoring | `MonitoringPort` (+ `IssueTriageCapability`) | Sentry |
+| monitoring | `MonitoringPort` (+ `IssueTriageCapability`, `ProjectProvisioningCapability`) | Sentry |
 
 ### Provider File Structure (7 files each)
 
@@ -59,7 +59,7 @@ providers/{family}/{provider}/
 
 ### Optional Capabilities
 
-EmbeddingCapability, TranscriptionCapability, StreamingCapability, ImageGenerationCapability, BulkUpdateCapability, BulkImportCapability, WebhookCapability, OAuthCapability, InvoiceAttachmentCapability, ProductFeedCapability, FeedUploadCapability, CreativeUploadCapability (ads: media upload + creative creation), SocialPublishCapability (social: post publishing with async status polling), DnsAllowlistCapability (network: per-segment DNS allowlist, e.g. an Unbound view on pfSense), IssueManagementCapability (devops: create/update/close/reopen/comment issues), IssueTriageCapability (monitoring: resolve/unresolve/ignore/assign issues)
+EmbeddingCapability, TranscriptionCapability, StreamingCapability, ImageGenerationCapability, BulkUpdateCapability, BulkImportCapability, WebhookCapability, OAuthCapability, InvoiceAttachmentCapability, ProductFeedCapability, FeedUploadCapability, CreativeUploadCapability (ads: media upload + creative creation), SocialPublishCapability (social: post publishing with async status polling), DnsAllowlistCapability (network: per-segment DNS allowlist, e.g. an Unbound view on pfSense), IssueManagementCapability (devops: create/update/close/reopen/comment issues), IssueTriageCapability (monitoring: resolve/unresolve/ignore/assign issues), ProjectProvisioningCapability (monitoring: list teams, create projects, list client keys / DSN)
 
 ## Testing
 
