@@ -1,7 +1,13 @@
 import pytest
 import requests
 
-from bapp_connectors.core.errors import AuthenticationError, ProviderError, RateLimitError
+from bapp_connectors.core.errors import (
+    AuthenticationError,
+    PermanentProviderError,
+    ProviderError,
+    RateLimitError,
+    ValidationError,
+)
 from bapp_connectors.providers.monitoring.sentry.client import SentryClient, parse_next_cursor
 from bapp_connectors.providers.monitoring.sentry.errors import (
     SentryError,
@@ -264,3 +270,82 @@ def test_raise_for_status_keeps_positional_signature():
     with pytest.raises(RateLimitError) as info:
         raise_for_status(429, "", "u", {"retry-after": "3"})
     assert info.value.retry_after == 3
+
+
+# ── provisioning ──
+
+
+def test_list_teams_follows_every_page():
+    http = FakeHttpClient()
+    pages = [
+        fake_response([{"slug": "a"}], {"Link": LINK_MORE}),
+        fake_response([{"slug": "b"}], {"Link": LINK_END}),
+    ]
+    http.add("GET", "/teams/", lambda method, path, kwargs: pages.pop(0))
+    assert make(http).list_teams() == [{"slug": "a"}, {"slug": "b"}]
+    assert [c.path for c in http.calls] == ["https://sentry.example.net/api/0/organizations/example-org/teams/"] * 2
+    assert "cursor" not in http.calls[0].kwargs["params"]
+    assert http.calls[1].kwargs["params"] == {"cursor": "1:100:0"}
+
+
+def test_list_keys_path_and_empty():
+    http = FakeHttpClient()
+    http.add("GET", "/keys/", fake_response([]))
+    assert make(http).list_keys("aio") == []
+    assert http.calls[0].path == "https://sentry.example.net/api/0/projects/example-org/aio/keys/"
+
+
+def test_create_project_posts_once_even_with_a_retry_policy():
+    http = _retrying_http()
+    http.add("POST", "/projects/", fake_response({"detail": "bad gateway"}, status=502))
+    with pytest.raises(SentryError):
+        make(http).create_project("example-team", {"name": "New", "slug": "new"})
+    assert len(http.calls) == 1
+    call = http.calls[0]
+    assert call.method == "POST"
+    assert call.path == "https://sentry.example.net/api/0/teams/example-org/example-team/projects/"
+    assert call.kwargs["json"] == {"name": "New", "slug": "new"}
+
+
+def test_create_project_conflict_names_the_slug():
+    http = FakeHttpClient()
+    http.add("POST", "/projects/", fake_response({"detail": "A project with this slug already exists."}, status=409))
+    with pytest.raises(ValidationError, match="Sentry project slug already exists: new") as info:
+        make(http).create_project("example-team", {"name": "New", "slug": "new"})
+    assert not isinstance(info.value, ProviderError) and info.value.retryable is False
+
+
+def test_create_project_conflict_without_slug_names_the_derived_slug_source():
+    http = FakeHttpClient()
+    http.add("POST", "/projects/", fake_response({"detail": "exists"}, status=409))
+    with pytest.raises(ValidationError) as info:
+        make(http).create_project("example-team", {"name": "New Service"})
+    assert str(info.value) == (
+        "A Sentry project with a slug derived from name 'New Service' already exists; pass an explicit slug."
+    )
+    assert info.value.status_code == 409
+
+
+def test_create_project_forbidden_is_permanent_not_auth():
+    http = FakeHttpClient()
+    http.add("POST", "/projects/", fake_response({"detail": "You do not have permission"}, status=403))
+    with pytest.raises(SentryNotFoundError) as info:
+        make(http).create_project("example-team", {"name": "New"})
+    assert isinstance(info.value, PermanentProviderError) and not isinstance(info.value, AuthenticationError)
+
+
+@pytest.mark.parametrize(("status", "exc"), [(400, PermanentProviderError), (422, PermanentProviderError)])
+def test_other_4xx_stay_permanent(status, exc):
+    http = FakeHttpClient()
+    http.add("POST", "/projects/", fake_response({"detail": "bad"}, status=status))
+    with pytest.raises(exc) as info:
+        make(http).create_project("example-team", {"name": "New"})
+    assert not isinstance(info.value, ValidationError)
+
+
+def test_raise_for_status_409_is_validation_error():
+    from bapp_connectors.providers.monitoring.sentry.errors import raise_for_status
+
+    with pytest.raises(ValidationError) as info:
+        raise_for_status(409, "dup", "u")
+    assert info.value.status_code == 409 and info.value.retryable is False

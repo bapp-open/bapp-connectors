@@ -1,14 +1,22 @@
 """Live Sentry tests. Read-only unless SENTRY_ALLOW_WRITES=1.
 
 SENTRY_PROJECT (a project slug, default `aio-backend`) picks the project used for the
-per-project reads and the write test.
+per-project reads and the write tests. SENTRY_TEAM (a team slug) picks the team that owns the
+project created by `test_create_project`; default: the first team listed.
 """
 
 import os
+import time
 
 import pytest
 
-from bapp_connectors.core.dto import ErrorIssue, MonitoredProject, MonitoredProjectStats
+from bapp_connectors.core.dto import (
+    ErrorIssue,
+    MonitoredProject,
+    MonitoredProjectStats,
+    MonitoringTeam,
+    ProjectKey,
+)
 from bapp_connectors.providers.monitoring.sentry import SentryAdapter
 
 CREDENTIALS = {
@@ -24,7 +32,7 @@ skip_unless_sentry = pytest.mark.skipif(
 )
 skip_unless_writes = pytest.mark.skipif(
     os.getenv("SENTRY_ALLOW_WRITES") != "1",
-    reason="set SENTRY_ALLOW_WRITES=1 to run write tests (resolves and unresolves an issue)",
+    reason="set SENTRY_ALLOW_WRITES=1 to run write tests (resolves and unresolves an issue, creates a project)",
 )
 
 pytestmark = [pytest.mark.integration, skip_unless_sentry]
@@ -75,6 +83,23 @@ def test_get_project_stats(adapter):
     assert stats.errors_received >= 0
 
 
+def test_list_teams(adapter):
+    teams = adapter.list_teams()
+    assert len(teams) >= 1
+    for team in teams:
+        assert isinstance(team, MonitoringTeam)
+        assert team.ref == team.slug
+
+
+def test_list_keys(adapter):
+    keys = adapter.list_keys(PROJECT)
+    assert isinstance(keys, list)
+    for key in keys:
+        assert isinstance(key, ProjectKey)
+        assert key.id
+        assert key.dsn_public.startswith("http")
+
+
 @skip_unless_writes
 def test_resolve_and_unresolve(adapter):
     issues = adapter.list_issues(PROJECT, query="is:unresolved", period="14d").items
@@ -87,3 +112,19 @@ def test_resolve_and_unresolve(adapter):
     finally:
         restored = adapter.unresolve_issue(issue_id)
     assert restored.status == "unresolved"
+
+
+@skip_unless_writes
+def test_create_project(adapter):
+    """Creates `bapp-connectors-test-<unix ts>` in SENTRY_TEAM (or the first team).
+
+    This adapter does not delete Sentry projects: remove the created project by hand
+    (Project Settings > General > Remove Project).
+    """
+    team = os.getenv("SENTRY_TEAM") or adapter.list_teams()[0].ref
+    slug = f"bapp-connectors-test-{int(time.time())}"
+    project = adapter.create_project(team, name=slug, slug=slug, platform="python")
+    assert isinstance(project, MonitoredProject)
+    assert project.ref == slug
+    assert adapter.get_project(slug).ref == slug
+    assert isinstance(adapter.list_keys(slug), list)

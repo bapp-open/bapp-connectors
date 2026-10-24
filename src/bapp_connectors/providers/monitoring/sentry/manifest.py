@@ -1,6 +1,6 @@
 """Sentry provider manifest — REST API v0 with an organization or user auth token."""
 
-from bapp_connectors.core.capabilities import IssueTriageCapability, WebhookCapability
+from bapp_connectors.core.capabilities import IssueTriageCapability, ProjectProvisioningCapability, WebhookCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -80,9 +80,17 @@ manifest = ProviderManifest(
                 help_text="Only issues seen in this environment; empty = all",
                 colspan=12,
             ),
+            SettingsField(
+                name="default_team",
+                label="Default team",
+                field_type=FieldType.STR,
+                default="",
+                help_text="Team slug that owns projects created from the host application (Settings → Teams)",
+                colspan=24,
+            ),
         ],
     ),
-    capabilities=[MonitoringPort, IssueTriageCapability, WebhookCapability],
+    capabilities=[MonitoringPort, IssueTriageCapability, WebhookCapability, ProjectProvisioningCapability],
     rate_limit=RateLimitConfig(requests_per_second=5, burst=10),
     retry=RetryConfig(
         max_retries=3,

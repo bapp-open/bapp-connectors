@@ -27,6 +27,7 @@ from .product_management import (
     RelatedProductCapability,
     VariantManagementCapability,
 )
+from .project_provisioning import ProjectProvisioningCapability
 from .returns import ReturnsCapability
 from .rich_messaging import RichMessagingCapability
 from .saved_payment import SavedPaymentCapability
@@ -68,6 +69,7 @@ __all__ = [
     "ProductFeedCapability",
     "ProductFullUpdateCapability",
     "ProductLookupCapability",
+    "ProjectProvisioningCapability",
     "RelatedProductCapability",
     "RemoteOrderStatus",
     "ReturnsCapability",

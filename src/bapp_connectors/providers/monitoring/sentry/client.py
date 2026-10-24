@@ -7,12 +7,14 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from bapp_connectors.core.errors import ValidationError
 from bapp_connectors.core.http.retry import execute_with_retry
 from bapp_connectors.providers.monitoring.sentry.errors import (
     SentryError,
     SentryUnreachableError,
     raise_for_status,
     reject_internal_error,
+    slug_conflict_error,
 )
 
 if TYPE_CHECKING:
@@ -139,6 +141,14 @@ class SentryClient:
         link = headers.get("Link") or headers.get("link") or ""
         return data, parse_next_cursor(link)
 
+    def all_pages(self, path: str, params: dict | None = None) -> list:
+        """Every item of a list endpoint, following the `Link` cursor to the last page."""
+        items, cursor = self.paged(path, params, None)
+        while cursor:
+            page, cursor = self.paged(path, params, cursor)
+            items.extend(page)
+        return items
+
     # ── endpoints ──
 
     def get_organization(self) -> dict:
@@ -184,3 +194,23 @@ class SentryClient:
             "statsPeriod": stats_period,
         }
         return self.request("GET", f"organizations/{self.organization}/stats_v2/", params=params)[0]
+
+    # ── provisioning ──
+
+    def list_teams(self) -> list[dict]:
+        return self.all_pages(f"organizations/{self.organization}/teams/")
+
+    def create_project(self, team: str, data: dict) -> dict:
+        """`POST teams/:org/:team/projects/` with `{"name", "slug"?, "platform"?}`; never retried.
+
+        A replay after a timeout would create a second project (or answer 409 for the first).
+        """
+        try:
+            return self.request("POST", f"teams/{self.organization}/{team}/projects/", json=data, retry=False)[0]
+        except ValidationError as exc:
+            if getattr(exc, "status_code", None) == 409:
+                raise slug_conflict_error(data.get("slug"), data.get("name") or "", exc) from exc
+            raise
+
+    def list_keys(self, slug: str) -> list[dict]:
+        return self.all_pages(f"projects/{self.organization}/{slug}/keys/")

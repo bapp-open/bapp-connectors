@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from bapp_connectors.core.errors import AuthenticationError, PermanentProviderError, ProviderError, RateLimitError
+from bapp_connectors.core.errors import (
+    AuthenticationError,
+    PermanentProviderError,
+    ProviderError,
+    RateLimitError,
+    ValidationError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -55,11 +61,15 @@ def raise_for_status(status_code: int, body: str, url: str, headers: Mapping[str
         raise SentryNotFoundError(f"Sentry resource forbidden or missing: {url}: {detail}", status_code=403)
     if status_code == 404:
         raise SentryNotFoundError(f"Sentry resource not found: {url}: {detail}", status_code=404)
+    if status_code == 409:
+        # 409 = conflict (e.g. a project slug already taken); `SentryClient.create_project`
+        # re-raises it naming the slug.
+        raise ValidationError(f"Sentry conflict: {url}: {detail}", status_code=409)
     if status_code == 429:
         raise RateLimitError(f"Sentry rate limit reached: {url}", retry_after=parse_retry_after(headers))
     if status_code >= 500:
         raise SentryError(f"Sentry server error {status_code}: {url}: {detail}", status_code=status_code)
-    # Remaining 4xx (400, 409, 422): the request itself is wrong, a retry will not help.
+    # Remaining 4xx (400, 422): the request itself is wrong, a retry will not help.
     raise PermanentProviderError(f"Sentry error {status_code}: {url}: {detail}", status_code=status_code)
 
 
@@ -71,3 +81,16 @@ def reject_internal_error(payload: Any, url: str) -> None:
     """
     if payload == INTERNAL_ERROR_BODY:
         raise SentryError(f"Sentry answered 'Internal Error': {url}")
+
+
+def slug_conflict_error(slug: str | None, name: str, cause: ValidationError) -> ValidationError:
+    """The 409 of `POST teams/:org/:team/projects/`: the project slug is already taken.
+
+    Without an explicit slug Sentry derived one from `name`; the message says so instead
+    of presenting the name as a slug.
+    """
+    if slug:
+        message = f"Sentry project slug already exists: {slug}"
+    else:
+        message = f"A Sentry project with a slug derived from name '{name}' already exists; pass an explicit slug."
+    return ValidationError(message, status_code=409, detail=str(cause))

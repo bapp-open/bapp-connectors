@@ -1,0 +1,56 @@
+[
+  {
+    "id": "REDACTEDPUBLICKEY0000000000000000",
+    "name": "Default",
+    "label": "Default",
+    "public": "REDACTEDPUBLICKEY0000000000000000",
+    "secret": "REDACTEDSECRET000000000000000000",
+    "projectId": 1,
+    "isActive": true,
+    "rateLimit": null,
+    "dsn": {
+      "secret": "https://REDACTEDPUBLICKEY0000000000000000:REDACTEDSECRET000000000000000000@sentry.example.net/1",
+      "public": "https://REDACTEDPUBLICKEY0000000000000000@sentry.example.net/1",
+      "csp": "https://sentry.example.net/api/1/csp-report/?sentry_key=REDACTEDPUBLICKEY0000000000000000",
+      "security": "https://sentry.example.net/api/1/security/?sentry_key=REDACTEDPUBLICKEY0000000000000000",
+      "minidump": "https://sentry.example.net/api/1/minidump/?sentry_key=REDACTEDPUBLICKEY0000000000000000",
+      "nel": "https://sentry.example.net/api/1/nel/?sentry_key=REDACTEDPUBLICKEY0000000000000000",
+      "unreal": "https://sentry.example.net/api/1/unreal/REDACTEDPUBLICKEY0000000000000000/",
+      "crons": "https://sentry.example.net/api/1/cron/___MONITOR_SLUG___/REDACTEDPUBLICKEY0000000000000000/",
+      "cdn": "https://sentry.example.net/js-sdk-loader/REDACTEDPUBLICKEY0000000000000000.min.js",
+      "playstation": "https://sentry.example.net/api/1/playstation/?sentry_key=REDACTEDPUBLICKEY0000000000000000",
+      "integration": "https://sentry.example.net/api/1/integration/",
+      "otlp_traces": "https://sentry.example.net/api/1/integration/otlp/v1/traces",
+      "otlp_logs": "https://sentry.example.net/api/1/integration/otlp/v1/logs"
+    },
+    "browserSdkVersion": "7.x",
+    "browserSdk": {
+      "choices": [
+        [
+          "10.x",
+          "10.x"
+        ],
+        [
+          "9.x",
+          "9.x"
+        ],
+        [
+          "8.x",
+          "8.x"
+        ],
+        [
+          "7.x",
+          "7.x"
+        ]
+      ]
+    },
+    "dateCreated": "2024-07-08T14:12:42.456862Z",
+    "dynamicSdkLoaderOptions": {
+      "hasReplay": true,
+      "hasPerformance": true,
+      "hasDebug": false,
+      "hasFeedback": false,
+      "hasLogsAndMetrics": false
+    }
+  }
+]

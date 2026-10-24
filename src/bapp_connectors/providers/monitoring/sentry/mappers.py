@@ -10,7 +10,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from bapp_connectors.core.dto import WebhookEvent, WebhookEventType
-from bapp_connectors.core.dto.monitoring import ErrorIssue, MonitoredProject, MonitoredProjectStats
+from bapp_connectors.core.dto.monitoring import (
+    ErrorIssue,
+    MonitoredProject,
+    MonitoredProjectStats,
+    MonitoringTeam,
+    ProjectKey,
+)
 
 _ISSUE_ACTIONS = {
     "created": WebhookEventType.ERROR_ISSUE_CREATED,
@@ -107,6 +113,25 @@ def map_stats(raw: dict, ref: str, period: str) -> MonitoredProjectStats:
         events=accepted,
         errors_received=total,
         errors_rejected=total - accepted,
+    )
+
+
+def map_team(raw: dict) -> MonitoringTeam:
+    """`GET /organizations/:org/teams/` item to a MonitoringTeam keyed by slug."""
+    slug = raw.get("slug") or ""
+    return MonitoringTeam(ref=slug, slug=slug, name=raw.get("name") or slug)
+
+
+def map_key(raw: dict) -> ProjectKey:
+    """`GET /projects/:org/:slug/keys/` item to a ProjectKey; `dsn.secret` is the legacy DSN."""
+    dsn = _obj(raw.get("dsn"))
+    return ProjectKey(
+        id=str(raw.get("id") or ""),
+        label=raw.get("label") or raw.get("name") or "",
+        dsn_public=dsn.get("public") or "",
+        dsn_secret=dsn.get("secret") or "",
+        is_active=bool(raw.get("isActive", True)),
+        extra={"projectId": raw.get("projectId"), "dateCreated": raw.get("dateCreated")},
     )
 
 

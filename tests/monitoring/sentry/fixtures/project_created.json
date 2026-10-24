@@ -1,0 +1,35 @@
+{
+  "id": "42",
+  "slug": "new-service",
+  "name": "New Service",
+  "platform": "python",
+  "dateCreated": "2026-10-24T09:15:02.118402Z",
+  "isBookmarked": false,
+  "isMember": true,
+  "features": [
+    "rate-limits",
+    "custom-inbound-filters",
+    "discard-groups"
+  ],
+  "firstEvent": null,
+  "firstTransactionEvent": false,
+  "access": [
+    "project:read",
+    "project:write",
+    "event:read"
+  ],
+  "hasAccess": true,
+  "team": {
+    "id": "7",
+    "slug": "example-team",
+    "name": "example-team"
+  },
+  "teams": [
+    {
+      "id": "7",
+      "slug": "example-team",
+      "name": "example-team"
+    }
+  ],
+  "status": "active"
+}

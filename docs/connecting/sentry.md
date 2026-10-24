@@ -3,6 +3,7 @@
 ## Ce da conectorul
 Proiectele organizatiei, issue-urile (erorile grupate: citire, filtrare dupa stare si mediu, rezolvare, redeschidere,
 ignorare, asignare) si statisticile de evenimente pe proiect, pe sentry.io sau pe o instanta self-hosted.
+Echipele organizatiei, crearea de proiecte noi si cheile client (DSN) ale unui proiect.
 Webhook-urile integrarii (evenimentele "issue") sunt verificate si traduse in evenimente.
 
 ## Token
@@ -10,12 +11,14 @@ Recomandat: o **internal integration**, ca sa nu depinda de contul unei persoane
 1. Settings > **Developer Settings** > **Custom Integrations** (pe versiunile mai vechi: *Internal Integrations*) >
    Create New Integration > Internal Integration.
 2. Permisiuni: **Project: Read**, **Issue & Event: Read & Write** (Write e necesar pentru rezolvare / redeschidere;
-   doar citire: **Issue & Event: Read**).
+   doar citire: **Issue & Event: Read**). Pentru crearea de proiecte din aplicatie: **Project: Read & Write**
+   (`project:write`) si **Team: Read**; fara ele, listarea echipelor si crearea proiectului dau eroare de permisiune.
 3. Salveaza, apoi copiaza token-ul generat de integrare.
 4. Pentru webhook-uri (vezi mai jos): copiaza si **Client Secret**-ul integrarii.
 
 Merge si un **User Auth Token** personal (User Settings > Auth Tokens) cu scope-urile
-`org:read project:read event:read event:write`, dar e legat de o persoana: dispare odata cu contul ei.
+`org:read project:read event:read event:write` (plus `team:read project:write` pentru crearea de proiecte), dar e
+legat de o persoana: dispare odata cu contul ei.
 
 ## Credentiale
 | Camp | Ce pui |
@@ -32,6 +35,14 @@ Merge si un **User Auth Token** personal (User Settings > Auth Tokens) cu scope-
 - `environment`: optional, filtreaza issue-urile pe un singur mediu (de ex. `production`). Gol = toate mediile.
 - `verify_ssl`: verifica certificatul TLS (implicit da; dezactiveaza doar pentru instante interne cu certificat propriu).
 - `timeout`: secunde per cerere (implicit 30).
+- `default_team`: slug-ul echipei care detine proiectele create din aplicatie (Settings > Teams, de ex. `backend`).
+  Goala = echipa se da explicit la fiecare creare de proiect.
+
+## Proiect Sentry din aplicatie
+Aplicatia poate crea un proiect Sentry nou (nume, slug optional, platforma optionala) in echipa din `default_team` si
+citeste apoi cheile client ale proiectului, ca sa preia DSN-ul public cu care se configureaza SDK-ul. Un slug deja
+folosit in organizatie e respins cu o eroare de validare care numeste slug-ul. Conectorul nu sterge proiecte: un
+proiect creat din greseala se sterge din Sentry (Project Settings > General > Remove Project).
 
 ## Webhook
 1. Pe internal integration-ul de mai sus: **Webhook URL** = cel din popover-ul conexiunii in aplicatie.
