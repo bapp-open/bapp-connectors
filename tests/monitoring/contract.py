@@ -2,8 +2,15 @@
 
 import pytest
 
+from bapp_connectors.core.capabilities import ProjectProvisioningCapability
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
-from bapp_connectors.core.dto.monitoring import ErrorIssue, MonitoredProject, MonitoredProjectStats
+from bapp_connectors.core.dto.monitoring import (
+    ErrorIssue,
+    MonitoredProject,
+    MonitoredProjectStats,
+    MonitoringTeam,
+    ProjectKey,
+)
 from bapp_connectors.core.ports import MonitoringPort
 
 
@@ -50,3 +57,20 @@ class MonitoringContractTests:
         assert stats.ref == self.project_ref and stats.period
         assert stats.errors_received > 0
         assert stats.events + stats.errors_rejected == stats.errors_received
+
+    # ── optional: ProjectProvisioningCapability ──
+
+    def _provisioning(self, adapter):
+        if not adapter.supports(ProjectProvisioningCapability):
+            pytest.skip("adapter does not implement ProjectProvisioningCapability")
+        return adapter
+
+    def test_list_teams(self, adapter):
+        teams = self._provisioning(adapter).list_teams()
+        assert isinstance(teams, list) and teams
+        assert all(isinstance(t, MonitoringTeam) and t.ref and t.slug for t in teams)
+
+    def test_list_keys(self, adapter):
+        keys = self._provisioning(adapter).list_keys(self.project_ref)
+        assert isinstance(keys, list) and keys
+        assert all(isinstance(k, ProjectKey) and k.id and k.dsn_public for k in keys)

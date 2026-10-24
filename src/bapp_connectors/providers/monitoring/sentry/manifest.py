@@ -1,6 +1,6 @@
 """Sentry provider manifest — REST API v0 with an organization or user auth token."""
 
-from bapp_connectors.core.capabilities import IssueTriageCapability, WebhookCapability
+from bapp_connectors.core.capabilities import IssueTriageCapability, ProjectProvisioningCapability, WebhookCapability
 from bapp_connectors.core.manifest import (
     AuthConfig,
     CredentialField,
@@ -90,7 +90,7 @@ manifest = ProviderManifest(
             ),
         ],
     ),
-    capabilities=[MonitoringPort, IssueTriageCapability, WebhookCapability],
+    capabilities=[MonitoringPort, IssueTriageCapability, WebhookCapability, ProjectProvisioningCapability],
     rate_limit=RateLimitConfig(requests_per_second=5, burst=10),
     retry=RetryConfig(
         max_retries=3,

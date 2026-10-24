@@ -1,13 +1,19 @@
-"""Sentry adapter — MonitoringPort, issue triage and integration webhooks over REST api/0."""
+"""Sentry adapter — MonitoringPort, issue triage, project provisioning and integration webhooks over REST api/0."""
 
 from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING
 
-from bapp_connectors.core.capabilities import IssueTriageCapability, WebhookCapability
+from bapp_connectors.core.capabilities import IssueTriageCapability, ProjectProvisioningCapability, WebhookCapability
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult, WebhookEvent
-from bapp_connectors.core.dto.monitoring import ErrorIssue, MonitoredProject, MonitoredProjectStats
+from bapp_connectors.core.dto.monitoring import (
+    ErrorIssue,
+    MonitoredProject,
+    MonitoredProjectStats,
+    MonitoringTeam,
+    ProjectKey,
+)
 from bapp_connectors.core.errors import ConnectorError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.http.rate_limit import RateLimiter
@@ -19,8 +25,10 @@ from bapp_connectors.providers.monitoring.sentry.errors import SentryError
 from bapp_connectors.providers.monitoring.sentry.manifest import manifest
 from bapp_connectors.providers.monitoring.sentry.mappers import (
     map_issue,
+    map_key,
     map_project,
     map_stats,
+    map_team,
     webhook_event_from_sentry,
 )
 
@@ -34,7 +42,7 @@ def _page(items: list, cursor: str | None) -> PaginatedResult:
     return PaginatedResult(items=items, cursor=cursor, has_more=cursor is not None)
 
 
-class SentryAdapter(MonitoringPort, IssueTriageCapability, WebhookCapability):
+class SentryAdapter(MonitoringPort, IssueTriageCapability, WebhookCapability, ProjectProvisioningCapability):
     """One Sentry organization (sentry.io or self-hosted) reached with an auth token.
 
     The `ref` of every project-scoped call, and of every returned DTO, is the project slug.
@@ -160,6 +168,28 @@ class SentryAdapter(MonitoringPort, IssueTriageCapability, WebhookCapability):
 
     def assign_issue(self, issue_id: str, email: str) -> ErrorIssue:
         return map_issue(self.client.update_issue(issue_id, {"assignedTo": email}))
+
+    # ── ProjectProvisioningCapability ──
+
+    def list_teams(self) -> list[MonitoringTeam]:
+        return [map_team(raw) for raw in self.client.list_teams()]
+
+    def create_project(
+        self,
+        team: str,
+        name: str,
+        slug: str | None = None,
+        platform: str | None = None,
+    ) -> MonitoredProject:
+        """Create a project owned by team `team`; a taken slug raises `ValidationError` naming it.
+
+        Never retried: the POST is not idempotent.
+        """
+        data = {key: value for key, value in {"name": name, "slug": slug, "platform": platform}.items() if value}
+        return map_project(self.client.create_project(team, data), self.host, self.organization)
+
+    def list_keys(self, ref: str) -> list[ProjectKey]:
+        return [map_key(raw) for raw in self.client.list_keys(ref)]
 
     # ── WebhookCapability ──
 

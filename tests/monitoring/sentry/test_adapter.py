@@ -7,9 +7,16 @@ from datetime import UTC, datetime
 
 import pytest
 
-from bapp_connectors.core.capabilities import IssueTriageCapability, WebhookCapability
+from bapp_connectors.core.capabilities import IssueTriageCapability, ProjectProvisioningCapability, WebhookCapability
 from bapp_connectors.core.dto import WebhookEventType
-from bapp_connectors.core.dto.monitoring import ErrorIssue, MonitoredProject, MonitoredProjectStats
+from bapp_connectors.core.dto.monitoring import (
+    ErrorIssue,
+    MonitoredProject,
+    MonitoredProjectStats,
+    MonitoringTeam,
+    ProjectKey,
+)
+from bapp_connectors.core.errors import PermanentProviderError, ProviderError, ValidationError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.registry import registry
 from bapp_connectors.providers.monitoring.sentry.adapter import SentryAdapter
@@ -27,6 +34,9 @@ def build_http() -> FakeHttpClient:
     """Rules are substring-matched in order: the most specific paths come first."""
     http = FakeHttpClient()
     http.add("GET", "/stats_v2/", fake_response(load("stats_v2")))
+    http.add("GET", "/organizations/example-org/teams/", fake_response(load("teams"), LAST))
+    http.add("POST", "/teams/example-org/example-team/projects/", fake_response(load("project_created"), status=201))
+    http.add("GET", "/projects/example-org/aio-backend/keys/", fake_response(load("keys")))
     http.add("GET", "/projects/example-org/aio-backend/issues/", fake_response(load("issues"), MORE))
     http.add("GET", "/projects/example-org/aio-backend/", fake_response(load("project")))
     http.add("GET", "/organizations/example-org/projects/", fake_response(load("projects"), LAST))
@@ -255,3 +265,89 @@ def test_get_project_stats_without_project_id_never_queries_the_whole_org(http):
     with pytest.raises(SentryError, match="ghost"):
         adapter.get_project_stats("ghost")
     assert not any("stats_v2" in c.path for c in http.calls)
+
+
+# ── ProjectProvisioningCapability ──
+
+
+def test_supports_provisioning(adapter):
+    assert adapter.supports(ProjectProvisioningCapability)
+
+
+def test_list_teams(adapter, http):
+    teams = adapter.list_teams()
+    assert all(isinstance(t, MonitoringTeam) for t in teams)
+    assert [t.ref for t in teams] == ["example-team", "example-ops"]
+    assert http.last_call().path == "https://sentry.example.net/api/0/organizations/example-org/teams/"
+
+
+def test_create_project_posts_to_team_without_retry(http):
+    from bapp_connectors.core.http.retry import RetryPolicy
+    from bapp_connectors.core.types import BackoffStrategy
+
+    http.retry_policy = RetryPolicy(max_retries=3, backoff=BackoffStrategy.NONE)
+    adapter = SentryAdapter(credentials=CREDENTIALS, http_client=http)
+    project = adapter.create_project("example-team", "New Service", slug="new-service", platform="python")
+    assert isinstance(project, MonitoredProject)
+    assert (project.ref, project.name, project.platform) == ("new-service", "New Service", "python")
+    assert project.web_url == "https://sentry.example.net/organizations/example-org/projects/new-service/"
+    call = http.last_call()
+    assert call.method == "POST"
+    assert call.path == "https://sentry.example.net/api/0/teams/example-org/example-team/projects/"
+    assert call.kwargs["json"] == {"name": "New Service", "slug": "new-service", "platform": "python"}
+
+
+def test_create_project_omits_unset_slug_and_platform(adapter, http):
+    adapter.create_project("example-team", "New Service")
+    assert http.last_call().kwargs["json"] == {"name": "New Service"}
+
+
+def test_create_project_is_never_retried():
+    from bapp_connectors.core.http.retry import RetryPolicy
+    from bapp_connectors.core.types import BackoffStrategy
+
+    http = FakeHttpClient()
+    http.retry_policy = RetryPolicy(max_retries=3, backoff=BackoffStrategy.NONE)
+    http.add("POST", "/projects/", fake_response({"detail": "unavailable"}, status=503))
+    with pytest.raises(ProviderError):
+        SentryAdapter(credentials=CREDENTIALS, http_client=http).create_project("example-team", "New")
+    assert len(http.calls) == 1
+
+
+def test_create_project_conflict_is_validation_error():
+    http = FakeHttpClient()
+    http.add("POST", "/projects/", fake_response({"detail": "slug exists"}, status=409))
+    adapter = SentryAdapter(credentials=CREDENTIALS, http_client=http)
+    with pytest.raises(ValidationError, match="Sentry project slug already exists: new-service"):
+        adapter.create_project("example-team", "New Service", slug="new-service")
+
+
+def test_create_project_forbidden_is_permanent():
+    from bapp_connectors.core.errors import AuthenticationError
+    from bapp_connectors.providers.monitoring.sentry.errors import SentryNotFoundError
+
+    http = FakeHttpClient()
+    http.add("POST", "/projects/", fake_response({"detail": "forbidden"}, status=403))
+    adapter = SentryAdapter(credentials=CREDENTIALS, http_client=http)
+    with pytest.raises(SentryNotFoundError, match="forbidden or missing") as info:
+        adapter.create_project("example-team", "New Service")
+    assert isinstance(info.value, PermanentProviderError) and not isinstance(info.value, AuthenticationError)
+
+
+def test_list_keys_maps_dsn(adapter, http):
+    keys = adapter.list_keys("aio-backend")
+    assert len(keys) == 1 and isinstance(keys[0], ProjectKey)
+    assert keys[0].dsn_public == "https://REDACTEDPUBLICKEY0000000000000000@sentry.example.net/1"
+    assert http.last_call().path == "https://sentry.example.net/api/0/projects/example-org/aio-backend/keys/"
+
+
+def test_list_keys_empty():
+    http = FakeHttpClient()
+    http.add("GET", "/keys/", fake_response([]))
+    assert SentryAdapter(credentials=CREDENTIALS, http_client=http).list_keys("empty") == []
+
+
+def test_registry_lists_sentry_for_provisioning():
+    import bapp_connectors.providers.monitoring.sentry  # noqa: F401
+
+    assert any(m.name == "sentry" for m in registry.list_providers(capability=ProjectProvisioningCapability))

@@ -1,4 +1,8 @@
-from bapp_connectors.core.capabilities import IssueTriageCapability, WebhookCapability
+from bapp_connectors.core.capabilities import (
+    IssueTriageCapability,
+    ProjectProvisioningCapability,
+    WebhookCapability,
+)
 from bapp_connectors.core.ports import MonitoringPort
 from bapp_connectors.providers.monitoring.sentry.manifest import manifest
 
@@ -27,7 +31,12 @@ def test_manifest_endpoint_and_settings():
 
 
 def test_manifest_capabilities_and_events():
-    assert manifest.capabilities == [MonitoringPort, IssueTriageCapability, WebhookCapability]
+    assert manifest.capabilities == [
+        MonitoringPort,
+        IssueTriageCapability,
+        WebhookCapability,
+        ProjectProvisioningCapability,
+    ]
     assert manifest.webhooks.events == [
         "error_issue.created",
         "error_issue.resolved",

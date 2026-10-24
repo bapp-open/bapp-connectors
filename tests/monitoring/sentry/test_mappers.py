@@ -5,10 +5,13 @@ from datetime import UTC, datetime
 import pytest
 
 from bapp_connectors.core.dto import WebhookEventType
+from bapp_connectors.core.dto.monitoring import MonitoringTeam, ProjectKey
 from bapp_connectors.providers.monitoring.sentry.mappers import (
     map_issue,
+    map_key,
     map_project,
     map_stats,
+    map_team,
     webhook_event_from_sentry,
 )
 from bapp_connectors.providers.monitoring.sentry.models import SentryIssue, SentryProject
@@ -208,3 +211,45 @@ def test_webhook_tolerates_empty_payload():
     event = webhook_event_from_sentry({}, None)
     assert event.event_type == WebhookEventType.UNKNOWN
     assert event.payload == {} and event.idempotency_key == ":" and event.provider_event_type == ":"
+
+
+# ── Provisioning: teams and client keys ──
+
+
+def test_map_team(teams_raw):
+    teams = [map_team(raw) for raw in teams_raw]
+    assert all(isinstance(t, MonitoringTeam) for t in teams)
+    assert [(t.ref, t.slug, t.name) for t in teams] == [
+        ("example-team", "example-team", "example-team"),
+        ("example-ops", "example-ops", "example-ops"),
+    ]
+
+
+def test_map_team_falls_back_to_slug_for_name():
+    team = map_team({"id": "1", "slug": "backend"})
+    assert (team.ref, team.slug, team.name) == ("backend", "backend", "backend")
+
+
+def test_map_key(keys_raw):
+    key = map_key(keys_raw[0])
+    assert isinstance(key, ProjectKey)
+    assert key.id == keys_raw[0]["id"] and key.label == "Default" and key.is_active is True
+    assert key.dsn_public == "https://REDACTEDPUBLICKEY0000000000000000@sentry.example.net/1"
+    assert key.dsn_secret.startswith("https://REDACTEDPUBLICKEY0000000000000000:REDACTEDSECRET")
+    assert key.extra == {"projectId": 1, "dateCreated": "2024-07-08T14:12:42.456862Z"}
+
+
+def test_map_key_tolerates_minimal_payload():
+    key = map_key({"id": "k1", "dsn": None, "isActive": False})
+    assert (key.id, key.label, key.dsn_public, key.dsn_secret, key.is_active) == ("k1", "", "", "", False)
+    assert key.extra == {"projectId": None, "dateCreated": None}
+
+
+def test_map_project_created(project_created_raw):
+    project = map_project(project_created_raw, HOST, ORG)
+    assert (project.ref, project.name, project.platform, project.extra) == (
+        "new-service",
+        "New Service",
+        "python",
+        {"id": "42"},
+    )

@@ -49,3 +49,18 @@ def hook_issue_created():
 @pytest.fixture
 def hook_issue_resolved():
     return load("hook_issue_resolved")
+
+
+@pytest.fixture
+def teams_raw():
+    return load("teams")
+
+
+@pytest.fixture
+def keys_raw():
+    return load("keys")
+
+
+@pytest.fixture
+def project_created_raw():
+    return load("project_created")
