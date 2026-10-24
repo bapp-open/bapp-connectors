@@ -209,7 +209,7 @@ class SentryClient:
             return self.request("POST", f"teams/{self.organization}/{team}/projects/", json=data, retry=False)[0]
         except ValidationError as exc:
             if getattr(exc, "status_code", None) == 409:
-                raise slug_conflict_error(data.get("slug") or data.get("name") or "", exc) from exc
+                raise slug_conflict_error(data.get("slug"), data.get("name") or "", exc) from exc
             raise
 
     def list_keys(self, slug: str) -> list[dict]:

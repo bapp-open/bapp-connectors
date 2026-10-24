@@ -315,11 +315,15 @@ def test_create_project_conflict_names_the_slug():
     assert not isinstance(info.value, ProviderError) and info.value.retryable is False
 
 
-def test_create_project_conflict_without_slug_names_the_name():
+def test_create_project_conflict_without_slug_names_the_derived_slug_source():
     http = FakeHttpClient()
     http.add("POST", "/projects/", fake_response({"detail": "exists"}, status=409))
-    with pytest.raises(ValidationError, match="already exists: New Service"):
+    with pytest.raises(ValidationError) as info:
         make(http).create_project("example-team", {"name": "New Service"})
+    assert str(info.value) == (
+        "A Sentry project with a slug derived from name 'New Service' already exists; pass an explicit slug."
+    )
+    assert info.value.status_code == 409
 
 
 def test_create_project_forbidden_is_permanent_not_auth():

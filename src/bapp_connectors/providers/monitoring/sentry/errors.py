@@ -62,7 +62,7 @@ def raise_for_status(status_code: int, body: str, url: str, headers: Mapping[str
     if status_code == 404:
         raise SentryNotFoundError(f"Sentry resource not found: {url}: {detail}", status_code=404)
     if status_code == 409:
-        # Only project creation answers 409 (slug taken); `SentryClient.create_project`
+        # 409 = conflict (e.g. a project slug already taken); `SentryClient.create_project`
         # re-raises it naming the slug.
         raise ValidationError(f"Sentry conflict: {url}: {detail}", status_code=409)
     if status_code == 429:
@@ -83,6 +83,14 @@ def reject_internal_error(payload: Any, url: str) -> None:
         raise SentryError(f"Sentry answered 'Internal Error': {url}")
 
 
-def slug_conflict_error(slug: str, cause: ValidationError) -> ValidationError:
-    """The 409 of `POST teams/:org/:team/projects/`: the project slug is already taken."""
-    return ValidationError(f"Sentry project slug already exists: {slug}", status_code=409, detail=str(cause))
+def slug_conflict_error(slug: str | None, name: str, cause: ValidationError) -> ValidationError:
+    """The 409 of `POST teams/:org/:team/projects/`: the project slug is already taken.
+
+    Without an explicit slug Sentry derived one from `name`; the message says so instead
+    of presenting the name as a slug.
+    """
+    if slug:
+        message = f"Sentry project slug already exists: {slug}"
+    else:
+        message = f"A Sentry project with a slug derived from name '{name}' already exists; pass an explicit slug."
+    return ValidationError(message, status_code=409, detail=str(cause))
