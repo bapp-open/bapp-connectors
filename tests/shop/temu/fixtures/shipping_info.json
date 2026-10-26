@@ -1,0 +1,24 @@
+{
+ "nationalAddress": null,
+ "regionName3": "White",
+ "receiptAdditionalName": null,
+ "regionName4": null,
+ "regionName1": "Romania",
+ "mail": "relay@eul.shipping.temuemail.com",
+ "regionName2": "Oraș Test",
+ "addressExtra": {
+  "firstName": "Client",
+  "lastName": "Test",
+  "additionalFirstName": null,
+  "additionalLastName": null
+ },
+ "mobile": "+40 700 000 000",
+ "addressLineAll": "Strada Exemplu 1, Ap. 2",
+ "receiptName": "Client Test",
+ "warning": null,
+ "addressLine1": "Strada Exemplu 1",
+ "backupMobile": null,
+ "postCode": "400000",
+ "addressLine2": "Ap. 2",
+ "addressLine3": null
+}

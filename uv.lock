@@ -44,7 +44,7 @@ wheels = [
 
 [[package]]
 name = "bapp-connectors"
-version = "0.44.0"
+version = "0.45.0"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
@@ -81,6 +81,9 @@ ses = [
 sftp = [
     { name = "paramiko" },
 ]
+temu = [
+    { name = "cryptography" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -89,6 +92,7 @@ requires-dist = [
     { name = "cryptography", marker = "extra == 'appstore'", specifier = ">=42" },
     { name = "cryptography", marker = "extra == 'mobilpay'", specifier = ">=41.0" },
     { name = "cryptography", marker = "extra == 'netopia'", specifier = ">=41.0" },
+    { name = "cryptography", marker = "extra == 'temu'", specifier = ">=41.0" },
     { name = "oauthlib", marker = "extra == 'oauth'", specifier = ">=3.0" },
     { name = "paramiko", marker = "extra == 'sftp'", specifier = ">=3.0" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -100,7 +104,7 @@ requires-dist = [
     { name = "responses", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
 ]
-provides-extras = ["oauth", "sftp", "s3", "ses", "mobilpay", "netopia", "appstore", "dev"]
+provides-extras = ["oauth", "sftp", "s3", "ses", "mobilpay", "netopia", "appstore", "temu", "dev"]
 
 [[package]]
 name = "bcrypt"

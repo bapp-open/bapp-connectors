@@ -3,9 +3,11 @@
 from .batch_tracking import BatchTrackingCapability
 from .bulk_operations import BulkImportCapability, BulkUpdateCapability, BulkUpsertCapability
 from .creative_upload import CreativeUploadCapability
+from .customer_details import CustomerDetailsCapability
 from .dns_allowlist import DnsAllowlistCapability
 from .embedding import EmbeddingCapability
 from .financial import FinancialCapability
+from .fulfillment import Carrier, FulfillmentCapability, ShipmentResult, ShippingService
 from .image_generation import ImageGenerationCapability
 from .inbox import InboxCapability
 from .invoice_attach import InvoiceAttachmentCapability
@@ -13,6 +15,7 @@ from .issue_management import IssueManagementCapability
 from .issue_triage import IssueTriageCapability
 from .mailbox import MailboxCapability
 from .oauth import OAuthCapability, OAuthTokens
+from .order_amounts import OrderAmountCapability, OrderAmounts, OrderLineAmounts
 from .order_lookup import OrderLookupCapability
 from .order_payment import OrderPaymentCapability
 from .order_status_catalog import OrderStatusCatalogCapability, RemoteOrderStatus
@@ -46,13 +49,16 @@ __all__ = [
     "BulkImportCapability",
     "BulkUpdateCapability",
     "BulkUpsertCapability",
+    "Carrier",
     "CategoryManagementCapability",
     "CreativeUploadCapability",
+    "CustomerDetailsCapability",
     "DnsAllowlistCapability",
     "EmbeddingCapability",
     "FeedFormat",
     "FeedUploadCapability",
     "FinancialCapability",
+    "FulfillmentCapability",
     "ImageGenerationCapability",
     "InboxCapability",
     "InvoiceAttachmentCapability",
@@ -61,6 +67,9 @@ __all__ = [
     "MailboxCapability",
     "OAuthCapability",
     "OAuthTokens",
+    "OrderAmountCapability",
+    "OrderAmounts",
+    "OrderLineAmounts",
     "OrderLookupCapability",
     "OrderPaymentCapability",
     "OrderStatusCatalogCapability",
@@ -76,7 +85,9 @@ __all__ = [
     "RichMessagingCapability",
     "SavedPaymentCapability",
     "SettingsDetectionCapability",
+    "ShipmentResult",
     "ShippingCapability",
+    "ShippingService",
     "SocialPublishCapability",
     "StreamingCapability",
     "SubscriptionCapability",

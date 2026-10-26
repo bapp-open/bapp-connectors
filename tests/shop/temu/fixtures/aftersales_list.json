@@ -1,0 +1,42 @@
+{
+ "total": 3,
+ "pageNumber": 1,
+ "data": [
+  {
+   "parentAfterSalesSn": "PO-167-1000000000000010-D02",
+   "afterSalesStatusGroup": 5,
+   "operateExpireTimeMs": null,
+   "availableOperateList": [],
+   "returnDeliveryType": null,
+   "parentAfterSalesStatus": 5,
+   "parentOrderSn": "PO-167-1000000000000010",
+   "updateAt": 1792323601,
+   "createAt": 1792323496,
+   "afterSalesType": 1
+  },
+  {
+   "parentAfterSalesSn": "PO-167-1000000000000011-D02",
+   "afterSalesStatusGroup": 2,
+   "operateExpireTimeMs": null,
+   "availableOperateList": [],
+   "returnDeliveryType": null,
+   "parentAfterSalesStatus": 2,
+   "parentOrderSn": "PO-167-1000000000000011",
+   "updateAt": 1792323602,
+   "createAt": 1792323497,
+   "afterSalesType": 1
+  },
+  {
+   "parentAfterSalesSn": "PO-167-1000000000000012-D02",
+   "afterSalesStatusGroup": 1,
+   "operateExpireTimeMs": null,
+   "availableOperateList": [],
+   "returnDeliveryType": null,
+   "parentAfterSalesStatus": 10,
+   "parentOrderSn": "PO-167-1000000000000012",
+   "updateAt": 1792323603,
+   "createAt": 1792323498,
+   "afterSalesType": 1
+  }
+ ]
+}
