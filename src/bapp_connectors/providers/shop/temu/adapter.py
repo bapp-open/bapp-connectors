@@ -49,6 +49,7 @@ from bapp_connectors.core.errors import (
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.providers.shop.temu.client import DEFAULT_PAGE_SIZE, TemuApiClient
+from bapp_connectors.providers.shop.temu.errors import SHIPPING_HIDDEN_CODE, TemuError
 from bapp_connectors.providers.shop.temu.manifest import manifest
 from bapp_connectors.providers.shop.temu.mappers import (
     amounts_from_invoice_detail,
@@ -185,8 +186,14 @@ class TemuShopAdapter(
         return SITE_CURRENCY.get(site_id) or str(self.config.get("currency") or "RON")
 
     def _shipping_or_none(self, order_id: str) -> dict | None:
-        """Shipping contact; errors propagate — an order without its buyer must not reach the host."""
-        return self.client.shipping_info(order_id) or None
+        """Shipping contact. None ONLY when Temu hides the buyer on purpose (cancelled order, 180020006);
+        every other error propagates — an order without its buyer must not reach the host by accident."""
+        try:
+            return self.client.shipping_info(order_id) or None
+        except TemuError as exc:
+            if exc.error_code == SHIPPING_HIDDEN_CODE:
+                return None
+            raise
 
     def _amounts_or_none(self, order_id: str) -> OrderAmounts | None:
         """Amounts, or None ONLY when the token lacks the scope / the API is unsupported (the known,
@@ -221,7 +228,7 @@ class TemuShopAdapter(
 
     def get_order(self, order_id: str) -> Order:
         detail = self.client.order_detail(order_id)
-        shipping = self.client.shipping_info(order_id)
+        shipping = self._shipping_or_none(order_id)
         amounts = self._amounts_or_none(order_id)
         return order_from_temu(detail, shipping, self._site_currency(detail.get("parentOrderMap") or {}), amounts)
 

@@ -137,6 +137,7 @@ def order_from_temu(parent: dict, shipping: dict | None, site_currency: str, amo
         "region_id": head.get("regionId"),
         "relay_email": (contact.extra.get("relay_email") if contact else "") or "",
         "amounts_missing": amounts is None,
+        "shipping_unavailable": shipping is None,
         "parent_order_time": head.get("parentOrderTime"),
         "expect_ship_latest_time": head.get("expectShipLatestTime"),
         "parent_shipping_time": head.get("parentShippingTime"),

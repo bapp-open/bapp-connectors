@@ -158,3 +158,38 @@ def test_find_order_by_reference(fake):
              else {"success": False, "errorCode": 3000032, "errorMsg": "x", "requestId": "r"} if kw["json"]["type"] == "temu.order.amount.v2.query"
              else ok({"invoiceDetailInfoList": None}))
     assert adapter.find_order_by_reference(detail["parentOrderMap"]["parentOrderSn"]).order_id == detail["parentOrderMap"]["parentOrderSn"]
+
+
+def _hidden_shipping(kw):
+    return {"success": False, "errorCode": 180020006, "errorMsg": "The current order status cannot be viewed.", "requestId": "r"}
+
+
+def test_get_orders_keeps_cancelled_order_whose_shipping_is_hidden(fake):
+    # live 2026-10-26: Temu hides the buyer of every cancelled order (180020006); the pull must go on
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config={})
+    page = load("order_list.json")
+    page["pageItems"] = page["pageItems"][:1]
+    page["pageItems"][0]["parentOrderMap"]["parentOrderStatus"] = 3
+    fake.add("POST", "openapi/router", lambda m, p, kw: ok(page) if kw["json"]["type"] == "bg.order.list.v2.get"
+             else _hidden_shipping(kw) if kw["json"]["type"] == "bg.order.shippinginfo.v2.get"
+             else {"success": False, "errorCode": 3000032, "errorMsg": "no scope", "requestId": "r"})
+    result = adapter.get_orders()
+    assert len(result.items) == 1
+    o = result.items[0]
+    assert o.status == OrderStatus.CANCELLED and o.shipping is None and o.billing is None
+    assert o.extra["shipping_unavailable"] is True
+
+
+def test_get_order_keeps_order_whose_shipping_is_hidden(fake):
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config={})
+    detail = load("order_detail.json")
+    fake.add("POST", "openapi/router", lambda m, p, kw: ok(detail) if kw["json"]["type"] == "bg.order.detail.v2.get"
+             else _hidden_shipping(kw) if kw["json"]["type"] == "bg.order.shippinginfo.v2.get"
+             else {"success": False, "errorCode": 3000032, "errorMsg": "no scope", "requestId": "r"})
+    o = adapter.get_order(detail["parentOrderMap"]["parentOrderSn"])
+    assert o.shipping is None and o.extra["shipping_unavailable"] is True
+
+
+def test_order_with_shipping_is_not_flagged_unavailable():
+    o = order_from_temu(load("order_detail.json"), load("shipping_info.json"), "RON")
+    assert o.extra["shipping_unavailable"] is False

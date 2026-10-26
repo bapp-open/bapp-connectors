@@ -24,6 +24,9 @@ VALIDATION_CODES = frozenset({130010001, 150010003, 200040002, 200040003})
 UNSUPPORTED_CODES = frozenset({200040005, 200030004})
 #: try again later
 RATE_LIMIT_CODES = frozenset({150010005})
+#: ``bg.order.shippinginfo.v2.get`` on a cancelled order (live 2026-10-26: every status-3 order): Temu hides the
+#: buyer once the order is cancelled. Not an error of ours — the order is imported without a contact.
+SHIPPING_HIDDEN_CODE = 180020006
 
 
 class TemuError(ProviderError):
