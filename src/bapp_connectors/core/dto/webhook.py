@@ -61,6 +61,26 @@ class WebhookEventType(StrEnum):
     FILE_UPDATED = "file.updated"
     FILE_DELETED = "file.deleted"
 
+    # DevOps
+    ISSUE_OPENED = "issue.opened"
+    ISSUE_UPDATED = "issue.updated"
+    ISSUE_CLOSED = "issue.closed"
+    ISSUE_REOPENED = "issue.reopened"
+    ISSUE_COMMENTED = "issue.commented"
+    MERGE_REQUEST_OPENED = "merge_request.opened"
+    MERGE_REQUEST_MERGED = "merge_request.merged"
+    MERGE_REQUEST_CLOSED = "merge_request.closed"
+    REPOSITORY_PUSH = "repository.push"
+    PIPELINE_SUCCEEDED = "pipeline.succeeded"
+    PIPELINE_FAILED = "pipeline.failed"
+
+    # Monitoring
+    ERROR_ISSUE_CREATED = "error_issue.created"
+    ERROR_ISSUE_RESOLVED = "error_issue.resolved"
+    ERROR_ISSUE_UNRESOLVED = "error_issue.unresolved"
+    ERROR_ISSUE_IGNORED = "error_issue.ignored"
+    ERROR_ISSUE_ASSIGNED = "error_issue.assigned"
+
     # Generic
     UNKNOWN = "unknown"
 

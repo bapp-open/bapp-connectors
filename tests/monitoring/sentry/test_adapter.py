@@ -1,0 +1,353 @@
+"""Sentry adapter tests against the scrubbed REST captures."""
+
+import hashlib
+import hmac
+import json
+from datetime import UTC, datetime
+
+import pytest
+
+from bapp_connectors.core.capabilities import IssueTriageCapability, ProjectProvisioningCapability, WebhookCapability
+from bapp_connectors.core.dto import WebhookEventType
+from bapp_connectors.core.dto.monitoring import (
+    ErrorIssue,
+    MonitoredProject,
+    MonitoredProjectStats,
+    MonitoringTeam,
+    ProjectKey,
+)
+from bapp_connectors.core.errors import PermanentProviderError, ProviderError, ValidationError
+from bapp_connectors.core.http import ResilientHttpClient
+from bapp_connectors.core.registry import registry
+from bapp_connectors.providers.monitoring.sentry.adapter import SentryAdapter
+from tests.fake_http import FakeHttpClient, fake_response
+from tests.monitoring.contract import MonitoringContractTests
+from tests.monitoring.sentry.conftest import load
+
+CREDENTIALS = {"host": "sentry.example.net", "organization": "example-org", "token": "not-a-real-token"}
+NEXT = '<https://s/api/0/x/?cursor=1:100:0>; rel="next"; results="{}"; cursor="1:100:0"'
+LAST = {"Link": NEXT.format("false")}
+MORE = {"Link": NEXT.format("true")}
+
+
+def build_http() -> FakeHttpClient:
+    """Rules are substring-matched in order: the most specific paths come first."""
+    http = FakeHttpClient()
+    http.add("GET", "/stats_v2/", fake_response(load("stats_v2")))
+    http.add("GET", "/organizations/example-org/teams/", fake_response(load("teams"), LAST))
+    http.add("POST", "/teams/example-org/example-team/projects/", fake_response(load("project_created"), status=201))
+    http.add("GET", "/projects/example-org/aio-backend/keys/", fake_response(load("keys")))
+    http.add("GET", "/projects/example-org/aio-backend/issues/", fake_response(load("issues"), MORE))
+    http.add("GET", "/projects/example-org/aio-backend/", fake_response(load("project")))
+    http.add("GET", "/organizations/example-org/projects/", fake_response(load("projects"), LAST))
+    http.add("GET", "/organizations/example-org/", fake_response({"slug": "example-org", "name": "Example Org"}))
+    http.add("GET", "/issues/23296/", fake_response(load("issue")))
+    http.add("PUT", "/issues/23296/", fake_response(load("issue")))
+    return http
+
+
+@pytest.fixture
+def http():
+    return build_http()
+
+
+@pytest.fixture
+def adapter(http):
+    return SentryAdapter(credentials=CREDENTIALS, http_client=http, config={})
+
+
+class TestSentryContract(MonitoringContractTests):
+    project_ref = "aio-backend"
+
+    @pytest.fixture
+    def adapter(self):
+        return SentryAdapter(credentials=CREDENTIALS, http_client=build_http(), config={})
+
+
+# ── construction ──
+
+
+def test_builds_its_own_http_client_when_none_injected():
+    adapter = SentryAdapter(credentials=CREDENTIALS)
+    assert isinstance(adapter.http_client, ResilientHttpClient)
+    assert adapter.client.http is adapter.http_client
+
+
+def test_injected_http_client_is_exposed(adapter, http):
+    assert adapter.http_client is http
+
+
+def test_config_parsing():
+    adapter = SentryAdapter(
+        credentials={**CREDENTIALS, "host": " sentry.example.net/ "},
+        http_client=FakeHttpClient(),
+        config={"verify_ssl": False, "timeout": 5, "stats_period": "24h", "environment": " production "},
+    )
+    assert adapter.stats_period == "24h" and adapter.environment == "production"
+    assert adapter.client.verify_ssl is False and adapter.client.timeout == 5
+    assert adapter.client.host == "sentry.example.net" and adapter.client.organization == "example-org"
+
+
+def test_config_defaults(adapter):
+    assert adapter.stats_period == "14d" and adapter.environment == ""
+
+
+def test_validate_credentials_missing_organization(http):
+    creds = {"host": "sentry.example.net", "token": "x"}
+    assert SentryAdapter(credentials=creds, http_client=http).validate_credentials() is False
+
+
+# ── connection ──
+
+
+def test_test_connection_reports_organization(adapter, http):
+    result = adapter.test_connection()
+    assert result.success is True and result.message == "Connected."
+    assert result.details == {"organization": "example-org", "name": "Example Org"}
+    assert http.last_call().path == "https://sentry.example.net/api/0/organizations/example-org/"
+
+
+def test_test_connection_bad_token():
+    http = FakeHttpClient()
+    http.add("GET", "/organizations/", fake_response({"detail": "Invalid token"}, status=401))
+    result = SentryAdapter(credentials=CREDENTIALS, http_client=http).test_connection()
+    assert result.success is False and result.message
+
+
+# ── reads ──
+
+
+def test_list_projects(adapter):
+    result = adapter.list_projects()
+    assert [p.ref for p in result.items] == ["aio-backend", "example-api", "example-web"]
+    assert result.has_more is False and result.cursor is None
+    assert result.items[0].web_url == "https://sentry.example.net/organizations/example-org/projects/aio-backend/"
+
+
+def test_get_project(adapter):
+    project = adapter.get_project("aio-backend")
+    assert isinstance(project, MonitoredProject) and project.ref == "aio-backend" and project.extra["id"] == "3"
+
+
+def test_list_issues_defaults_and_cursor(adapter, http):
+    result = adapter.list_issues("aio-backend", cursor="1:0:0")
+    assert len(result.items) == 3 and result.has_more is True and result.cursor == "1:100:0"
+    params = http.last_call().kwargs["params"]
+    assert params == {"query": "is:unresolved", "statsPeriod": "14d", "sort": "date", "cursor": "1:0:0"}
+
+
+def test_list_issues_passes_environment_and_period(http):
+    adapter = SentryAdapter(
+        credentials=CREDENTIALS, http_client=http, config={"environment": "production", "stats_period": "90d"}
+    )
+    adapter.list_issues("aio-backend", query="is:resolved", period="24h", sort="freq")
+    params = http.last_call().kwargs["params"]
+    # The argument wins over the config `stats_period`: that one is the caller's default.
+    assert params["statsPeriod"] == "24h" and params["environment"] == "production"
+    assert params["query"] == "is:resolved" and params["sort"] == "freq"
+
+
+def test_get_issue(adapter):
+    issue = adapter.get_issue("23296")
+    assert isinstance(issue, ErrorIssue) and issue.short_id == "AIO-BACKEND-3XK" and issue.ref == "aio-backend"
+
+
+def test_get_project_stats_resolves_numeric_id(adapter, http):
+    stats = adapter.get_project_stats("aio-backend", period="7d")
+    assert isinstance(stats, MonitoredProjectStats)
+    assert (stats.ref, stats.period, stats.events, stats.errors_received, stats.errors_rejected) == (
+        "aio-backend",
+        "7d",
+        5,
+        16,
+        11,
+    )
+    params = http.last_call().kwargs["params"]
+    assert params["project"] == "3"
+    assert params["statsPeriod"] == "7d"
+
+
+# ── triage ──
+
+
+def test_resolve_issue_sends_status(adapter, http):
+    issue = adapter.resolve_issue("23296")
+    assert isinstance(issue, ErrorIssue)
+    assert http.calls[-1].method == "PUT"
+    assert http.calls[-1].kwargs["json"] == {"status": "resolved"}
+
+
+def test_unresolve_issue(adapter, http):
+    assert isinstance(adapter.unresolve_issue("23296"), ErrorIssue)
+    assert http.last_call().kwargs["json"] == {"status": "unresolved"}
+
+
+def test_ignore_issue_indefinitely(adapter, http):
+    adapter.ignore_issue("23296")
+    assert http.last_call().kwargs["json"] == {"status": "ignored", "statusDetails": {}}
+
+
+def test_ignore_issue_until(adapter, http):
+    until = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+    adapter.ignore_issue("23296", until=until)
+    assert http.last_call().kwargs["json"] == {
+        "status": "ignored",
+        "statusDetails": {"ignoreUntil": "2026-11-01T12:00:00+00:00"},
+    }
+
+
+def test_assign_issue(adapter, http):
+    adapter.assign_issue("23296", "dev@example.net")
+    assert http.last_call().method == "PUT"
+    assert http.last_call().kwargs["json"] == {"assignedTo": "dev@example.net"}
+
+
+# ── webhooks ──
+
+
+def test_verify_webhook_hmac(http):
+    body = b'{"action":"created"}'
+    signature = hmac.new(b"sec", body, hashlib.sha256).hexdigest()
+    adapter = SentryAdapter(credentials={**CREDENTIALS, "webhook_secret": "sec"}, http_client=http)
+    assert adapter.verify_webhook({"Sentry-Hook-Signature": signature}, body) is True
+    assert adapter.verify_webhook({"sentry-hook-signature": signature}, body) is True
+    assert adapter.verify_webhook({"SENTRY-HOOK-SIGNATURE": signature}, body) is True
+    assert adapter.verify_webhook({"Sentry-Hook-Signature": signature}, body + b" ") is False
+    assert adapter.verify_webhook({}, body) is False
+
+
+def test_verify_webhook_explicit_secret_wins(adapter):
+    body = b"{}"
+    signature = hmac.new(b"given", body, hashlib.sha256).hexdigest()
+    assert adapter.verify_webhook({"Sentry-Hook-Signature": signature}, body, secret="given") is True
+
+
+def test_verify_webhook_without_secret_is_false(adapter):
+    body = b"{}"
+    signature = hmac.new(b"", body, hashlib.sha256).hexdigest()
+    assert adapter.verify_webhook({"Sentry-Hook-Signature": signature}, body) is False
+
+
+@pytest.mark.parametrize("signature", ["\u00e9" * 64, "t=1616346610,v1=" + "\u00e9" * 64, "t=\u00e9,v1=abc"])
+def test_verify_webhook_non_ascii_signature_is_false(http, signature):
+    adapter = SentryAdapter(credentials={**CREDENTIALS, "webhook_secret": "sec"}, http_client=http)
+    assert adapter.verify_webhook({"Sentry-Hook-Signature": signature}, b"{}") is False
+
+
+def test_parse_webhook(adapter):
+    body = json.dumps(load("hook_issue_created")).encode()
+    event = adapter.parse_webhook({"Sentry-Hook-Resource": "issue", "Request-ID": "r-1"}, body)
+    assert event.event_type == WebhookEventType.ERROR_ISSUE_CREATED and event.provider == "sentry"
+    assert event.idempotency_key == "r-1"
+
+
+def test_register_webhook_not_supported(adapter):
+    with pytest.raises(NotImplementedError):
+        adapter.register_webhook("https://hooks.example.net/x")
+
+
+# ── registry ──
+
+
+def test_registry():
+    import bapp_connectors.providers.monitoring.sentry  # noqa: F401
+
+    assert registry.is_registered("monitoring", "sentry")
+    assert any(m.name == "sentry" for m in registry.list_providers(capability=IssueTriageCapability))
+    assert any(m.name == "sentry" for m in registry.list_providers(capability=WebhookCapability))
+
+
+def test_get_project_stats_without_project_id_never_queries_the_whole_org(http):
+    from bapp_connectors.providers.monitoring.sentry.errors import SentryError
+
+    http.responses.insert(0, ("GET", "/projects/example-org/ghost/", fake_response({"slug": "ghost"})))
+    adapter = SentryAdapter(credentials=CREDENTIALS, http_client=http)
+    with pytest.raises(SentryError, match="ghost"):
+        adapter.get_project_stats("ghost")
+    assert not any("stats_v2" in c.path for c in http.calls)
+
+
+# ── ProjectProvisioningCapability ──
+
+
+def test_supports_provisioning(adapter):
+    assert adapter.supports(ProjectProvisioningCapability)
+
+
+def test_list_teams(adapter, http):
+    teams = adapter.list_teams()
+    assert all(isinstance(t, MonitoringTeam) for t in teams)
+    assert [t.ref for t in teams] == ["example-team", "example-ops"]
+    assert http.last_call().path == "https://sentry.example.net/api/0/organizations/example-org/teams/"
+
+
+def test_create_project_posts_to_team_without_retry(http):
+    from bapp_connectors.core.http.retry import RetryPolicy
+    from bapp_connectors.core.types import BackoffStrategy
+
+    http.retry_policy = RetryPolicy(max_retries=3, backoff=BackoffStrategy.NONE)
+    adapter = SentryAdapter(credentials=CREDENTIALS, http_client=http)
+    project = adapter.create_project("example-team", "New Service", slug="new-service", platform="python")
+    assert isinstance(project, MonitoredProject)
+    assert (project.ref, project.name, project.platform) == ("new-service", "New Service", "python")
+    assert project.web_url == "https://sentry.example.net/organizations/example-org/projects/new-service/"
+    call = http.last_call()
+    assert call.method == "POST"
+    assert call.path == "https://sentry.example.net/api/0/teams/example-org/example-team/projects/"
+    assert call.kwargs["json"] == {"name": "New Service", "slug": "new-service", "platform": "python"}
+
+
+def test_create_project_omits_unset_slug_and_platform(adapter, http):
+    adapter.create_project("example-team", "New Service")
+    assert http.last_call().kwargs["json"] == {"name": "New Service"}
+
+
+def test_create_project_is_never_retried():
+    from bapp_connectors.core.http.retry import RetryPolicy
+    from bapp_connectors.core.types import BackoffStrategy
+
+    http = FakeHttpClient()
+    http.retry_policy = RetryPolicy(max_retries=3, backoff=BackoffStrategy.NONE)
+    http.add("POST", "/projects/", fake_response({"detail": "unavailable"}, status=503))
+    with pytest.raises(ProviderError):
+        SentryAdapter(credentials=CREDENTIALS, http_client=http).create_project("example-team", "New")
+    assert len(http.calls) == 1
+
+
+def test_create_project_conflict_is_validation_error():
+    http = FakeHttpClient()
+    http.add("POST", "/projects/", fake_response({"detail": "slug exists"}, status=409))
+    adapter = SentryAdapter(credentials=CREDENTIALS, http_client=http)
+    with pytest.raises(ValidationError, match="Sentry project slug already exists: new-service"):
+        adapter.create_project("example-team", "New Service", slug="new-service")
+
+
+def test_create_project_forbidden_is_permanent():
+    from bapp_connectors.core.errors import AuthenticationError
+    from bapp_connectors.providers.monitoring.sentry.errors import SentryNotFoundError
+
+    http = FakeHttpClient()
+    http.add("POST", "/projects/", fake_response({"detail": "forbidden"}, status=403))
+    adapter = SentryAdapter(credentials=CREDENTIALS, http_client=http)
+    with pytest.raises(SentryNotFoundError, match="forbidden or missing") as info:
+        adapter.create_project("example-team", "New Service")
+    assert isinstance(info.value, PermanentProviderError) and not isinstance(info.value, AuthenticationError)
+
+
+def test_list_keys_maps_dsn(adapter, http):
+    keys = adapter.list_keys("aio-backend")
+    assert len(keys) == 1 and isinstance(keys[0], ProjectKey)
+    assert keys[0].dsn_public == "https://REDACTEDPUBLICKEY0000000000000000@sentry.example.net/1"
+    assert http.last_call().path == "https://sentry.example.net/api/0/projects/example-org/aio-backend/keys/"
+
+
+def test_list_keys_empty():
+    http = FakeHttpClient()
+    http.add("GET", "/keys/", fake_response([]))
+    assert SentryAdapter(credentials=CREDENTIALS, http_client=http).list_keys("empty") == []
+
+
+def test_registry_lists_sentry_for_provisioning():
+    import bapp_connectors.providers.monitoring.sentry  # noqa: F401
+
+    assert any(m.name == "sentry" for m in registry.list_providers(capability=ProjectProvisioningCapability))

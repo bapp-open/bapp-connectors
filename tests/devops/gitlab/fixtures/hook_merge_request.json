@@ -1,0 +1,24 @@
+{
+  "object_kind": "merge_request",
+  "event_type": "merge_request",
+  "user": {"id": 3, "name": "Example User", "username": "exampleuser", "email": "user@example.com"},
+  "project": {
+    "id": 382,
+    "name": "aio-backend",
+    "web_url": "https://gitlab.example.net/bapp-cloud/application/aio-backend",
+    "path_with_namespace": "bapp-cloud/application/aio-backend"
+  },
+  "object_attributes": {
+    "id": 4512,
+    "iid": 12,
+    "target_project_id": 382,
+    "title": "Example merge request 2",
+    "state": "merged",
+    "action": "merge",
+    "source_branch": "feature/reception-scan-increment",
+    "target_branch": "master",
+    "created_at": "2026-05-25T18:02:11.120Z",
+    "updated_at": "2026-05-26T04:57:55.601Z",
+    "url": "https://gitlab.example.net/bapp-cloud/application/aio-backend/-/merge_requests/12"
+  }
+}

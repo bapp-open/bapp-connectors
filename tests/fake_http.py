@@ -7,8 +7,10 @@ is recorded in ``calls`` for assertions on outgoing payloads.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 
@@ -68,3 +70,14 @@ class FakeHttpClient:
     def last_call(self) -> RecordedCall:
         assert self.calls, "FakeHttpClient: no calls recorded"
         return self.calls[-1]
+
+
+def fake_response(payload: Any, headers: dict | None = None, status: int = 200) -> SimpleNamespace:
+    """A stand-in for ``requests.Response``, for clients that call with ``direct_response=True``."""
+    return SimpleNamespace(
+        status_code=status,
+        headers=headers or {},
+        json=lambda: payload,
+        text=json.dumps(payload),
+        ok=status < 400,
+    )

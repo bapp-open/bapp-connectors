@@ -1,0 +1,347 @@
+[
+  {
+    "id": "23296",
+    "shareId": null,
+    "shortId": "AIO-BACKEND-3XK",
+    "title": "ExampleError: example message 1",
+    "culprit": "example.module1 in handler",
+    "permalink": "https://sentry.example.net/organizations/example-org/issues/23296/",
+    "logger": null,
+    "level": "error",
+    "status": "unresolved",
+    "statusDetails": {},
+    "substatus": "new",
+    "isPublic": false,
+    "platform": "python",
+    "project": {
+      "id": "3",
+      "name": "aio-backend",
+      "slug": "aio-backend",
+      "platform": "python-django"
+    },
+    "type": "error",
+    "metadata": {
+      "value": "example message 1",
+      "type": "ExampleError",
+      "filename": "example/module1.py",
+      "function": "handler",
+      "in_app_frame_mix": "mixed",
+      "sdk": {
+        "name": "sentry.python.django",
+        "name_normalized": "sentry.python"
+      },
+      "initial_priority": 75,
+      "title": null
+    },
+    "numComments": 0,
+    "assignedTo": {
+      "type": "user",
+      "id": "1",
+      "name": "Example User",
+      "email": "user@example.com"
+    },
+    "isBookmarked": false,
+    "isSubscribed": false,
+    "subscriptionDetails": null,
+    "hasSeen": false,
+    "annotations": [],
+    "issueType": "error",
+    "issueCategory": "error",
+    "priority": "high",
+    "priorityLockedAt": null,
+    "seerFixabilityScore": null,
+    "seerAutofixLastTriggered": null,
+    "seerExplorerAutofixLastTriggered": null,
+    "isUnhandled": true,
+    "count": "3",
+    "userCount": 1,
+    "firstSeen": "2026-10-23T07:57:53.537894Z",
+    "lastSeen": "2026-10-23T07:58:07.627162Z",
+    "stats": {
+      "14d": [
+        [
+          1791590400,
+          0
+        ],
+        [
+          1791676800,
+          0
+        ],
+        [
+          1791763200,
+          0
+        ],
+        [
+          1791849600,
+          0
+        ],
+        [
+          1791936000,
+          0
+        ],
+        [
+          1792022400,
+          0
+        ],
+        [
+          1792108800,
+          0
+        ],
+        [
+          1792195200,
+          0
+        ],
+        [
+          1792281600,
+          0
+        ],
+        [
+          1792368000,
+          0
+        ],
+        [
+          1792454400,
+          0
+        ],
+        [
+          1792540800,
+          0
+        ],
+        [
+          1792627200,
+          0
+        ],
+        [
+          1792713600,
+          3
+        ]
+      ]
+    }
+  },
+  {
+    "id": "21832",
+    "shareId": null,
+    "shortId": "AIO-BACKEND-3Q4",
+    "title": "ExampleError: example message 2",
+    "culprit": "django.core.management.commands.shell in handle",
+    "permalink": "https://sentry.example.net/organizations/example-org/issues/21832/",
+    "logger": null,
+    "level": "info",
+    "status": "unresolved",
+    "statusDetails": {},
+    "substatus": "ongoing",
+    "isPublic": false,
+    "platform": "python",
+    "project": {
+      "id": "3",
+      "name": "aio-backend",
+      "slug": "aio-backend",
+      "platform": "python-django"
+    },
+    "type": "default",
+    "metadata": {
+      "title": "Example message 2",
+      "sdk": {
+        "name": "sentry.python.django",
+        "name_normalized": "sentry.python"
+      },
+      "initial_priority": 25,
+      "value": "example message 2",
+      "type": "ExampleError",
+      "filename": "<string>",
+      "function": "<module>"
+    },
+    "numComments": 0,
+    "assignedTo": null,
+    "isBookmarked": false,
+    "isSubscribed": false,
+    "subscriptionDetails": null,
+    "hasSeen": true,
+    "annotations": [],
+    "issueType": "error",
+    "issueCategory": "error",
+    "priority": "low",
+    "priorityLockedAt": null,
+    "seerFixabilityScore": null,
+    "seerAutofixLastTriggered": null,
+    "seerExplorerAutofixLastTriggered": null,
+    "isUnhandled": false,
+    "count": "84",
+    "userCount": 6,
+    "firstSeen": "2026-09-02T02:55:28.612403Z",
+    "lastSeen": "2026-10-23T05:05:42.270196Z",
+    "stats": {
+      "14d": [
+        [
+          1791590400,
+          0
+        ],
+        [
+          1791676800,
+          0
+        ],
+        [
+          1791763200,
+          1
+        ],
+        [
+          1791849600,
+          1
+        ],
+        [
+          1791936000,
+          18
+        ],
+        [
+          1792022400,
+          6
+        ],
+        [
+          1792108800,
+          3
+        ],
+        [
+          1792195200,
+          2
+        ],
+        [
+          1792281600,
+          0
+        ],
+        [
+          1792368000,
+          0
+        ],
+        [
+          1792454400,
+          2
+        ],
+        [
+          1792540800,
+          3
+        ],
+        [
+          1792627200,
+          1
+        ],
+        [
+          1792713600,
+          1
+        ]
+      ]
+    }
+  },
+  {
+    "id": "23270",
+    "shareId": null,
+    "shortId": "AIO-BACKEND-3XJ",
+    "title": "ExampleError: example message 3",
+    "culprit": "example.module3 in handler",
+    "permalink": "https://sentry.example.net/organizations/example-org/issues/23270/",
+    "logger": "bapp_sdk.helpers.company_info",
+    "level": "error",
+    "status": "unresolved",
+    "statusDetails": {},
+    "substatus": "new",
+    "isPublic": false,
+    "platform": "python",
+    "project": {
+      "id": "3",
+      "name": "aio-backend",
+      "slug": "aio-backend",
+      "platform": "python-django"
+    },
+    "type": "error",
+    "metadata": {
+      "value": "example message 3",
+      "type": "ExampleError",
+      "filename": "example/module3.py",
+      "function": "handler",
+      "in_app_frame_mix": "mixed",
+      "sdk": {
+        "name": "sentry.python.django",
+        "name_normalized": "sentry.python"
+      },
+      "initial_priority": 75
+    },
+    "numComments": 0,
+    "assignedTo": null,
+    "isBookmarked": false,
+    "isSubscribed": false,
+    "subscriptionDetails": null,
+    "hasSeen": false,
+    "annotations": [],
+    "issueType": "error",
+    "issueCategory": "error",
+    "priority": "high",
+    "priorityLockedAt": null,
+    "seerFixabilityScore": null,
+    "seerAutofixLastTriggered": null,
+    "seerExplorerAutofixLastTriggered": null,
+    "isUnhandled": false,
+    "count": "1",
+    "userCount": 1,
+    "firstSeen": "2026-10-22T12:16:27.527665Z",
+    "lastSeen": "2026-10-22T12:16:27.527665Z",
+    "stats": {
+      "14d": [
+        [
+          1791590400,
+          0
+        ],
+        [
+          1791676800,
+          0
+        ],
+        [
+          1791763200,
+          0
+        ],
+        [
+          1791849600,
+          0
+        ],
+        [
+          1791936000,
+          0
+        ],
+        [
+          1792022400,
+          0
+        ],
+        [
+          1792108800,
+          0
+        ],
+        [
+          1792195200,
+          0
+        ],
+        [
+          1792281600,
+          0
+        ],
+        [
+          1792368000,
+          0
+        ],
+        [
+          1792454400,
+          0
+        ],
+        [
+          1792540800,
+          0
+        ],
+        [
+          1792627200,
+          1
+        ],
+        [
+          1792713600,
+          0
+        ]
+      ]
+    }
+  }
+]

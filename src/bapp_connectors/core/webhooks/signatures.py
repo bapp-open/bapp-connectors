@@ -72,8 +72,9 @@ class AdapterOnlyVerifier(SignatureVerifier):
 # Signature methods whose verification lives in the adapter, not in a shared secret.
 # "apple-jws": App Store Server Notifications V2 (JWS cu lant x5c).
 # "google-pubsub-oidc": Google Play RTDN prin Pub/Sub push (token OIDC optional).
+# "plain-token": GitLab: shared secret compared by the adapter.
 # "temu-hmac-aes": Temu — body AES-CBC cu app secret + HMAC-SHA256 peste headere + payload decriptat.
-ADAPTER_VERIFIED_METHODS = frozenset({"netopia-jwt", "apple-jws", "google-pubsub-oidc", "temu-hmac-aes"})
+ADAPTER_VERIFIED_METHODS = frozenset({"netopia-jwt", "apple-jws", "google-pubsub-oidc", "plain-token", "temu-hmac-aes"})
 
 
 class NoopVerifier(SignatureVerifier):

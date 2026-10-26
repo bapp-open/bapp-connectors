@@ -11,6 +11,8 @@ from .fulfillment import Carrier, FulfillmentCapability, ShipmentResult, Shippin
 from .image_generation import ImageGenerationCapability
 from .inbox import InboxCapability
 from .invoice_attach import InvoiceAttachmentCapability
+from .issue_management import IssueManagementCapability
+from .issue_triage import IssueTriageCapability
 from .mailbox import MailboxCapability
 from .oauth import OAuthCapability, OAuthTokens
 from .order_amounts import OrderAmountCapability, OrderAmounts, OrderLineAmounts
@@ -28,6 +30,7 @@ from .product_management import (
     RelatedProductCapability,
     VariantManagementCapability,
 )
+from .project_provisioning import ProjectProvisioningCapability
 from .returns import ReturnsCapability
 from .rich_messaging import RichMessagingCapability
 from .saved_payment import SavedPaymentCapability
@@ -59,6 +62,8 @@ __all__ = [
     "ImageGenerationCapability",
     "InboxCapability",
     "InvoiceAttachmentCapability",
+    "IssueManagementCapability",
+    "IssueTriageCapability",
     "MailboxCapability",
     "OAuthCapability",
     "OAuthTokens",
@@ -73,6 +78,7 @@ __all__ = [
     "ProductFeedCapability",
     "ProductFullUpdateCapability",
     "ProductLookupCapability",
+    "ProjectProvisioningCapability",
     "RelatedProductCapability",
     "RemoteOrderStatus",
     "ReturnsCapability",

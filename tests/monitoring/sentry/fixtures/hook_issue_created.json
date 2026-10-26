@@ -1,0 +1,32 @@
+{
+  "action": "created",
+  "installation": {"uuid": "7a485448-a9e2-4c85-8a3c-4f44175783c9"},
+  "data": {
+    "issue": {
+      "id": "23310",
+      "shortId": "AIO-BACKEND-3XL",
+      "title": "ExampleError: example message 4",
+      "culprit": "example.module4 in handler",
+      "level": "error",
+      "status": "unresolved",
+      "statusDetails": {},
+      "substatus": "new",
+      "platform": "python",
+      "type": "error",
+      "metadata": {"type": "ExampleError", "value": "example message 4", "filename": "example/module4.py", "function": "handler"},
+      "logger": null,
+      "isUnhandled": true,
+      "count": "1",
+      "userCount": 0,
+      "firstSeen": "2026-10-23T08:12:04.118223Z",
+      "lastSeen": "2026-10-23T08:12:04.118223Z",
+      "assignedTo": null,
+      "permalink": "https://sentry.example.net/organizations/example-org/issues/23310/",
+      "web_url": "https://sentry.example.net/organizations/example-org/issues/23310/",
+      "url": "https://sentry.example.net/api/0/organizations/example-org/issues/23310/",
+      "project_url": "https://sentry.example.net/organizations/example-org/issues/?project=3",
+      "project": {"id": "3", "name": "aio-backend", "slug": "aio-backend", "platform": "python-django"}
+    }
+  },
+  "actor": {"type": "application", "id": "sentry", "name": "Sentry"}
+}
