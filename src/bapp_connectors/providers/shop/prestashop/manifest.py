@@ -49,7 +49,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=True,
                 help_text="Whether PrestaShop prices include tax (tax_incl fields).",
-                colspan=12,
+                colspan=24,
             ),
         ],
     ),

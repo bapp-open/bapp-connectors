@@ -67,7 +67,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=False,
                 help_text="Whether Shopify prices include tax.",
-                colspan=8,
+                colspan=16,
             ),
         ],
     ),

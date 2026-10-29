@@ -77,7 +77,7 @@ manifest = ProviderManifest(
                 default=True,
                 help_text="Whether the WooCommerce store is configured to use VAT-inclusive prices (WooCommerce > Settings > Tax > Prices entered with tax).",
                 group=PRICES,
-                colspan=12,
+                colspan=24,
             ),
             SettingsField(
                 name="batch_size", label="Products per batch", field_type=FieldType.INT, default=20,

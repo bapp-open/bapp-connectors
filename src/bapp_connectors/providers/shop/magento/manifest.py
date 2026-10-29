@@ -58,7 +58,7 @@ manifest = ProviderManifest(
                 field_type=FieldType.BOOL,
                 default=False,
                 help_text="Whether Magento catalog prices include tax (Stores > Config > Tax > Catalog Prices).",
-                colspan=8,
+                colspan=16,
             ),
         ],
     ),
