@@ -184,3 +184,36 @@ def test_woocommerce_declares_settings_detection_capability():
     from bapp_connectors.providers.shop.woocommerce.manifest import manifest
 
     assert SettingsDetectionCapability in manifest.capabilities
+
+
+# ── Webhook ping (prod: WebhookEvent 8108, Sentry 23489) ──
+
+PING_HEADERS = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    "User-Agent": "WooCommerce/11.2.1 Hookshot (WordPress/7.1.4)",
+}
+
+
+def test_webhook_ping_on_creation_is_not_an_error(adapter):
+    from bapp_connectors.core.dto import WebhookEventType
+
+    event = adapter.parse_webhook(PING_HEADERS, b"webhook_id=1")
+    assert event.event_type == WebhookEventType.UNKNOWN
+    assert event.provider_event_type == "ping"
+    assert event.extra == {"ping": True, "webhook_id": "1"}
+
+
+def test_real_delivery_is_still_parsed_as_json(adapter):
+    from bapp_connectors.core.dto import WebhookEventType
+
+    headers = {"X-WC-Webhook-Topic": "order.created", "X-WC-Webhook-Delivery-ID": "77"}
+    event = adapter.parse_webhook(headers, b'{"id": 5, "webhook_id": 1}')
+    assert event.event_type == WebhookEventType.ORDER_CREATED
+    assert event.payload["id"] == 5
+
+
+def test_other_non_json_body_still_fails(adapter):
+    import json
+
+    with pytest.raises(json.JSONDecodeError):
+        adapter.parse_webhook(PING_HEADERS, b"action=woocommerce_new_order&arg=5")

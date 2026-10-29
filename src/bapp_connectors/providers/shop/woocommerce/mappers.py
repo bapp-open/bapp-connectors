@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 from datetime import UTC, datetime
 from decimal import Decimal
+from urllib.parse import parse_qs
 
 from bapp_connectors.core.dto import (
     Address,
@@ -578,6 +579,32 @@ def webhook_event_from_woocommerce(headers: dict, payload: dict) -> WebhookEvent
         idempotency_key=str(delivery_id) if delivery_id else "",
         received_at=datetime.now(UTC),
         extra={"resource": resource, "webhook_id": event_id},
+    )
+
+
+def webhook_ping_from_woocommerce(body: bytes) -> WebhookEvent | None:
+    """The ping WooCommerce sends on webhook creation, or None for a real delivery.
+
+    The ping is form-encoded (``webhook_id=1``), never JSON; a real delivery always is.
+    """
+    try:
+        text = body.decode("utf-8") if isinstance(body, bytes) else str(body)
+    except UnicodeDecodeError:
+        return None
+    if text.lstrip().startswith(("{", "[")):
+        return None
+    fields = parse_qs(text.strip(), keep_blank_values=True)
+    if set(fields) != {"webhook_id"}:
+        return None
+    webhook_id = fields["webhook_id"][0]
+    return WebhookEvent(
+        event_id=f"ping-{webhook_id}",
+        event_type=WebhookEventType.UNKNOWN,
+        provider="woocommerce",
+        provider_event_type="ping",
+        payload={"webhook_id": webhook_id},
+        received_at=datetime.now(UTC),
+        extra={"ping": True, "webhook_id": webhook_id},
     )
 
 

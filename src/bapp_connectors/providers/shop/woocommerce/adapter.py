@@ -77,6 +77,7 @@ from bapp_connectors.providers.shop.woocommerce.mappers import (
     variant_from_woocommerce,
     variant_to_woocommerce,
     webhook_event_from_woocommerce,
+    webhook_ping_from_woocommerce,
 )
 
 if TYPE_CHECKING:
@@ -678,7 +679,15 @@ class WooCommerceShopAdapter(
         return hmac.compare_digest(signature, computed)
 
     def parse_webhook(self, headers: dict, body: bytes) -> WebhookEvent:
-        """Parse a WooCommerce webhook payload into a normalized WebhookEvent."""
+        """Parse a WooCommerce webhook payload into a normalized WebhookEvent.
+
+        WooCommerce pings the delivery URL when a webhook is created: a form-encoded
+        ``webhook_id=N`` with no ``X-WC-Webhook-*`` headers and no signature. It is not
+        an event, but it must not fail the delivery either.
+        """
+        ping = webhook_ping_from_woocommerce(body)
+        if ping is not None:
+            return ping
         payload = json.loads(body)
         return webhook_event_from_woocommerce(headers, payload)
 
