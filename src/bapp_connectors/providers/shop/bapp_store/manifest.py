@@ -51,7 +51,6 @@ manifest = ProviderManifest(
     settings=SettingsConfig(
         fields=[
             SettingsField(name="prices_include_vat", label="Store Prices Include VAT", field_type=FieldType.BOOL, default=True, help_text="Company Store displays gross prices; leave on unless the store is configured net.", group=PRICES, colspan=12),
-            SettingsField(name="vat_rate", label="VAT Rate", field_type=FieldType.STR, default="0.21", help_text="VAT rate as a decimal (0.21 for 21%). Used to convert between net and gross prices.", group=PRICES, colspan=12),
             SettingsField(name="batch_size", label="Products per batch", field_type=FieldType.INT, default=100, help_text="Products per CatalogSyncTask call (the store accepts at most 100).", group=CATALOG_SYNC, colspan=8),
             SettingsField(name="pause_seconds", label="Pause between batches (s)", field_type=FieldType.INT, default=1, help_text="Seconds to wait between consecutive batches.", group=CATALOG_SYNC, colspan=8),
             SettingsField(name="publish_status", label="Status for new products", field_type=FieldType.SELECT, choices=["publish", "draft"], default="publish", help_text="New products are visible immediately or created inactive for review.", group=CATALOG_SYNC, colspan=8),

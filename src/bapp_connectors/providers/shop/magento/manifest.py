@@ -60,14 +60,6 @@ manifest = ProviderManifest(
                 help_text="Whether Magento catalog prices include tax (Stores > Config > Tax > Catalog Prices).",
                 colspan=8,
             ),
-            SettingsField(
-                name="vat_rate",
-                label="VAT Rate",
-                field_type=FieldType.STR,
-                default="0.19",
-                help_text="VAT rate as decimal (e.g., 0.19 for 19%).",
-                colspan=8,
-            ),
         ],
     ),
     capabilities=[

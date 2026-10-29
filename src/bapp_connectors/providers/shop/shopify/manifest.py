@@ -69,13 +69,6 @@ manifest = ProviderManifest(
                 help_text="Whether Shopify prices include tax.",
                 colspan=8,
             ),
-            SettingsField(
-                name="vat_rate",
-                label="VAT Rate",
-                field_type=FieldType.STR,
-                default="0.19",
-                colspan=8,
-            ),
         ],
     ),
     capabilities=[

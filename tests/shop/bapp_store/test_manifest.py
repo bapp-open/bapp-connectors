@@ -51,7 +51,8 @@ def test_the_token_is_still_a_credential_even_though_nobody_types_it():
 def test_settings_have_store_defaults():
     defaults = manifest.settings.apply_defaults({})
     assert defaults["prices_include_vat"] is True
-    assert defaults["vat_rate"] == "0.21"
+    # Cota nu e setare: BAPP trimite pretul brut calculat cu cota fiecarui produs.
+    assert "vat_rate" not in defaults
     assert defaults["batch_size"] == 100
     assert defaults["pause_seconds"] == 1
     assert defaults["publish_status"] == "publish"

@@ -80,15 +80,6 @@ manifest = ProviderManifest(
                 colspan=12,
             ),
             SettingsField(
-                name="vat_rate",
-                label="VAT Rate",
-                field_type=FieldType.STR,
-                default="0.19",
-                help_text="VAT rate as a decimal (e.g., 0.19 for 19%). Used to convert between net and gross prices.",
-                group=PRICES,
-                colspan=12,
-            ),
-            SettingsField(
                 name="batch_size", label="Products per batch", field_type=FieldType.INT, default=20,
                 help_text="How many products are sent in one /products/batch call (max 100). Smaller batches are gentler on the WordPress server, especially when images are included.",
                 group=CATALOG_SYNC,
