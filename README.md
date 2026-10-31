@@ -44,8 +44,8 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **Monitoring** | Sentry | 1 |
 | **Ads** | Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads | 6 |
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
-| **Social** | Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts | 7 |
-| | **Total** | **76** |
+| **Social** | Facebook Page, Instagram, LinkedIn Page, Meta (Facebook + Instagram), Pinterest, Threads, TikTok, YouTube Shorts | 8 |
+| | **Total** | **77** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -259,7 +259,7 @@ packages/connectors/
 │       ├── monitoring/    # Sentry
 │       ├── ads/           # Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads
 │       ├── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
-│       └── social/        # Facebook Page, Instagram, LinkedIn Page, Pinterest, Threads, TikTok, YouTube Shorts
+│       └── social/        # Facebook Page, Instagram, LinkedIn Page, Meta (Facebook + Instagram), Pinterest, Threads, TikTok, YouTube Shorts
 <!-- STRUCTURE:END -->
 ├── packages/django/        # Django integration (separate uv workspace)
 │   └── src/django_bapp_connectors/
