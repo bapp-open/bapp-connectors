@@ -3,7 +3,8 @@ Instagram social adapter — implements SocialPort + SocialPublishCapability.
 
 Covers an Instagram *Business/Creator* account via the Instagram Graph API
 (graph.facebook.com v19.0): profile, published media (incl. Reels), per-media
-stats, account-level insights, and URL-based publishing (images and Reels).
+stats, account-level insights, URL-based publishing (images and Reels) with
+user/product tags and location, and mention/product search for tagging.
 
 Auth: Page/user access token with instagram scopes, sent as a Bearer header.
 """
@@ -13,20 +14,31 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
-from bapp_connectors.core.capabilities import OAuthCapability, SocialPublishCapability
+from bapp_connectors.core.capabilities import (
+    OAuthCapability,
+    SocialMentionSearchCapability,
+    SocialProductSearchCapability,
+    SocialPublishCapability,
+)
 from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import ConnectionTestResult, PaginatedResult
 from bapp_connectors.core.dto.social import (
     PublishResult,
     PublishStatus,
+    SocialFormat,
+    SocialFormatProfile,
     SocialMediaType,
+    SocialMention,
     SocialPrivacy,
+    SocialProductTag,
+    SocialPublishProfile,
 )
 from bapp_connectors.core.errors import ConnectorError, ValidationError
 from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
 from bapp_connectors.core.ports import SocialPort
+from bapp_connectors.core.social_profile import compose_caption
 from bapp_connectors.providers.social.instagram.client import InstagramGraphClient
-from bapp_connectors.providers.social.instagram.errors import check_payload
+from bapp_connectors.providers.social.instagram.errors import check_payload, is_user_not_found
 from bapp_connectors.providers.social.instagram.manifest import manifest
 from bapp_connectors.providers.social.instagram.mappers import (
     account_from_ig,
@@ -54,8 +66,43 @@ ACCOUNT_INSIGHT_METRICS = "impressions,reach"
 
 _FB_OAUTH_DIALOG_URL = "https://www.facebook.com/v19.0/dialog/oauth"
 
+# Limits from Meta's docs: captions up to 2,200 characters with at most 30
+# hashtags and 20 @-tags; Reels are vertical (9:16) 3-90 s videos. Feed posts
+# are images only here — videos always publish as Reels.
+_CAPTION_LIMITS = {"max_text_length": 2200, "max_hashtags": 30, "supports_mentions": True, "max_mentions": 20}
+PUBLISH_PROFILE = SocialPublishProfile(
+    formats=[
+        SocialFormatProfile(
+            format=SocialFormat.POST,
+            media_types=[SocialMediaType.IMAGE],
+            supports_product_tags=True,
+            supports_location=True,
+            **_CAPTION_LIMITS,
+        ),
+        SocialFormatProfile(
+            format=SocialFormat.REEL,
+            media_types=[SocialMediaType.SHORT_VIDEO],
+            supports_product_tags=True,
+            supports_location=True,
+            min_video_seconds=3,
+            max_video_seconds=90,
+            vertical_only=True,
+            **_CAPTION_LIMITS,
+        ),
+    ]
+)
 
-class InstagramSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapability):
+# Image tags need a position; Instagram has no "whole image" tag, so tags are centred.
+_TAG_CENTER = {"x": 0.5, "y": 0.5}
+
+
+class InstagramSocialAdapter(
+    SocialPort,
+    SocialPublishCapability,
+    SocialMentionSearchCapability,
+    SocialProductSearchCapability,
+    OAuthCapability,
+):
     """
     Instagram Business/Creator account adapter (Instagram Graph API v19.0).
 
@@ -72,7 +119,20 @@ class InstagramSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapabilit
     container -> media_publish flow; videos/Reels come back PROCESSING while
     Meta transcodes — poll ``check_publish_status`` with the returned
     ``publish_id`` (the container id): it performs the final media_publish
-    step once the container reaches FINISHED.
+    step once the container reaches FINISHED. Captions are the description
+    plus ``draft.hashtags``; mentions are sent as ``user_tags``, product tags
+    as ``product_tags`` (centred on images) and ``draft.location`` as
+    ``location_id`` (a Facebook Page id) on both images and Reels.
+
+    Implements SocialMentionSearchCapability via ``business_discovery``, which
+    only resolves an exact username of a Business/Creator account (0 or 1
+    result), and SocialProductSearchCapability over the account's first
+    available catalog.
+
+    Location *search* is deliberately not offered (no
+    SocialLocationSearchCapability): the only place lookup left in the Graph
+    API, ``pages/search``, requires the "Page Public Metadata Access" feature,
+    which needs Meta app review. A known place id can still be attached.
 
     Implements OAuthCapability: Meta OAuth2 authorization code flow. The
     exchanged token is a *user* token — call ``list_instagram_accounts`` with
@@ -325,6 +385,9 @@ class InstagramSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapabilit
 
     # ── SocialPublishCapability ──
 
+    def get_publish_profile(self) -> SocialPublishProfile:
+        return PUBLISH_PROFILE
+
     def publish_post(self, draft: SocialPostDraft) -> PublishResult:
         """Publish an image or video/Reel to the IG Business account.
 
@@ -345,9 +408,12 @@ class InstagramSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapabilit
         if not draft.media_url:
             raise ValidationError("Instagram has no text-only posts; a media_url (image or video) is required")
 
+        is_video = draft.media_type in (SocialMediaType.VIDEO, SocialMediaType.SHORT_VIDEO)
+        if draft.format == SocialFormat.REEL and not is_video:
+            raise ValidationError("Instagram Reels require a video (media_type SHORT_VIDEO)")
         if draft.media_type == SocialMediaType.IMAGE:
             return self._publish_image(draft)
-        if draft.media_type in (SocialMediaType.VIDEO, SocialMediaType.SHORT_VIDEO):
+        if is_video:
             return self._publish_video(draft)
         raise ValidationError(f"Instagram cannot publish media of type '{draft.media_type}'")
 
@@ -378,7 +444,12 @@ class InstagramSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapabilit
 
     def _publish_image(self, draft: SocialPostDraft) -> PublishResult:
         """POST {ig_user_id}/media + media_publish — images publish synchronously."""
-        payload = {"image_url": draft.media_url, "caption": draft.description, **draft.extra}
+        payload = {
+            "image_url": draft.media_url,
+            "caption": compose_caption(draft.description, draft.hashtags),
+            **self._tags(draft, position=_TAG_CENTER),
+            **draft.extra,
+        }
         container = self.client.post_edge(self.ig_user_id, "media", payload)
         creation_id = str(container.get("id", ""))
 
@@ -395,7 +466,9 @@ class InstagramSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapabilit
         payload = {
             "media_type": "REELS",
             "video_url": draft.media_url,
-            "caption": draft.description,
+            "share_to_feed": True,
+            "caption": compose_caption(draft.description, draft.hashtags),
+            **self._tags(draft),
             **draft.extra,
         }
         container = self.client.post_edge(self.ig_user_id, "media", payload)
@@ -405,3 +478,60 @@ class InstagramSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapabilit
             status=PublishStatus.PROCESSING,
             extra=container,
         )
+
+    @staticmethod
+    def _tags(draft: SocialPostDraft, position: dict | None = None) -> dict:
+        """``user_tags`` / ``product_tags`` / ``location_id`` params; images also need a tag ``position``."""
+        position = position or {}
+        params: dict = {}
+        if draft.mentions:
+            params["user_tags"] = [{"username": m.username, **position} for m in draft.mentions]
+        if draft.product_tags:
+            params["product_tags"] = [{"product_id": p.id, **position} for p in draft.product_tags]
+        if draft.location:
+            params["location_id"] = draft.location.id
+        return params
+
+    # ── SocialMentionSearchCapability ──
+
+    def search_mentions(self, query: str, limit: int = 10) -> list[SocialMention]:
+        """Look up a Business/Creator account by its exact username (0 or 1 result)."""
+        username = query.strip().lstrip("@").strip()
+        if not username or limit < 1:
+            return []
+        try:
+            payload = self.client.business_discovery(self.ig_user_id, username, "username,name,profile_picture_url")
+        except ConnectorError as e:
+            if is_user_not_found(e):
+                return []
+            raise
+        account = payload.get("business_discovery") or {}
+        if not account.get("username"):
+            return []
+        return [
+            SocialMention(
+                username=account["username"],
+                id=str(account.get("id", "")),
+                name=account.get("name", ""),
+                avatar_url=account.get("profile_picture_url", ""),
+            )
+        ]
+
+    # ── SocialProductSearchCapability ──
+
+    def search_products(self, query: str, limit: int = 10) -> list[SocialProductTag]:
+        """Search taggable products in the account's first available catalog (none → ``[]``)."""
+        catalogs = self.client.available_catalogs(self.ig_user_id).get("data", [])
+        if not catalogs:
+            return []
+        catalog_id = str(catalogs[0].get("catalog_id", ""))
+        products = self.client.catalog_product_search(self.ig_user_id, catalog_id, query).get("data", [])
+        return [
+            SocialProductTag(
+                id=str(product.get("product_id", "")),
+                name=product.get("product_name", ""),
+                image_url=product.get("image_url", ""),
+                extra={k: product[k] for k in ("retailer_id", "review_status") if k in product},
+            )
+            for product in products[:limit]
+        ]

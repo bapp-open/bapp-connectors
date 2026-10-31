@@ -465,6 +465,7 @@ class TestPublishPost:
         assert call.kwargs["json"] == {
             "media_type": "REELS",
             "video_url": "https://cdn.example.com/clip.mp4",
+            "share_to_feed": True,
             "caption": "A clip",
         }
         assert result.status == PublishStatus.PROCESSING

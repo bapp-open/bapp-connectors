@@ -71,3 +71,15 @@ class InstagramGraphClient:
         query = {k: v for k, v in query.items() if v is not None}
         response = self.http.call("GET", f"{object_id}/insights", params=query)
         return check_payload(response)
+
+    def business_discovery(self, ig_user_id: str, username: str, fields: str) -> dict:
+        """GET {ig_user_id}?fields=business_discovery.username(<username>){fields} — public Business/Creator profile."""
+        return self.get_object(ig_user_id, f"business_discovery.username({username}){{{fields}}}")
+
+    def available_catalogs(self, ig_user_id: str) -> dict:
+        """GET {ig_user_id}/available_catalogs — product catalogs usable for shopping tags."""
+        return self.get_edge(ig_user_id, "available_catalogs")
+
+    def catalog_product_search(self, ig_user_id: str, catalog_id: str, query: str) -> dict:
+        """GET {ig_user_id}/catalog_product_search — taggable products of a catalog matching ``query``."""
+        return self.get_edge(ig_user_id, "catalog_product_search", catalog_id=catalog_id, q=query)
