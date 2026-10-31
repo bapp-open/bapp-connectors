@@ -17,6 +17,7 @@ from bapp_connectors.core.capabilities.oauth import OAuthTokens
 from bapp_connectors.core.dto import ConnectionTestResult
 from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
 from bapp_connectors.core.ports import BasePort
+from bapp_connectors.providers.social.facebook.http import GraphHttpClient
 from bapp_connectors.providers.social.meta.client import MetaGraphClient
 from bapp_connectors.providers.social.meta.errors import check_payload
 from bapp_connectors.providers.social.meta.manifest import manifest
@@ -58,7 +59,7 @@ class MetaAdapter(BasePort, OAuthCapability, SocialDestinationsCapability):
         self._app_secret = credentials.get("app_secret", "")
 
         if http_client is None:
-            http_client = ResilientHttpClient(
+            http_client = GraphHttpClient(
                 base_url=manifest.base_url,
                 auth=BearerAuth(credentials.get("token", "")),
                 provider_name="meta",

@@ -173,8 +173,22 @@ class TestSearchMentions:
         assert adapter(fake).search_mentions(" @ ") == []
         assert fake.calls == []
 
+    @pytest.mark.parametrize(
+        "query",
+        ["bapp){id}", "a b", "user,name", "x" * 31, "ana(1)", "@"],
+    )
+    def test_invalid_username_makes_no_call(self, query):
+        fake = FakeHttpClient()
+        assert adapter(fake).search_mentions(query) == []
+        assert fake.calls == []
+
 
 class TestSearchProducts:
+    def test_blank_query_makes_no_call(self):
+        fake = FakeHttpClient()
+        assert adapter(fake).search_products("  ") == []
+        assert fake.calls == []
+
     def test_searches_first_catalog(self):
         fake = FakeHttpClient()
         fake.add("GET", f"{IG_USER_ID}/available_catalogs", {"data": [{"catalog_id": "K1"}, {"catalog_id": "K2"}]})

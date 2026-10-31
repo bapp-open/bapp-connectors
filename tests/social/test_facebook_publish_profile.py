@@ -106,6 +106,51 @@ class TestReels:
         )
         assert adapter(fake).check_publish_status("V1").status == PublishStatus.FAILED
 
+    def test_failed_status_carries_meta_error_message(self):
+        fake = FakeHttpClient()
+        fake.add(
+            "GET",
+            "V1",
+            {
+                "status": {
+                    "video_status": "error",
+                    "processing_phase": {"status": "error", "error": {"message": "Video format not supported"}},
+                }
+            },
+        )
+        result = adapter(fake).check_publish_status("V1")
+        assert result.status == PublishStatus.FAILED
+        assert "Video format not supported" in result.error
+
+    def test_failed_publishing_phase_carries_meta_error_message(self):
+        fake = FakeHttpClient()
+        fake.add(
+            "GET",
+            "V1",
+            {
+                "status": {
+                    "video_status": "ready",
+                    "publishing_phase": {"status": "error", "error": {"message": "Aspect ratio not allowed"}},
+                }
+            },
+        )
+        assert "Aspect ratio not allowed" in adapter(fake).check_publish_status("V1").error
+
+    def test_reel_finish_success_false_is_failed(self):
+        fake = FakeHttpClient()
+
+        def video_reels(method, path, kwargs):
+            if kwargs["json"]["upload_phase"] == "start":
+                return {"video_id": "V1", "upload_url": RUPLOAD_URL}
+            return {"success": False}
+
+        fake.add("POST", f"{PAGE_ID}/video_reels", video_reels)
+        fake.add("POST", RUPLOAD_URL, {"success": True})
+        result = adapter(fake).publish_post(reel_draft())
+        assert result.status == PublishStatus.FAILED
+        assert result.publish_id == "V1"
+        assert result.error
+
 
 class TestCaptionAndPlace:
     def test_photo_caption_includes_hashtags_and_place(self):
@@ -153,6 +198,7 @@ class TestPublishProfile:
         assert post.max_text_length == 63206
         assert post.max_hashtags is None
         assert post.supports_location is True
+        assert post.location_media_types == [SocialMediaType.IMAGE]
         assert not (post.supports_mentions or post.supports_product_tags or post.vertical_only or post.requires_title)
 
         reel = profile.for_format(SocialFormat.REEL)
@@ -167,6 +213,27 @@ class TestPublishProfile:
         fitted = fit_draft(reel_draft(location=SocialLocation(id="L1", name="Cluj")), profile, video_seconds=30)
         assert fitted.errors == []
         assert fitted.omitted == ["location"]
+
+    def test_fit_draft_keeps_location_on_post_image_and_text(self):
+        profile = adapter(FakeHttpClient()).get_publish_profile()
+        location = SocialLocation(id="L1", name="Cluj")
+        image = SocialPostDraft(media_type=SocialMediaType.IMAGE, media_url="https://m/p.jpg", location=location)
+        text = SocialPostDraft(media_type=SocialMediaType.TEXT, description="Hi", location=location)
+        for draft in (image, text):
+            fitted = fit_draft(draft, profile)
+            assert fitted.omitted == []
+            assert fitted.draft.location == location
+
+    def test_fit_draft_drops_location_from_post_video(self):
+        # /videos takes no `place`: the location is dropped and reported, not lost silently
+        profile = adapter(FakeHttpClient()).get_publish_profile()
+        draft = SocialPostDraft(
+            media_type=SocialMediaType.VIDEO, media_url=MEDIA_URL, location=SocialLocation(id="L1", name="Cluj")
+        )
+        fitted = fit_draft(draft, profile, video_seconds=30)
+        assert fitted.errors == []
+        assert fitted.omitted == ["location"]
+        assert fitted.draft.location is None
 
     def test_location_search_not_declared(self):
         # pages/search needs the "Page Public Metadata Access" feature (app review), see adapter docstring.

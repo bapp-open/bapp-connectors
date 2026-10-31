@@ -1,9 +1,11 @@
 """
 Facebook Graph API error mapping.
 
-HTTP-level errors (401/429/4xx/5xx) are classified by the shared
-ResilientHttpClient. The Graph API can also return HTTP 200 with an
-``{"error": {...}}`` body — ``check_payload`` maps those to framework errors.
+4xx responses with a Graph error body are classified by error code in
+``facebook.http.GraphHttpClient`` (403 permission errors are not auth errors,
+code 190 on a 400 is); other statuses by the shared ResilientHttpClient. The
+Graph API can also return HTTP 200 with an ``{"error": {...}}`` body —
+``check_payload`` maps those to framework errors.
 """
 
 from __future__ import annotations

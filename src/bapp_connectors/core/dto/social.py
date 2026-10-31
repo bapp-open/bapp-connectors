@@ -104,6 +104,10 @@ class SocialFormatProfile(BaseModel):
     max_mentions: int | None = None
     supports_product_tags: bool = False
     supports_location: bool = False
+    #: Media types the location applies to when the draft carries media; ``None`` = all of
+    #: ``media_types``. A draft without media (text/link post) keeps it whenever
+    #: ``supports_location`` is set.
+    location_media_types: list[SocialMediaType] | None = None
     min_video_seconds: int | None = None
     max_video_seconds: int | None = None
     vertical_only: bool = False

@@ -130,3 +130,26 @@ def test_for_format_and_new_oauth_field():
     assert PROFILE.for_format(SocialFormat.REEL) is REEL
     assert PROFILE.for_format(SocialFormat.SHORT) is None
     assert OAuthTokens(access_token="t").refresh_expires_in is None
+
+
+def test_location_media_types_limit_location_to_those_media():
+    profile = SocialPublishProfile(
+        formats=[
+            SocialFormatProfile(
+                format=SocialFormat.POST,
+                media_types=[SocialMediaType.IMAGE, SocialMediaType.VIDEO],
+                supports_location=True,
+                location_media_types=[SocialMediaType.IMAGE],
+            )
+        ]
+    )
+    location = SocialLocation(id="9", name="Cluj")
+    video = SocialPostDraft(media_type=SocialMediaType.VIDEO, media_url="https://m/v.mp4", location=location)
+    image = SocialPostDraft(media_type=SocialMediaType.IMAGE, media_url="https://m/i.jpg", location=location)
+    text_only = SocialPostDraft(media_type=SocialMediaType.VIDEO, description="hi", location=location)
+
+    assert fit_draft(video, profile).omitted == ["location"]
+    assert fit_draft(video, profile).draft.location is None
+    assert fit_draft(image, profile).omitted == []
+    # without media there is no media type to check: the format's supports_location decides
+    assert fit_draft(text_only, profile).omitted == []

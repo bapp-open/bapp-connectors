@@ -32,6 +32,7 @@ from bapp_connectors.core.ports import SocialPort
 from bapp_connectors.core.social_profile import compose_caption
 from bapp_connectors.providers.social.facebook.client import FacebookGraphClient
 from bapp_connectors.providers.social.facebook.errors import check_payload
+from bapp_connectors.providers.social.facebook.http import GraphHttpClient
 from bapp_connectors.providers.social.facebook.manifest import manifest
 from bapp_connectors.providers.social.facebook.mappers import (
     account_from_page,
@@ -68,6 +69,8 @@ PUBLISH_PROFILE = SocialPublishProfile(
             media_types=[SocialMediaType.IMAGE, SocialMediaType.VIDEO],
             max_text_length=63206,
             supports_location=True,
+            # `place` is sent on /feed and /photos only; /videos takes none, so a video drops it.
+            location_media_types=[SocialMediaType.IMAGE],
         ),
         SocialFormatProfile(
             format=SocialFormat.REEL,
@@ -96,7 +99,8 @@ class FacebookSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapability
     ``media_url`` only) come back PROCESSING while Meta transcodes — poll
     ``check_publish_status`` with the returned ``publish_id``. Captions are the
     description plus ``draft.hashtags``; ``draft.location`` is sent as the
-    ``place`` (a Facebook Page id) on feed posts and photos. Publishing requires
+    ``place`` (a Facebook Page id) on feed posts and photos (videos take none;
+    the profile's ``location_media_types`` makes ``fit_draft`` drop it). Publishing requires
     the ``pages_manage_posts`` permission on the token.
 
     Location *search* is deliberately not offered (no
@@ -131,7 +135,7 @@ class FacebookSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapability
         self._app_secret = credentials.get("app_secret", "")
 
         if http_client is None:
-            http_client = ResilientHttpClient(
+            http_client = GraphHttpClient(
                 base_url=manifest.base_url,
                 auth=BearerAuth(credentials.get("token", "")),
                 provider_name="facebook",
@@ -384,11 +388,14 @@ class FacebookSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapability
 
         video_status = status.get("video_status", "")
         publishing = (status.get("publishing_phase") or {}).get("status")
-        if video_status in ("error", "expired") or publishing == "error":
+        processing = (status.get("processing_phase") or {}).get("status")
+        if video_status in ("error", "expired") or "error" in (publishing, processing):
+            reason = self._phase_error(status)
+            error = f"Facebook video processing failed (video {publish_id})"
             return PublishResult(
                 publish_id=publish_id,
                 status=PublishStatus.FAILED,
-                error=f"Facebook video processing failed (video {publish_id})",
+                error=f"{error}: {reason}" if reason else error,
             )
         if video_status == "ready" and publishing in (None, "complete"):
             return PublishResult(
@@ -471,7 +478,25 @@ class FacebookSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapability
             **draft.extra,
         }
         response = self.client.post_edge(self.page_id, "video_reels", payload)
+        if isinstance(response, dict) and response.get("success") is False:
+            return PublishResult(
+                publish_id=video_id,
+                status=PublishStatus.FAILED,
+                error=f"Facebook refused to publish the Reel (video {video_id})",
+                extra=response,
+            )
         return PublishResult(publish_id=video_id, status=PublishStatus.PROCESSING, extra=response)
+
+    @staticmethod
+    def _phase_error(status: dict) -> str:
+        """Meta's message from the failed phase of a video status (``processing_phase``/``publishing_phase``/...)."""
+        for phase in ("uploading_phase", "processing_phase", "publishing_phase"):
+            error = (status.get(phase) or {}).get("error") or {}
+            if isinstance(error, dict) and error.get("message"):
+                return str(error["message"])
+            if isinstance(error, str) and error:
+                return error
+        return ""
 
     @staticmethod
     def _place(draft: SocialPostDraft) -> dict:

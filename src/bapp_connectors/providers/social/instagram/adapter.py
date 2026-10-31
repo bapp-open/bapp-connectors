@@ -11,6 +11,7 @@ Auth: Page/user access token with instagram scopes, sent as a Bearer header.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
@@ -37,8 +38,9 @@ from bapp_connectors.core.errors import ConnectorError, ValidationError
 from bapp_connectors.core.http import BearerAuth, ResilientHttpClient
 from bapp_connectors.core.ports import SocialPort
 from bapp_connectors.core.social_profile import compose_caption
+from bapp_connectors.providers.social.facebook.http import GraphHttpClient
 from bapp_connectors.providers.social.instagram.client import InstagramGraphClient
-from bapp_connectors.providers.social.instagram.errors import check_payload, is_user_not_found
+from bapp_connectors.providers.social.instagram.errors import check_payload, classify_graph_error, is_user_not_found
 from bapp_connectors.providers.social.instagram.manifest import manifest
 from bapp_connectors.providers.social.instagram.mappers import (
     account_from_ig,
@@ -65,6 +67,9 @@ VIDEO_INSIGHT_METRICS = "plays,video_views"
 ACCOUNT_INSIGHT_METRICS = "impressions,reach"
 
 _FB_OAUTH_DIALOG_URL = "https://www.facebook.com/v19.0/dialog/oauth"
+
+# Instagram handles: letters, digits, "." and "_", at most 30 characters.
+_USERNAME_RE = re.compile(r"[A-Za-z0-9._]{1,30}")
 
 # Limits from Meta's docs: captions up to 2,200 characters with at most 30
 # hashtags and 20 @-tags; Reels are vertical (9:16) 3-90 s videos. Feed posts
@@ -163,10 +168,11 @@ class InstagramSocialAdapter(
         self._app_secret = credentials.get("app_secret", "")
 
         if http_client is None:
-            http_client = ResilientHttpClient(
+            http_client = GraphHttpClient(
                 base_url=manifest.base_url,
                 auth=BearerAuth(credentials.get("token", "")),
                 provider_name="instagram",
+                classify=classify_graph_error,
             )
 
         self.client = InstagramGraphClient(http_client=http_client)
@@ -496,8 +502,9 @@ class InstagramSocialAdapter(
 
     def search_mentions(self, query: str, limit: int = 10) -> list[SocialMention]:
         """Look up a Business/Creator account by its exact username (0 or 1 result)."""
-        username = query.strip().lstrip("@").strip()
-        if not username or limit < 1:
+        username = query.strip().removeprefix("@")
+        # the username goes into the Graph field expression: anything but a valid handle is refused unsent
+        if limit < 1 or not _USERNAME_RE.fullmatch(username):
             return []
         try:
             payload = self.client.business_discovery(self.ig_user_id, username, "username,name,profile_picture_url")
@@ -521,6 +528,9 @@ class InstagramSocialAdapter(
 
     def search_products(self, query: str, limit: int = 10) -> list[SocialProductTag]:
         """Search taggable products in the account's first available catalog (none → ``[]``)."""
+        query = query.strip()
+        if not query or limit < 1:
+            return []
         catalogs = self.client.available_catalogs(self.ig_user_id).get("data", [])
         if not catalogs:
             return []

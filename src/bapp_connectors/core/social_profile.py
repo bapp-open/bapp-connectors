@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bapp_connectors.core.dto.social import SocialPostDraft, SocialPublishProfile
+    from bapp_connectors.core.dto.social import SocialFormatProfile, SocialPostDraft, SocialPublishProfile
 
 
 @dataclass(frozen=True)
@@ -42,6 +42,14 @@ def compose_caption(text: str, hashtags: list[str]) -> str:
     if text and tags:
         return f"{text}\n\n{tags}"
     return text or tags
+
+
+def _location_supported(draft: SocialPostDraft, fmt: SocialFormatProfile) -> bool:
+    """The format takes a location, and — when the draft carries media — for this media type."""
+    if not fmt.supports_location:
+        return False
+    has_media = bool(draft.media_url or draft.file_path or draft.content is not None)
+    return fmt.location_media_types is None or not has_media or draft.media_type in fmt.location_media_types
 
 
 def fit_draft(
@@ -80,7 +88,7 @@ def fit_draft(
         update["product_tags"] = []
         omitted.append("product_tags")
 
-    if draft.location is not None and not fmt.supports_location:
+    if draft.location is not None and not _location_supported(draft, fmt):
         update["location"] = None
         omitted.append("location")
 
