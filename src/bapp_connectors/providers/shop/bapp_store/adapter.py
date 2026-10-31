@@ -11,7 +11,7 @@ import json
 from datetime import UTC
 from decimal import Decimal
 from typing import TYPE_CHECKING
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from bapp_connectors.core.capabilities import (
     BulkUpsertCapability,
@@ -247,16 +247,18 @@ class BappStoreShopAdapter(
 
     def get_authorize_url(self, redirect_uri: str, state: str = "") -> str:
         """The store's approval page. The framework owns redirect_uri and state; we only carry them."""
-        # the framework passes a bare path today, but this must not depend on that staying true
-        separator = "&" if "?" in redirect_uri else "?"
+        # The store POSTs {token, tenant_id, store_name} to callback_url and sends the
+        # browser to return_url, neither carrying the state: so the state rides in both
+        # URLs' query, which is the only way the framework can tell which connection it is.
+        carried = {"state": state} if state else {}
         return f"{CONNECT_URL}?" + urlencode({
             "app_name": "BAPP",
             "scope": "read_write",
             "state": state,
             # the framework reads a GET with no code as the browser returning after
             # the POST already delivered the credentials, and sends the operator on
-            "return_url": f"{redirect_uri}{separator}success=1",
-            "callback_url": redirect_uri,
+            "return_url": _with_query(redirect_uri, success="1", **carried),
+            "callback_url": _with_query(redirect_uri, **carried),
         })
 
     def exchange_code_for_token(self, code: str, redirect_uri: str, state: str = "") -> OAuthTokens:
@@ -272,3 +274,13 @@ class BappStoreShopAdapter(
     def refresh_token(self, refresh_token: str) -> OAuthTokens:
         """A store sync token does not expire and cannot be refreshed; re-authorise instead."""
         raise NotImplementedError("Re-run the connect flow to issue a new token.")
+
+
+def _with_query(url: str, **params: str) -> str:
+    """`url` with `params` added to its query (URL-encoded), keeping what is already there."""
+    if not params:
+        return url
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k not in params]
+    query.extend(params.items())
+    return urlunsplit(parts._replace(query=urlencode(query)))

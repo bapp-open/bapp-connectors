@@ -17,7 +17,7 @@ def test_the_authorize_url_points_at_the_store_and_carries_the_framework_values(
     assert parsed.netloc == "store.bapp.ro"
     query = parse_qs(parsed.query)
     assert query["state"] == ["abc"]
-    assert query["callback_url"] == ["https://panel.bapp.ro/api/webhooks/oauth/callback/381/bapp_store/"]
+    assert query["callback_url"] == ["https://panel.bapp.ro/api/webhooks/oauth/callback/381/bapp_store/?state=abc"]
     # the store refuses the request unless all five are present
     for name in ("app_name", "scope", "state", "return_url", "callback_url"):
         assert name in query, name
@@ -58,3 +58,26 @@ def test_a_body_that_is_not_an_object_yields_no_credentials_rather_than_crashing
     for body in ("[1,2]", "null", "not json at all", ""):
         tokens = _adapter().exchange_code_for_token(body, "https://panel.bapp.ro/cb/", "abc")
         assert tokens.extra["credentials"] == {}, body
+
+
+def test_the_state_rides_in_both_the_callback_and_the_return_url():
+    """The store's POST body and browser return carry no state, so the framework can only
+    find the connection if the state is in the query of the URLs the store calls back."""
+    from urllib.parse import parse_qs, urlparse
+
+    state = "eyJjIjoxfQ:1t:sig/+&="  # signed states contain characters that need encoding
+    callback = "https://panel.bapp.ro/api/webhooks/oauth/callback/?x=1"
+    query = parse_qs(urlparse(_adapter().get_authorize_url(callback, state)).query)
+    cb = urlparse(query["callback_url"][0])
+    ret = urlparse(query["return_url"][0])
+    assert cb.path == ret.path == "/api/webhooks/oauth/callback/"
+    assert parse_qs(cb.query) == {"x": ["1"], "state": [state]}
+    assert parse_qs(ret.query) == {"x": ["1"], "success": ["1"], "state": [state]}
+
+
+def test_without_a_state_the_callback_stays_bare():
+    from urllib.parse import parse_qs, urlparse
+
+    callback = "https://panel.bapp.ro/api/webhooks/oauth/callback/"
+    query = parse_qs(urlparse(_adapter().get_authorize_url(callback, "")).query)
+    assert query["callback_url"] == [callback]
