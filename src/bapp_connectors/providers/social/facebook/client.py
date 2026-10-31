@@ -3,7 +3,8 @@ Facebook Graph API client — raw HTTP calls only, no business logic.
 
 Auth is a Page access token sent as a Bearer header by the shared HTTP client.
 Reads are GETs against https://graph.facebook.com/v19.0/{object_id}[/{edge}];
-publishing POSTs to an object's edge (feed/photos/videos), JSON or multipart.
+publishing POSTs to an object's edge (feed/photos/videos/video_reels), JSON or
+multipart. Reels upload their bytes through the separate rupload host.
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 logger = logging.getLogger(__name__)
+
+RUPLOAD_VIDEO_URL = "https://rupload.facebook.com/video-upload/v19.0/{video_id}"
 
 
 class FacebookGraphClient:
@@ -61,6 +64,19 @@ class FacebookGraphClient:
     def post_edge_multipart(self, object_id: str, edge: str, files: dict, data: dict) -> dict:
         """POST {object_id}/{edge} — create an object with a multipart body (local file/bytes uploads)."""
         response = self.http.call("POST", f"{object_id}/{edge}", files=files, data=data)
+        return check_payload(response)
+
+    def upload_hosted_video(self, video_id: str, file_url: str, token: str) -> dict:
+        """POST rupload.facebook.com/video-upload/v19.0/{video_id} — Meta pulls the video from ``file_url``.
+
+        rupload is a separate host from the Graph base URL and authenticates with
+        an ``Authorization: OAuth <token>`` header (overrides the client's Bearer header).
+        """
+        response = self.http.call(
+            "POST",
+            RUPLOAD_VIDEO_URL.format(video_id=video_id),
+            headers={"Authorization": f"OAuth {token}", "file_url": file_url},
+        )
         return check_payload(response)
 
     def get_insights(
