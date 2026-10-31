@@ -6,12 +6,17 @@ Some platforms publish synchronously (a post id comes back immediately), others
 asynchronously (the platform transcodes/reviews first). PublishResult.status
 tells them apart; poll check_publish_status with PublishResult.publish_id for
 async platforms until PUBLISHED or FAILED.
+
+get_publish_profile declares what each format accepts (media types, limits,
+mentions, product tags, location); see bapp_connectors.core.social_profile.fit_draft.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
+
+from bapp_connectors.core.dto.social import SocialPublishProfile
 
 if TYPE_CHECKING:
     from bapp_connectors.core.dto.social import PublishResult, SocialPostDraft
@@ -36,3 +41,7 @@ class SocialPublishCapability(ABC):
         Synchronous platforms return PUBLISHED for ids of existing posts.
         """
         ...
+
+    def get_publish_profile(self) -> SocialPublishProfile:
+        """What the channel accepts per format. Empty = no profile declared."""
+        return SocialPublishProfile()

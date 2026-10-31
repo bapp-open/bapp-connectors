@@ -17,6 +17,7 @@ class OAuthTokens:
     expires_in: int | None = None
     token_type: str = "Bearer"
     extra: dict | None = None
+    refresh_expires_in: int | None = None
 
 
 class OAuthCapability(ABC):

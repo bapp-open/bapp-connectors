@@ -36,7 +36,13 @@ from .rich_messaging import RichMessagingCapability
 from .saved_payment import SavedPaymentCapability
 from .settings_detection import SettingsDetectionCapability
 from .shipping import ShippingCapability
+from .social_destinations import SocialDestinationsCapability
 from .social_publish import SocialPublishCapability
+from .social_tags import (
+    SocialLocationSearchCapability,
+    SocialMentionSearchCapability,
+    SocialProductSearchCapability,
+)
 from .streaming import StreamingCapability
 from .subscriptions import SubscriptionCapability
 from .transcription import TranscriptionCapability
@@ -88,6 +94,10 @@ __all__ = [
     "ShipmentResult",
     "ShippingCapability",
     "ShippingService",
+    "SocialDestinationsCapability",
+    "SocialLocationSearchCapability",
+    "SocialMentionSearchCapability",
+    "SocialProductSearchCapability",
     "SocialPublishCapability",
     "StreamingCapability",
     "SubscriptionCapability",

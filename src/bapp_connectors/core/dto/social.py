@@ -45,6 +45,101 @@ class PublishStatus(StrEnum):
     FAILED = "failed"
 
 
+class SocialFormat(StrEnum):
+    """Publishing surface on a channel (feed post, reel, short)."""
+
+    POST = "post"
+    REEL = "reel"
+    SHORT = "short"
+
+
+class SocialMention(BaseModel):
+    """An account tagged/mentioned in a post."""
+
+    model_config = ConfigDict(frozen=True)
+
+    username: str
+    id: str = ""
+    name: str = ""
+    avatar_url: str = ""
+
+
+class SocialProductTag(BaseModel):
+    """A catalog product tagged in a post (shopping tags)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    name: str = ""
+    image_url: str = ""
+    extra: dict = {}
+
+
+class SocialLocation(BaseModel):
+    """A place attached to a post."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    name: str
+    address: str = ""
+
+
+class SocialFormatProfile(BaseModel):
+    """
+    What a channel accepts for one format.
+
+    ``None`` limits mean "no known limit"; ``0`` means "not accepted at all".
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    format: SocialFormat
+    media_types: list[SocialMediaType]
+    max_text_length: int | None = None
+    max_title_length: int | None = None
+    requires_title: bool = False
+    max_hashtags: int | None = None
+    supports_mentions: bool = False
+    max_mentions: int | None = None
+    supports_product_tags: bool = False
+    supports_location: bool = False
+    min_video_seconds: int | None = None
+    max_video_seconds: int | None = None
+    vertical_only: bool = False
+    max_file_bytes: int | None = None
+
+
+class SocialPublishProfile(BaseModel):
+    """The formats a channel can publish. Empty = channel declares no profile."""
+
+    model_config = ConfigDict(frozen=True)
+
+    formats: list[SocialFormatProfile] = []
+
+    def for_format(self, fmt: SocialFormat) -> SocialFormatProfile | None:
+        return next((p for p in self.formats if p.format == fmt), None)
+
+
+class SocialDestination(BaseModel):
+    """
+    A publish target reachable through one connection (a Facebook page, an
+    Instagram business account, ...). ``kind`` is provider-defined, e.g.
+    ``"facebook_page"`` or ``"instagram_account"``; ``credentials`` holds the
+    destination-scoped secrets (e.g. a page access token).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    provider: str
+    kind: str
+    name: str
+    username: str = ""
+    avatar_url: str = ""
+    credentials: dict = {}
+
+
 class SocialPostDraft(BaseModel):
     """
     A post to publish on a social platform.
@@ -67,6 +162,11 @@ class SocialPostDraft(BaseModel):
     privacy: SocialPrivacy = SocialPrivacy.PUBLIC
     tags: list[str] = []
     extra: dict = {}
+    format: SocialFormat = SocialFormat.POST
+    hashtags: list[str] = []
+    mentions: list[SocialMention] = []
+    product_tags: list[SocialProductTag] = []
+    location: SocialLocation | None = None
 
 
 class PublishResult(BaseModel):
