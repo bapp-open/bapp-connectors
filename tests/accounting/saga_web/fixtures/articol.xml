@@ -1,0 +1,14 @@
+<Articol>
+         <Denumire>ARTICOL</Denumire>
+         <TVA>11</TVA>
+         <UM>BUC</UM>
+         <Pret_Vanzare1>100</Pret_Vanzare1>
+         <Pret_Vanzare1_cuTVA>110</Pret_Vanzare1_cuTVA>
+         <Pret_Vanzare2>1000</Pret_Vanzare2>
+         <Pret_Vanzare2_cuTVA>1100</Pret_Vanzare2_cuTVA>
+         <Cod_Bare>692648521232</Cod_Bare>
+         <Cod_NC></Cod_NC>
+         <Cod_CPV></Cod_CPV>
+         <Informatii_Suplimentare>Acesta este un exemplu</Informatii_Suplimentare>
+         <Cod_Propriu>0</Cod_Propriu>
+</Articol>
