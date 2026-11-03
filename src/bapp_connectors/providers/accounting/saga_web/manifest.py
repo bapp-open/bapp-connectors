@@ -49,6 +49,9 @@ manifest = ProviderManifest(
     ),
     capabilities=[AccountingPort],
     rate_limit=RateLimitConfig(requests_per_second=2, burst=4),
+    # The client calls with direct_response=True, where the http client ignores status codes:
+    # these two lists have no effect. Reads are retried by the client on SagaWebError.retryable
+    # (5xx/429, transport errors) up to max_retries; Import is never retried.
     retry=RetryConfig(
         max_retries=2,
         retryable_status_codes=[429, 500, 502, 503, 504],
