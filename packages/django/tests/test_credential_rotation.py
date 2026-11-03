@@ -6,6 +6,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
+import responses
 
 from bapp_connectors.core.types import ProviderFamily
 from django_bapp_connectors.callbacks import _redact
@@ -66,3 +67,32 @@ def test_refresh_header_is_redacted():
 def test_accounting_family_label():
     assert FAMILY_DEFAULTS[ProviderFamily.ACCOUNTING]["icon"] == "fad fa-calculator"
     assert str(FAMILY_DEFAULTS[ProviderFamily.ACCOUNTING]["label"]) == "Accounting"
+
+
+@responses.activate
+def test_real_saga_web_adapter_persists_rotated_token(db):
+    """The real adapter built by ``get_adapter`` (no mock) saves the key SAGA rotates."""
+    ensure_providers_loaded()
+    base_url = "https://web2.sagasoft.ro/sagac/api/v20260225/"
+    responses.add(
+        responses.GET,
+        base_url + "Situatii/GetSoldCont",
+        json={"success": True, "message": "", "data": "100.00"},
+        status=200,
+        headers={"X-Saga-Refresh-Token": "ROTATED-K2"},
+    )
+    conn = Connection.objects.create(
+        provider_family="accounting", provider_name="saga_web", display_name="SAGA", config={"keep": "me"}
+    )
+    conn.credentials = {"base_url": base_url, "cod_fiscal": "6716875", "token": "OLD-K1"}
+    conn.save()
+
+    adapter = ConnectionService.get_adapter(conn)
+    result = adapter.test_connection()
+
+    assert result.success is True
+    assert responses.calls[0].request.headers["Authorization"] == "Bearer OLD-K1"
+    conn = Connection.objects.get(pk=conn.pk)
+    assert conn.credentials["token"] == "ROTATED-K2"
+    assert conn.config["keep"] == "me"
+    datetime.fromisoformat(conn.config["credentials_rotated_at"])

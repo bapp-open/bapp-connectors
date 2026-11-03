@@ -12,10 +12,11 @@ unknown outcome.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 import requests
 
+from bapp_connectors.core.http.retry import execute_with_retry
 from bapp_connectors.providers.accounting.saga_web.errors import (
     SagaWebAuthError,
     SagaWebCredentialsNotSaved,
@@ -28,6 +29,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from bapp_connectors.core.http import ResilientHttpClient
+
+T = TypeVar("T")
 
 REFRESH_HEADER = "X-Saga-Refresh-Token"
 CIF_HEADER = "X-Saga-Cod-Fiscal"
@@ -106,8 +109,10 @@ class SagaWebApiClient:
         files: dict | None = None,
         data: dict | None = None,
         timeout: float | None = None,
-        retry: bool,
     ) -> requests.Response:
+        """One HTTP exchange, never replayed by the http client: under ``direct_response`` its
+        retry only covers transport errors, and Import must not be replayed at all. Reads are
+        retried as a whole by ``_read``."""
         # Import is not idempotent: none of its failures may be replayed by the host
         retryable = False if path.strip("/") == IMPORT_PATH else None
         kwargs = {}
@@ -125,7 +130,7 @@ class SagaWebApiClient:
                 f"{self.base_url}/{path.lstrip('/')}",
                 direct_response=True,
                 headers=self._headers(),
-                retry=retry,
+                retry=False,
                 **kwargs,
             )
         except requests.ConnectTimeout:
@@ -160,8 +165,23 @@ class SagaWebApiClient:
             files={"file": (filename, content, "application/xml")},
             data={"importAutomat": "true" if auto_import else "false"},
             timeout=IMPORT_TIMEOUT,
-            retry=False,
         )
+
+    def _read(self, path: str, params: dict, handle: Callable[[requests.Response], T]) -> T:
+        """GET ``path`` and ``handle`` the answer, retried whole under the http client's policy.
+
+        Retrying the request together with its status check is what makes a 5xx or a 429 on a
+        read retryable (``SagaWebError.retryable``); the key headers are rebuilt per attempt, so
+        a key rotated by a failed attempt is the one the next attempt sends.
+        """
+
+        def attempt() -> T:
+            return handle(self._request("GET", path, params=params))
+
+        policy = getattr(self.http, "retry_policy", None)
+        if policy is None:
+            return attempt()
+        return execute_with_retry(attempt, retry_policy=policy)
 
     def get_json(self, path: str, params: dict) -> tuple[bool, str, str]:
         """``(success, message, data)`` of SAGA's JSON envelope.
@@ -169,36 +189,49 @@ class SagaWebApiClient:
         A body that is not an envelope raises ``SagaWebError`` with ``is_envelope=False`` whatever
         the status, so a landing page answering 200 never reads as a SAGA answer.
         """
-        response = self._request("GET", path, params=params, retry=True)
-        status = response.status_code
-        envelope = read_envelope(response.text or "")
-        if envelope is None:
-            raise SagaWebError(
-                f"SAGA Web a răspuns cu HTTP {status} fără un răspuns JSON",
-                status_code=status,
-                retryable=status >= 500 or status == 429,
-            )
-        success, message, data = envelope
-        if status == 400:
-            raise SagaWebValidationError(
-                message or "SAGA Web a respins cererea (HTTP 400)", status_code=400, is_envelope=True
-            )
-        if not 200 <= status < 300:
-            raise SagaWebError(
-                message or f"SAGA Web a răspuns cu HTTP {status}", status_code=status, is_envelope=True
-            )
-        return success, message, data
+        return self._read(path, params, _json_answer)
 
     def get_xml(self, path: str, params: dict) -> str:
-        response = self._request("GET", path, params=params, retry=True)
-        status = response.status_code
-        if status == 200:
-            return response.text
-        _, message, _ = parse_envelope(response.text)
-        message = message or f"SAGA Web a răspuns cu eroare (HTTP {status})"
-        if status == 400:
-            raise SagaWebValidationError(message, status_code=status)
-        raise SagaWebError(message, status_code=status)
+        return self._read(path, params, _xml_answer)
+
+
+def _retryable_status(status: int) -> bool:
+    return status >= 500 or status == 429
+
+
+def _json_answer(response) -> tuple[bool, str, str]:
+    status = response.status_code
+    envelope = read_envelope(response.text or "")
+    if envelope is None:
+        raise SagaWebError(
+            f"SAGA Web a răspuns cu HTTP {status} fără un răspuns JSON",
+            status_code=status,
+            retryable=_retryable_status(status),
+        )
+    success, message, data = envelope
+    if status == 400:
+        raise SagaWebValidationError(
+            message or "SAGA Web a respins cererea (HTTP 400)", status_code=400, is_envelope=True
+        )
+    if not 200 <= status < 300:
+        raise SagaWebError(
+            message or f"SAGA Web a răspuns cu HTTP {status}",
+            status_code=status,
+            is_envelope=True,
+            retryable=_retryable_status(status),
+        )
+    return success, message, data
+
+
+def _xml_answer(response) -> str:
+    status = response.status_code
+    if status == 200:
+        return response.text
+    _, message, _ = parse_envelope(response.text)
+    message = message or f"SAGA Web a răspuns cu eroare (HTTP {status})"
+    if status == 400:
+        raise SagaWebValidationError(message, status_code=status)
+    raise SagaWebError(message, status_code=status, retryable=_retryable_status(status))
 
 
 def _header(response, name: str) -> str:
