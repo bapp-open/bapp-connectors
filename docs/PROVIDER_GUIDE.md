@@ -689,6 +689,17 @@ and encode "the next period not yet fetched" in `PaginatedResult.cursor`; one pa
 Dependencies beyond `requests`/`pydantic` go in an extra (`appstore = ["PyJWT[crypto]>=2.8", "cryptography>=42"]`) and the
 provider's `__init__.py` registers only if the import succeeds (see `providers/storage/s3/__init__.py`).
 
+### Providers that rotate their own key
+
+Some providers (e.g. SAGA Web) issue a new key on every call and revoke the old one at once.
+Set `AuthConfig(rotating_credentials=True)` in the manifest and accept an
+`on_credentials_update: Callable[[dict], None] | None = None` keyword in the adapter's `__init__`.
+`ConnectionService.get_adapter` (Django package) passes a callback that merges the patch into
+`Connection.credentials` and saves it immediately (`persist_rotated_credentials`). Call it with
+the changed fields only (`{"token": new}`) on every response that carries a new key, error
+responses included, before any status handling. Do not wrap adapter calls in a transaction you
+intend to roll back: that would discard the new key and leave the connection holding a revoked one.
+
 ---
 
 ## Provider Checklist

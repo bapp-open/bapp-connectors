@@ -71,7 +71,7 @@ def discover_providers() -> dict[str, list[dict]]:
 
 def build_providers_table(providers: dict[str, list[dict]]) -> str:
     """Build the markdown providers table."""
-    family_order = ["shop", "courier", "payment", "messaging", "storage", "llm", "feed", "network", "appstore", "hosting", "dns", "erp", "devops", "monitoring"]
+    family_order = ["shop", "courier", "payment", "messaging", "storage", "llm", "feed", "network", "appstore", "hosting", "dns", "erp", "devops", "monitoring", "accounting"]
     # Include any families not in the predefined order
     for fam in sorted(providers.keys()):
         if fam not in family_order:
@@ -91,6 +91,7 @@ def build_providers_table(providers: dict[str, list[dict]]) -> str:
         "erp": "ERP",
         "devops": "DevOps",
         "monitoring": "Monitoring",
+        "accounting": "Accounting",
     }
 
     lines = [
@@ -114,7 +115,7 @@ def build_providers_table(providers: dict[str, list[dict]]) -> str:
 
 def build_structure_tree(providers: dict[str, list[dict]]) -> str:
     """Build the providers section of the project structure tree."""
-    family_order = ["shop", "courier", "payment", "messaging", "storage", "llm", "feed", "network", "appstore", "hosting", "dns", "erp", "devops", "monitoring"]
+    family_order = ["shop", "courier", "payment", "messaging", "storage", "llm", "feed", "network", "appstore", "hosting", "dns", "erp", "devops", "monitoring", "accounting"]
     for fam in sorted(providers.keys()):
         if fam not in family_order:
             family_order.append(fam)
