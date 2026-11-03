@@ -23,23 +23,29 @@ def saga_date(day: date) -> str:
 
 
 def to_decimal(text: str | None, default: Decimal = Decimal(0)) -> Decimal:
-    """Parse a SAGA number (``"3142,9"`` or ``"3142.9"``); blank or invalid → ``default``."""
+    """Parse a SAGA number (``"3142,9"`` or ``"3142.9"``); blank → ``default``.
+
+    Non-blank text that is not a finite number (``"1.234,56"``, ``"abc"``, ``"NaN"``) raises
+    ``ValueError`` rather than being read as ``default``, so bad figures never pass silently.
+    """
     if text is None:
         return default
     cleaned = text.strip().replace(",", ".")
     if not cleaned:
         return default
     try:
-        return Decimal(cleaned)
-    except InvalidOperation:
-        return default
+        value = Decimal(cleaned)
+    except InvalidOperation as exc:
+        raise ValueError(f"Valoare numerica invalida: {text!r}") from exc
+    if not value.is_finite():
+        raise ValueError(f"Valoare numerica invalida: {text!r}")
+    return value
 
 
 def _optional_decimal(text: str | None) -> Decimal | None:
     if text is None or not text.strip():
         return None
-    value = to_decimal(text, default=Decimal("NaN"))
-    return None if value.is_nan() else value
+    return to_decimal(text)
 
 
 # ── JSON envelope ──
@@ -67,13 +73,18 @@ _ERROR_RE = re.compile(r"^\s*(Eroare.*)$")
 
 
 def parse_report(text: str) -> list[ImportProblem]:
-    """One ``ImportProblem`` per ``NR_DOC:`` block of a SAGA "Raport Import" text."""
+    """One ``ImportProblem`` per invoice block of a SAGA "Raport Import" text.
+
+    A block starts at each ``Factura N.`` line (``index=N``); a later ``NR_DOC:`` line fills in
+    its number and every ``Eroare...`` line is joined into ``message``. A second ``NR_DOC:`` inside
+    the same block opens a new block with the same index. A ``Factura N.`` block with neither a
+    number nor an error is dropped; errors are never dropped, even without ``NR_DOC:``.
+    """
     problems: list[ImportProblem] = []
-    index: int | None = None
     current: dict | None = None
 
     def flush() -> None:
-        if current is not None:
+        if current is not None and (current["document_number"] or current["errors"] or current["has_doc"]):
             problems.append(
                 ImportProblem(
                     index=current["index"],
@@ -82,15 +93,24 @@ def parse_report(text: str) -> list[ImportProblem]:
                 )
             )
 
+    def new_block(index: int | None) -> dict:
+        return {"index": index, "document_number": "", "errors": [], "has_doc": False}
+
     for line in (text or "").splitlines():
         if match := _INVOICE_RE.match(line):
-            index = int(match.group(1))
+            flush()
+            current = new_block(int(match.group(1)))
             continue
         if match := _DOC_RE.match(line):
-            flush()
-            current = {"index": index, "document_number": match.group(1).strip(), "errors": []}
+            if current is None or current["has_doc"]:
+                flush()
+                current = new_block(current["index"] if current is not None else None)
+            current["document_number"] = match.group(1).strip()
+            current["has_doc"] = True
             continue
-        if current is not None and (match := _ERROR_RE.match(line)):
+        if match := _ERROR_RE.match(line):
+            if current is None:
+                current = new_block(None)
             current["errors"].append(match.group(1).strip())
     flush()
     return problems

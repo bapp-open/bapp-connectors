@@ -35,7 +35,9 @@ def test_parse_stock_report():
     assert len(lines) == 1
     line = lines[0]
     assert line.warehouse == "0001" and line.article_code == "00000001" and line.sellable is True
-    assert line.qty_final == Decimal("136") and line.avg_price == Decimal("40.6675") and line.value == Decimal("5530.78")
+    assert (
+        line.qty_final == Decimal("136") and line.avg_price == Decimal("40.6675") and line.value == Decimal("5530.78")
+    )
 
 
 def test_parse_trial_balance():
@@ -46,7 +48,12 @@ def test_parse_trial_balance():
 
 def test_parse_article():
     art = mappers.parse_article((FIX / "articol.xml").read_text())
-    assert art.name == "ARTICOL" and art.vat == Decimal("11") and art.price1_vat == Decimal("110") and art.barcode == "692648521232"
+    assert (
+        art.name == "ARTICOL"
+        and art.vat == Decimal("11")
+        and art.price1_vat == Decimal("110")
+        and art.barcode == "692648521232"
+    )
     assert art.nc_code == "" and art.info == "Acesta este un exemplu"
     assert mappers.parse_article("<Altceva/>") is None
 
@@ -55,3 +62,33 @@ def test_saga_date_and_decimal():
     assert mappers.saga_date(datetime.date(2026, 1, 5)) == "05.01.2026"
     assert mappers.to_decimal(" 3142,9 ") == Decimal("3142.9")
     assert mappers.to_decimal("") == Decimal(0)
+
+
+def test_parse_report_three_problems_repeated_index():
+    problems = mappers.parse_report((FIX / "raport_207_trei.txt").read_text())
+    assert [(p.index, p.document_number) for p in problems] == [(1, "A100"), (1, "A101"), (3, "A102")]
+    assert problems[1].message == "Eroare antet: Data scadenta este anterioara datei documentului."
+    assert problems[2].message == "Eroare: Completati clientul."
+
+
+def test_parse_report_error_before_doc_number_stays_on_its_invoice():
+    problems = mappers.parse_report("Factura 1.\n NR_DOC: A1\n Eroare: x\nFactura 2.\n Eroare: y\n NR_DOC: A2\n")
+    assert [(p.index, p.document_number, p.message) for p in problems] == [
+        (1, "A1", "Eroare: x"),
+        (2, "A2", "Eroare: y"),
+    ]
+
+
+def test_parse_report_error_without_doc_number_is_kept():
+    problems = mappers.parse_report("Factura 1.\n Eroare antet: fara numar\n")
+    assert [(p.index, p.document_number, p.message) for p in problems] == [(1, "", "Eroare antet: fara numar")]
+
+
+def test_to_decimal_rejects_invalid_and_non_finite():
+    import pytest
+
+    for bad in ("1.234,56", "abc", "NaN", "Infinity", "-inf"):
+        with pytest.raises(ValueError):
+            mappers.to_decimal(bad)
+    assert mappers.to_decimal("   ") == Decimal(0)
+    assert mappers.to_decimal(None, Decimal(5)) == Decimal(5)
