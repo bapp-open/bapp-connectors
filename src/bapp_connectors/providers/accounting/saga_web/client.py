@@ -143,8 +143,11 @@ class SagaWebApiClient:
     def get_json(self, path: str, params: dict) -> tuple[bool, str, str]:
         response = self._request("GET", path, params=params, retry=True)
         success, message, data = parse_envelope(response.text)
-        if response.status_code == 400:
+        status = response.status_code
+        if status == 400:
             raise SagaWebValidationError(message or "SAGA Web a respins cererea (HTTP 400)", status_code=400)
+        if not 200 <= status < 300:
+            raise SagaWebError(message or f"SAGA Web a răspuns cu HTTP {status}", status_code=status)
         return success, message, data
 
     def get_xml(self, path: str, params: dict) -> str:

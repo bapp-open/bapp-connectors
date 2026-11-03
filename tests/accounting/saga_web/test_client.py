@@ -218,6 +218,30 @@ def test_get_json_400_is_validation_error():
     assert exc_info.value.retryable is False
 
 
+def test_get_json_5xx_raises_saga_web_error():
+    http = FakeHttpClient()
+    http.add("GET", "X", FakeResponse(500, {"success": False, "message": "Eroare interna"}))
+    with pytest.raises(SagaWebError) as exc_info:
+        make_client(http).get_json("X", {})
+    assert not isinstance(exc_info.value, SagaWebValidationError)
+    assert exc_info.value.status_code == 500
+    assert str(exc_info.value) == "Eroare interna"
+
+
+def test_get_json_5xx_non_json_body_uses_status_message():
+    http = FakeHttpClient()
+    http.add("GET", "X", FakeResponse(502, text=""))
+    with pytest.raises(SagaWebError, match="SAGA Web a răspuns cu HTTP 502") as exc_info:
+        make_client(http).get_json("X", {})
+    assert exc_info.value.status_code == 502
+
+
+def test_get_json_200_success_false_returns_tuple():
+    http = FakeHttpClient()
+    http.add("GET", "X", FakeResponse(200, {"success": False, "message": "Cont inexistent"}))
+    assert make_client(http).get_json("X", {}) == (False, "Cont inexistent", "")
+
+
 def test_get_xml_200_returns_text():
     http = FakeHttpClient()
     http.add("GET", "Balanta", FakeResponse(200, text="<Balanta/>"))
