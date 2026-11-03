@@ -117,7 +117,8 @@ class SagaWebApiClient:
         except requests.Timeout:
             if path.strip("/") == IMPORT_PATH:
                 raise SagaWebError(
-                    "SAGA Web nu a răspuns la timp; nu se știe dacă fișierul a fost primit — nu retrimite automat"
+                    "SAGA Web nu a răspuns la timp; nu se știe dacă fișierul a fost primit — nu retrimite automat",
+                    retryable=False,
                 ) from None
             raise SagaWebError("SAGA Web nu a răspuns la timp") from None
         except requests.RequestException as exc:

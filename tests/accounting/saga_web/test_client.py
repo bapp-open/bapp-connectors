@@ -199,6 +199,7 @@ def test_import_timeout_message_says_unknown_outcome():
     with pytest.raises(SagaWebError) as exc_info:
         make_client(http).import_file("F_x.xml", b"<Facturi/>", auto_import=True)
     assert "nu retrimite automat" in str(exc_info.value)
+    assert exc_info.value.retryable is False
     assert str(exc_info.value) == (
         "SAGA Web nu a răspuns la timp; nu se știe dacă fișierul a fost primit — nu retrimite automat"
     )
