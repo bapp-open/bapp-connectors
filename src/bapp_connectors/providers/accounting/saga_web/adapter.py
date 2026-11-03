@@ -187,7 +187,8 @@ class SagaWebAdapter(AccountingPort):
             _, message, _ = parse_envelope(text)
             return ImportResult(status=ImportStatus.FAILED, http_status=status, message=message)
         _, message, _ = parse_envelope(text)
-        raise SagaWebError(message or f"SAGA Web a răspuns cu HTTP {status}", status_code=status)
+        # never replayed: SAGA may have taken part of the file before failing
+        raise SagaWebError(message or f"SAGA Web a răspuns cu HTTP {status}", status_code=status, retryable=False)
 
     def _get_value(self, path: str, params: dict) -> Decimal:
         self._ensure_base_url()

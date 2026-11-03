@@ -271,6 +271,7 @@ def test_import_other_status_raises():
     with pytest.raises(SagaWebError) as exc:
         make_adapter(http)[0].import_file("F_1.xml", b"<Facturi/>")
     assert exc.value.status_code == 500
+    assert exc.value.retryable is False
 
 
 # ── reads ──

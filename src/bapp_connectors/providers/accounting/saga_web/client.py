@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 REFRESH_HEADER = "X-Saga-Refresh-Token"
 CIF_HEADER = "X-Saga-Cod-Fiscal"
 IMPORT_PATH = "Import"
+# Import waits for SAGA to process the whole file; reads keep the http client's default
+IMPORT_TIMEOUT = 180
 
 
 class _Secret:
@@ -94,8 +96,11 @@ class SagaWebApiClient:
         params: dict | None = None,
         files: dict | None = None,
         data: dict | None = None,
+        timeout: float | None = None,
         retry: bool,
     ) -> requests.Response:
+        # Import is not idempotent: none of its failures may be replayed by the host
+        retryable = False if path.strip("/") == IMPORT_PATH else None
         kwargs = {}
         if params is not None:
             kwargs["params"] = params
@@ -103,6 +108,8 @@ class SagaWebApiClient:
             kwargs["files"] = files
         if data is not None:
             kwargs["data"] = data
+        if timeout is not None:
+            kwargs["timeout"] = timeout
         try:
             response = self.http.call(
                 method,
@@ -114,9 +121,9 @@ class SagaWebApiClient:
             )
         except requests.ConnectTimeout:
             # never reached the server: nothing was sent
-            raise SagaWebError("SAGA Web nu răspunde (ConnectTimeout)") from None
+            raise SagaWebError("SAGA Web nu răspunde (ConnectTimeout)", retryable=retryable) from None
         except requests.Timeout:
-            if path.strip("/") == IMPORT_PATH:
+            if retryable is False:
                 raise SagaWebError(
                     "SAGA Web nu a răspuns la timp; nu se știe dacă fișierul a fost primit — nu retrimite automat",
                     retryable=False,
@@ -128,7 +135,7 @@ class SagaWebApiClient:
             raise SagaWebError("Credențiale SAGA Web invalide (ValueError)", retryable=False) from None
         except requests.RequestException as exc:
             # the exception text may carry request details; only its type is reported
-            raise SagaWebError(f"SAGA Web nu răspunde ({type(exc).__name__})") from None
+            raise SagaWebError(f"SAGA Web nu răspunde ({type(exc).__name__})", retryable=retryable) from None
 
         self._capture_refresh(response)
 
@@ -143,6 +150,7 @@ class SagaWebApiClient:
             IMPORT_PATH,
             files={"file": (filename, content, "application/xml")},
             data={"importAutomat": "true" if auto_import else "false"},
+            timeout=IMPORT_TIMEOUT,
             retry=False,
         )
 

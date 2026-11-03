@@ -295,3 +295,39 @@ def test_token_trailing_newline_is_stripped():
     headers = http.last_call().kwargs["headers"]
     assert headers["Authorization"] == "Bearer KEY"
     assert headers["X-Saga-Cod-Fiscal"] == "6716875"
+
+
+def test_import_timeout_is_180_reads_keep_default():
+    http = FakeHttpClient()
+    http.add("POST", "Import", FakeResponse(200, text="ok"))
+    http.add("GET", "X", ok_envelope("1"))
+    client = make_client(http)
+    client.import_file("F_x.xml", b"<Facturi/>", auto_import=True)
+    assert http.last_call().kwargs["timeout"] == 180
+    client.get_json("X", {})
+    assert "timeout" not in http.last_call().kwargs
+
+
+@pytest.mark.parametrize(
+    "exc", [requests.ConnectionError("reset"), requests.ConnectTimeout("x"), requests.ReadTimeout("x"), ValueError("x")]
+)
+def test_every_import_transport_error_is_not_retryable(exc):
+    def boom(method, path, kwargs):
+        raise exc
+
+    http = FakeHttpClient()
+    http.add("POST", "Import", boom)
+    with pytest.raises(SagaWebError) as exc_info:
+        make_client(http).import_file("F_x.xml", b"<Facturi/>", auto_import=True)
+    assert exc_info.value.retryable is False
+
+
+def test_read_connection_error_stays_retryable():
+    def boom(method, path, kwargs):
+        raise requests.ConnectionError("reset")
+
+    http = FakeHttpClient()
+    http.add("GET", "X", boom)
+    with pytest.raises(SagaWebError) as exc_info:
+        make_client(http).get_json("X", {})
+    assert exc_info.value.retryable is True
