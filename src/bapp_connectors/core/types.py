@@ -27,6 +27,7 @@ class ProviderFamily(StrEnum):
     ERP = "erp"
     DEVOPS = "devops"
     MONITORING = "monitoring"
+    ACCOUNTING = "accounting"
 
 
 class BackoffStrategy(StrEnum):

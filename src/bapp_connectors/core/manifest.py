@@ -138,6 +138,9 @@ class AuthConfig:
     strategy: AuthStrategy = AuthStrategy.NONE
     required_fields: list[CredentialField] = field(default_factory=list)
     oauth: OAuthConfig | None = None
+    # The provider issues new credentials on use (e.g. a refresh token rotated on every
+    # exchange); the host must persist the credentials the adapter hands back.
+    rotating_credentials: bool = False
 
     def validate_credentials(self, credentials: dict) -> list[str]:
         """Validate that all required fields are present. Returns list of missing field names."""

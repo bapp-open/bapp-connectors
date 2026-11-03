@@ -2,6 +2,7 @@
 Normalized data transfer objects for cross-provider communication.
 """
 
+from .accounting import Article, ImportProblem, ImportResult, ImportStatus, StockLine, TrialBalanceLine
 from .ads import (
     Ad,
     AdCampaign,
@@ -130,6 +131,7 @@ __all__ = [
     "AppStoreSale",
     "AppStoreStat",
     "AppStoreStatMetric",
+    "Article",
     "AttributeDefinition",
     "AttributeValue",
     "BaseDTO",
@@ -174,6 +176,9 @@ __all__ = [
     "HostingDomain",
     "HostingResource",
     "ImageResult",
+    "ImportProblem",
+    "ImportResult",
+    "ImportStatus",
     "InboundMessage",
     "InboxAction",
     "InboxActionType",
@@ -238,6 +243,7 @@ __all__ = [
     "SocialPostDraft",
     "SocialPostStats",
     "SocialPrivacy",
+    "StockLine",
     "Subscription",
     "SubscriptionInterval",
     "SubscriptionStatus",
@@ -246,6 +252,7 @@ __all__ = [
     "ToolDefinition",
     "TrackingEvent",
     "TranscriptionResult",
+    "TrialBalanceLine",
     "UploadedAdMedia",
     "WebhookEvent",
     "WebhookEventType",
