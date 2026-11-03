@@ -8,6 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+import requests
 
 from bapp_connectors.core.dto import ImportStatus
 from bapp_connectors.core.errors import ConfigurationError
@@ -138,6 +139,60 @@ def test_test_connection_other_error_is_authenticated_warning():
     result = make_adapter(http)[0].test_connection()
     assert result.success is True
     assert result.details == {"warning": "Contul nu exista"}
+
+
+def test_test_connection_200_success_false_is_authenticated_warning():
+    http = FakeHttpClient()
+    http.add("GET", "GetSoldCont", envelope(success=False, message="Cont inexistent"))
+    result = make_adapter(http)[0].test_connection()
+    assert result.success is True
+    assert result.details == {"warning": "Cont inexistent"}
+
+
+def test_test_connection_400_json_cont_inexistent_is_warning():
+    http = FakeHttpClient()
+    http.add("GET", "GetSoldCont", FakeResponse(400, {"success": False, "error": "cont inexistent"}))
+    result = make_adapter(http)[0].test_connection()
+    assert result.success is True
+    assert result.details == {"warning": "cont inexistent"}
+
+
+@pytest.mark.parametrize(
+    ("status", "text"),
+    [
+        (200, "<html><body>SAGA Web</body></html>"),
+        (404, "<html><body>404 Not Found</body></html>"),
+        (502, "<html><body>502 Bad Gateway</body></html>"),
+        (404, '{"success": false, "message": "nu exista"}'),
+        (500, '{"success": false, "message": "Eroare interna"}'),
+    ],
+)
+def test_test_connection_answer_saga_did_not_vouch_for_fails(status, text):
+    http = FakeHttpClient()
+    http.add("GET", "GetSoldCont", FakeResponse(status, text=text))
+    result = make_adapter(http)[0].test_connection()
+    assert result.success is False
+    assert result.message == f"SAGA Web a răspuns cu HTTP {status} — verifică URL-ul API"
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_test_connection_401_403_says_new_key(status):
+    http = FakeHttpClient()
+    http.add("GET", "GetSoldCont", FakeResponse(status, text="<html>Forbidden</html>"))
+    result = make_adapter(http)[0].test_connection()
+    assert result.success is False
+    assert "generează o cheie nouă" in result.message.lower()
+
+
+def test_test_connection_transport_error_fails():
+    def boom(method, path, kwargs):
+        raise requests.ConnectionError("refused")
+
+    http = FakeHttpClient()
+    http.add("GET", "GetSoldCont", boom)
+    result = make_adapter(http)[0].test_connection()
+    assert result.success is False
+    assert "ConnectionError" in result.message
 
 
 def test_test_connection_never_raises():

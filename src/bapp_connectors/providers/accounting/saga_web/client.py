@@ -21,7 +21,7 @@ from bapp_connectors.providers.accounting.saga_web.errors import (
     SagaWebError,
     SagaWebValidationError,
 )
-from bapp_connectors.providers.accounting.saga_web.mappers import parse_envelope
+from bapp_connectors.providers.accounting.saga_web.mappers import parse_envelope, read_envelope
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -142,13 +142,29 @@ class SagaWebApiClient:
         )
 
     def get_json(self, path: str, params: dict) -> tuple[bool, str, str]:
+        """``(success, message, data)`` of SAGA's JSON envelope.
+
+        A body that is not an envelope raises ``SagaWebError`` with ``is_envelope=False`` whatever
+        the status, so a landing page answering 200 never reads as a SAGA answer.
+        """
         response = self._request("GET", path, params=params, retry=True)
-        success, message, data = parse_envelope(response.text)
         status = response.status_code
+        envelope = read_envelope(response.text or "")
+        if envelope is None:
+            raise SagaWebError(
+                f"SAGA Web a răspuns cu HTTP {status} fără un răspuns JSON",
+                status_code=status,
+                retryable=status >= 500 or status == 429,
+            )
+        success, message, data = envelope
         if status == 400:
-            raise SagaWebValidationError(message or "SAGA Web a respins cererea (HTTP 400)", status_code=400)
+            raise SagaWebValidationError(
+                message or "SAGA Web a respins cererea (HTTP 400)", status_code=400, is_envelope=True
+            )
         if not 200 <= status < 300:
-            raise SagaWebError(message or f"SAGA Web a răspuns cu HTTP {status}", status_code=status)
+            raise SagaWebError(
+                message or f"SAGA Web a răspuns cu HTTP {status}", status_code=status, is_envelope=True
+            )
         return success, message, data
 
     def get_xml(self, path: str, params: dict) -> str:

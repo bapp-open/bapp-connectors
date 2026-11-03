@@ -6,10 +6,17 @@ from bapp_connectors.core.errors import AuthenticationError, ProviderError, Vali
 
 
 class SagaWebError(ProviderError):
-    """A SAGA Web call failed. The message is SAGA's own when it sent one."""
+    """A SAGA Web call failed. The message is SAGA's own when it sent one.
 
-    def __init__(self, message: str = "", status_code: int | None = None, **kwargs):
+    ``is_envelope`` is True when the body was SAGA's JSON envelope, i.e. SAGA itself answered
+    (and so accepted the key); a proxy page, an HTML 404 or a transport failure leave it False.
+    """
+
+    is_envelope: bool = False
+
+    def __init__(self, message: str = "", status_code: int | None = None, *, is_envelope: bool = False, **kwargs):
         super().__init__(message, status_code=status_code, **kwargs)
+        self.is_envelope = is_envelope
 
 
 class SagaWebAuthError(SagaWebError, AuthenticationError):

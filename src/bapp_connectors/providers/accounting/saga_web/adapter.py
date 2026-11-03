@@ -67,12 +67,14 @@ def base_url_error(base_url: str) -> str:
     return ""
 
 
-def _parsed(parser: Callable[[str], Any], text: str) -> Any:
+def _parsed(parser: Callable[[str], Any], text: str, *, is_envelope: bool = False) -> Any:
     """Run a mapper on a 2xx body; bad XML or a malformed number becomes a ``SagaWebError``."""
     try:
         return parser(text)
     except ValueError as exc:
-        raise SagaWebError(f"Răspuns SAGA Web invalid: {exc}", status_code=200, retryable=False) from None
+        raise SagaWebError(
+            f"Răspuns SAGA Web invalid: {exc}", status_code=200, retryable=False, is_envelope=is_envelope
+        ) from None
 
 
 class SagaWebAdapter(AccountingPort):
@@ -121,11 +123,16 @@ class SagaWebAdapter(AccountingPort):
         except SagaWebAuthError:
             return ConnectionTestResult(success=False, message=AUTH_REFUSED_MESSAGE)
         except SagaWebError as exc:
-            if exc.status_code is None:
-                # no HTTP answer (timeout, network): nothing says the key works
-                return ConnectionTestResult(success=False, message=str(exc))
-            # SAGA answered past the key check: the connection works, the query did not
-            return ConnectionTestResult(success=True, message="Conexiune reușită", details={"warning": str(exc)})
+            if exc.is_envelope and exc.status_code in (200, 400):
+                # SAGA's own envelope past the key check: the key works, the query did not
+                return ConnectionTestResult(success=True, message="Conexiune reușită", details={"warning": str(exc)})
+            if exc.status_code is not None:
+                # an answer SAGA did not vouch for: an HTML page, a 404 off a wrong URL, a 5xx
+                return ConnectionTestResult(
+                    success=False, message=f"SAGA Web a răspuns cu HTTP {exc.status_code} — verifică URL-ul API"
+                )
+            # no HTTP answer (timeout, network): nothing says the key works
+            return ConnectionTestResult(success=False, message=str(exc))
         except Exception as exc:
             return ConnectionTestResult(success=False, message=f"Eroare neașteptată ({type(exc).__name__})")
         return ConnectionTestResult(
@@ -165,8 +172,10 @@ class SagaWebAdapter(AccountingPort):
         self._ensure_base_url()
         success, message, data = self.client.get_json(path, params)
         if not success:
-            raise SagaWebError(message or "SAGA Web nu a returnat valoarea cerută", status_code=200, retryable=False)
-        return _parsed(to_decimal, data)
+            raise SagaWebError(
+                message or "SAGA Web nu a returnat valoarea cerută", status_code=200, retryable=False, is_envelope=True
+            )
+        return _parsed(to_decimal, data, is_envelope=True)
 
     def _get_xml(self, path: str, params: dict) -> str:
         self._ensure_base_url()

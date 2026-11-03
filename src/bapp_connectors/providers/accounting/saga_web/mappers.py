@@ -51,18 +51,30 @@ def _optional_decimal(text: str | None) -> Decimal | None:
 # ── JSON envelope ──
 
 
-def parse_envelope(body: str) -> tuple[bool, str, str]:
-    """Read ``{success, message|error, data}``; a non-JSON body → ``(False, body[:300], "")``."""
+def read_envelope(body: str) -> tuple[bool, str, str] | None:
+    """Read ``{success, message|error, data}``; ``None`` when the body is not a JSON object.
+
+    Only an envelope proves SAGA itself answered: an HTML landing page, a proxy's 502 page or
+    the 404 of a base URL missing ``/sagac/`` is not one.
+    """
     try:
         payload = json.loads(body)
     except (ValueError, TypeError):
-        return False, (body or "")[:300], ""
+        return None
     if not isinstance(payload, dict):
-        return False, (body or "")[:300], ""
+        return None
     success = bool(payload.get("success"))
     message = payload.get("message") or payload.get("error") or ""
     data = payload.get("data")
     return success, str(message), "" if data is None else str(data)
+
+
+def parse_envelope(body: str) -> tuple[bool, str, str]:
+    """Read ``{success, message|error, data}``; a non-JSON body → ``(False, body[:300], "")``."""
+    envelope = read_envelope(body)
+    if envelope is None:
+        return False, (body or "")[:300], ""
+    return envelope
 
 
 # ── Import report ──
