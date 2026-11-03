@@ -30,3 +30,13 @@ class SagaWebValidationError(SagaWebError, ValidationError):
     """SAGA Web refused the request parameters (HTTP 400)."""
 
     retryable = False
+
+
+class SagaWebCredentialsNotSaved(SagaWebError):  # noqa: N818 — the name says what the host must do
+    """SAGA issued a new key and ``on_credentials_update`` failed to store it.
+
+    The old key is already blocked, so the run must stop; never retried, and the message never
+    carries the key.
+    """
+
+    retryable = False

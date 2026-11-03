@@ -18,6 +18,7 @@ import requests
 
 from bapp_connectors.providers.accounting.saga_web.errors import (
     SagaWebAuthError,
+    SagaWebCredentialsNotSaved,
     SagaWebError,
     SagaWebValidationError,
 )
@@ -81,12 +82,20 @@ class SagaWebApiClient:
         return {"Authorization": f"Bearer {self._token.get()}", CIF_HEADER: self.cod_fiscal}
 
     def _capture_refresh(self, response) -> None:
-        new = _header(response, REFRESH_HEADER).strip()
-        if not new or new == self._token.get():
+        # the local is named ``token`` so error trackers scrub it from captured frames
+        token = _header(response, REFRESH_HEADER).strip()
+        if not token or token == self._token.get():
             return
-        self._token = _Secret(new)
-        if self.on_credentials_update is not None:
-            self.on_credentials_update({"token": new})
+        self._token = _Secret(token)
+        if self.on_credentials_update is None:
+            return
+        try:
+            self.on_credentials_update({"token": token})
+        except Exception:
+            del token
+            raise SagaWebCredentialsNotSaved(
+                "Cheia nouă SAGA Web nu a putut fi salvată; rularea trebuie oprită", retryable=False
+            ) from None
 
     def _request(
         self,

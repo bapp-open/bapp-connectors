@@ -10,6 +10,7 @@ import requests
 from bapp_connectors.providers.accounting.saga_web.client import SagaWebApiClient
 from bapp_connectors.providers.accounting.saga_web.errors import (
     SagaWebAuthError,
+    SagaWebCredentialsNotSaved,
     SagaWebError,
     SagaWebValidationError,
 )
@@ -331,3 +332,26 @@ def test_read_connection_error_stays_retryable():
     with pytest.raises(SagaWebError) as exc_info:
         make_client(http).get_json("X", {})
     assert exc_info.value.retryable is True
+
+
+@pytest.mark.parametrize("status", [200, 401])
+def test_failing_callback_raises_credentials_not_saved_without_the_key(status):
+    def callback(patch):
+        raise RuntimeError(f"db down while saving {patch['token']}")
+
+    http = FakeHttpClient()
+    http.add("GET", "X", FakeResponse(status, {"success": True, "data": "1"}, headers={"X-Saga-Refresh-Token": "NEWKEY9"}))
+    with pytest.raises(SagaWebCredentialsNotSaved) as exc_info:
+        make_client(http, callback=callback).get_json("X", {})
+    exc = exc_info.value
+    assert str(exc) == "Cheia nouă SAGA Web nu a putut fi salvată; rularea trebuie oprită"
+    assert "NEWKEY9" not in str(exc)
+    assert exc.retryable is False
+    assert exc.__cause__ is None
+    assert exc.__suppress_context__ is True
+    # no client frame of the raising traceback keeps the key in a local (skip this test's frame)
+    tb = exc.__traceback__.tb_next
+    assert tb is not None
+    while tb is not None:
+        assert "NEWKEY9" not in repr(tb.tb_frame.f_locals)
+        tb = tb.tb_next
