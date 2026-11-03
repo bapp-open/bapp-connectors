@@ -380,7 +380,7 @@ def test_clean_cod_fiscal(value):
     assert clean_cod_fiscal(value) == "6716875"
 
 
-@pytest.mark.parametrize("value", ["RO67-16875", "J40/1/2020", "６７１６８７５", "RO"])
+@pytest.mark.parametrize("value", ["RO67-16875", "J40/1/2020", "\uff16\uff17\uff11\uff16\uff18\uff17\uff15", "RO"])
 def test_non_digit_cod_fiscal_is_refused(value):
     http = FakeHttpClient()
     adapter, _ = make_adapter(http, cod_fiscal=value)
