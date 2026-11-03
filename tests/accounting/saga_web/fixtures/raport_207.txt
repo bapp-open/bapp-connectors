@@ -1,0 +1,9 @@
+Raport Import F_123123_15_09_2026.xml
+
+Factura 1.
+     NR_DOC: A100
+     Eroare antet: Factura a fost importata sau operata manual deja.
+Factura 3.
+     NR_DOC: A1002
+     Eroare: Completati clientul.
+

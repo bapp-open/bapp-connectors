@@ -6,7 +6,7 @@ This file provides context for Claude Code when working in this repository.
 
 Ports-and-adapters integration framework. Zero Django dependencies in the core package.
 
-### Provider Families (17)
+### Provider Families (18)
 
 | Family | Port | Providers |
 |--------|------|-----------|
@@ -27,6 +27,7 @@ Ports-and-adapters integration framework. Zero Django dependencies in the core p
 | erp | `ErpPort` (capabilities, print a file, send SMS; also `MessagingPort`) | BAPP |
 | devops | `DevOpsPort` (+ `IssueManagementCapability`) | GitLab |
 | monitoring | `MonitoringPort` (+ `IssueTriageCapability`, `ProjectProvisioningCapability`) | Sentry |
+| accounting | `AccountingPort` (import XML, stock, balances, trial balance, article) | SAGA Web |
 
 ### Provider File Structure (7 files each)
 
@@ -56,6 +57,7 @@ providers/{family}/{provider}/
   Family says what a provider *is*; ports say what it *can do*.
 - **Report-file providers (appstore):** data arrives as daily/monthly files; `core/reports.py` helpers; `PaginatedResult.cursor` = next period; one page = one file.
 - **Universal ads insights:** `AdsPort.get_insights(level, ...)` returns normalized `AdInsights` on the campaign → ad group → ad hierarchy (Meta "ad set" = TikTok "adgroup" = Google "ad group"); status changes go through `set_*_status`
+- **Rotating credentials:** a manifest with `auth.rotating_credentials=True` gets `on_credentials_update(patch)` from `ConnectionService.get_adapter`; the adapter must call it on every response that rotates a key, including errors.
 
 ### Optional Capabilities
 

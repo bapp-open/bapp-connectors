@@ -9,6 +9,7 @@ import logging
 import pkgutil
 from typing import TYPE_CHECKING, Any
 
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from bapp_connectors.core.registry import registry
@@ -40,6 +41,10 @@ FAMILY_DEFAULTS: dict[str, dict] = {
     ProviderFamily.HOSTING:   {"label": _("Hosting"),              "icon": "fad fa-server",           "color": "#14b8a6"},
     ProviderFamily.DNS:       {"label": _("DNS"),                  "icon": "fad fa-globe",            "color": "#0891b2"},
     ProviderFamily.APPSTORE:  {"label": _("App Stores"),           "icon": "fad fa-mobile-alt",       "color": "#a855f7"},
+    ProviderFamily.ERP:       {"label": _("ERP"),                  "icon": "fad fa-building",         "color": "#64748b"},
+    ProviderFamily.DEVOPS:    {"label": _("DevOps"),               "icon": "fad fa-code-branch",      "color": "#fc6d26"},
+    ProviderFamily.MONITORING: {"label": _("Monitoring"),          "icon": "fad fa-heart-pulse",      "color": "#362d59"},
+    ProviderFamily.ACCOUNTING: {"label": _("Accounting"),          "icon": "fad fa-calculator",       "color": "#0ea5e9"},
 }
 
 
@@ -158,12 +163,23 @@ class ConnectionService:
 
         When ``log_execution`` is True (the default), every HTTP request made
         through this adapter is persisted to the ExecutionLog model.
+
+        Providers whose manifest sets ``auth.rotating_credentials`` get an
+        ``on_credentials_update`` callback that persists the rotated values
+        immediately (see ``persist_rotated_credentials``).
         """
+        extra: dict[str, Any] = {}
+        manifest = registry.get_manifest(connection.provider_family, connection.provider_name)
+        if getattr(manifest.auth, "rotating_credentials", False) is True:
+            extra["on_credentials_update"] = lambda patch: ConnectionService.persist_rotated_credentials(
+                connection, patch
+            )
         adapter = registry.create_adapter(
             family=connection.provider_family,
             provider=connection.provider_name,
             credentials=connection.credentials,
             config=connection.config,
+            **extra,
         )
         if log_execution:
             try:
@@ -187,6 +203,21 @@ class ConnectionService:
         connection.is_connected = result.success
         connection.save(update_fields=["is_connected", "updated_at"])
         return result
+
+    @staticmethod
+    def persist_rotated_credentials(connection, patch: dict) -> None:
+        """Merge credentials rotated by the provider into the connection and save at once.
+
+        A provider that rotates its key on a call (e.g. SAGA Web) has already
+        invalidated the old value, so this is a plain ``save()`` — no
+        ``transaction.on_commit`` — and it must survive even if the surrounding
+        adapter call then fails. Callers must NOT wrap adapter calls in a
+        transaction they intend to roll back: that would discard the new key and
+        leave the connection holding a revoked one.
+        """
+        connection.credentials = {**connection.credentials, **patch}
+        connection.config = {**(connection.config or {}), "credentials_rotated_at": timezone.now().isoformat()}
+        connection.save(update_fields=["credentials_encrypted", "config", "updated_at"])
 
     @staticmethod
     def rotate_credentials(connection, new_credentials: dict) -> None:

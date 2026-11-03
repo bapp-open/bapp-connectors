@@ -23,6 +23,8 @@ _SENSITIVE_KEYS = {
     "possignature", "posid", "api_key", "apikey",
     # Steam Web API: publisher key in the query string (`?key=...`)
     "key",
+    # SAGA Web: rotated API key comes back in a response header (matched lower-cased)
+    "x-saga-refresh-token",
 }
 _KEY_IN_TEXT = re.compile(r"(?i)(\bkey=)[^&\s]+")
 

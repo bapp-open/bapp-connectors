@@ -42,10 +42,11 @@ A ports-and-adapters integration framework for connecting to external services: 
 | **ERP** | BAPP | 1 |
 | **DevOps** | GitLab | 1 |
 | **Monitoring** | Sentry | 1 |
+| **Accounting** | SAGA Web | 1 |
 | **Ads** | Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads | 6 |
 | **Email** | Gmail, Mailchimp Transactional, Amazon SES, SMTP Email | 4 |
 | **Social** | Facebook Page, Instagram, LinkedIn Page, Meta (Facebook + Instagram), Pinterest, Threads, TikTok, YouTube Shorts | 8 |
-| | **Total** | **77** |
+| | **Total** | **78** |
 <!-- PROVIDERS:END -->
 
 ## Quick Start
@@ -257,6 +258,7 @@ packages/connectors/
 │       ├── erp/           # BAPP
 │       ├── devops/        # GitLab
 │       ├── monitoring/    # Sentry
+│       ├── accounting/    # SAGA Web
 │       ├── ads/           # Facebook Ads, Google Ads, LinkedIn Ads, Microsoft Ads, Pinterest Ads, TikTok Ads
 │       ├── email/         # Gmail, Mailchimp Transactional, Amazon SES, SMTP Email
 │       └── social/        # Facebook Page, Instagram, LinkedIn Page, Meta (Facebook + Instagram), Pinterest, Threads, TikTok, YouTube Shorts

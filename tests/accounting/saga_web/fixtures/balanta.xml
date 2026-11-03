@@ -1,0 +1,17 @@
+<Balanta>
+    <LinieBalantaXML>
+         <CONT>371</CONT>
+         <DENUMIRE>MARFURI</DENUMIRE>
+         <TIP>A</TIP>
+         <DEB_INIT>-4</DEB_INIT>
+         <CRED_INIT>0</CRED_INIT>
+         <CRED_PREC>0</CRED_PREC>
+         <DEB_PREC>123456</DEB_PREC>
+         <RULAJ_D>0</RULAJ_D>
+         <RULAJ_C>0</RULAJ_C>
+         <TOTAL_DEB>123456</TOTAL_DEB>
+         <TOTAL_CRED>0</TOTAL_CRED>
+         <FIN_D>123456</FIN_D>
+         <FIN_C>0</FIN_C>
+    </LinieBalantaXML>
+</Balanta>

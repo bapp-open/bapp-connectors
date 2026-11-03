@@ -1,13 +1,13 @@
 [project]
 name = "django-bapp-connectors"
-version = "0.26.2"
+version = "0.27.0"
 description = "Django integration for bapp-connectors: multi-tenant connection management, sync state, webhooks, and audit logging"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 dependencies = [
     "django>=4.2",
-    "bapp-connectors>=0.41.0",
+    "bapp-connectors>=0.47.0",
     "cryptography>=41.0",
 ]
 

@@ -1,0 +1,31 @@
+<Situatie>
+    <LinieSituatieXML>
+         <GESTIUNE>0001</GESTIUNE>
+         <DEN_GEST>EXEMPLU GESTIUNE</DEN_GEST>
+         <DENUMIRE>EXEMPLU DENUMIRE ARTICOL</DENUMIRE>
+         <COD_ART>00000001</COD_ART>
+         <COD_BARE>3123461238123</COD_BARE>
+         <GRUPA></GRUPA>
+         <UM>BUC</UM>
+         <TIP>04</TIP>
+         <TVA>21</TVA>
+         <DEN_TIP>EXEMPLU TIP</DEN_TIP>
+         <CONT>345</CONT>
+         <VANDABIL>1</VANDABIL>
+         <CANT_MIN>0</CANT_MIN>
+         <CANT_INT>2671</CANT_INT>
+         <CANT_IES>2535</CANT_IES>
+         <CANT_INIT>0</CANT_INIT>
+         <CANT_FIN>136</CANT_FIN>
+         <GREUTATE>0</GREUTATE>
+         <PRET_MEDIU>40.6675</PRET_MEDIU>
+         <VAL_INIT>3186.28</VAL_INIT>
+         <VAL_INT>64593.54</VAL_INT>
+         <VAL_IES>62249.04</VAL_IES>
+         <VALOARE>5530.78</VALOARE>
+         <COMANDAT>0</COMANDAT>
+         <COM_INT>0</COM_INT>
+         <DISPONIBIL>136</DISPONIBIL>
+         <TEXT_SUPL>EXEMPLU INFORMATIE SUPLIMENTARA</TEXT_SUPL>
+    </LinieSituatieXML>
+</Situatie>
