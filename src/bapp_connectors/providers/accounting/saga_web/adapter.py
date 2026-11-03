@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 from bapp_connectors.core.dto import (
     Article,
     ConnectionTestResult,
+    ImportProblem,
     ImportResult,
     ImportStatus,
     StockLine,
@@ -47,6 +48,7 @@ if TYPE_CHECKING:
 AUTH_REFUSED_MESSAGE = (
     "SAGA Web a refuzat cheia de acces (HTTP 401/403). Generează o cheie nouă din Utilizatori → Integrare API."
 )
+EMPTY_REPORT_MESSAGE = "Raport SAGA gol sau nerecunoscut"
 COD_FISCAL_MESSAGE = "Codul fiscal trebuie să conțină doar cifre"
 _INVALID_ARTICLE_HINT = "cod de articol"
 
@@ -177,11 +179,16 @@ class SagaWebAdapter(AccountingPort):
                 status=ImportStatus.OK if success else ImportStatus.FAILED, http_status=status, message=message
             )
         if status in (207, 422):
+            problems = parse_report(text)
+            if not problems:
+                # SAGA refused at least part of the file: an empty or unknown report must not
+                # read as a fully accepted one
+                problems = [ImportProblem(index=None, document_number="", message=EMPTY_REPORT_MESSAGE)]
             return ImportResult(
                 status=ImportStatus.PARTIAL if status == 207 else ImportStatus.FAILED,
                 http_status=status,
                 report=text,
-                problems=parse_report(text),
+                problems=problems,
             )
         if status == 400:
             _, message, _ = parse_envelope(text)

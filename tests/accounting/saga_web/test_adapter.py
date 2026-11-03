@@ -390,3 +390,20 @@ def test_non_digit_cod_fiscal_is_refused(value):
     assert result.success is False
     assert result.message == "Codul fiscal trebuie să conțină doar cifre"
     assert http.calls == []
+
+
+# ── empty import report ──
+
+
+@pytest.mark.parametrize(("status", "expected"), [(207, ImportStatus.PARTIAL), (422, ImportStatus.FAILED)])
+@pytest.mark.parametrize("text", ["", "ceva ce nu e un raport SAGA"])
+def test_import_207_422_without_recognised_problems_gets_one(status, expected, text):
+    http = FakeHttpClient()
+    http.add("POST", "Import", FakeResponse(status, text=text))
+    result = make_adapter(http)[0].import_file("F_1.xml", b"<Facturi/>")
+    assert result.status == expected
+    assert len(result.problems) == 1
+    problem = result.problems[0]
+    assert problem.message == "Raport SAGA gol sau nerecunoscut"
+    assert problem.index is None
+    assert problem.document_number == ""
