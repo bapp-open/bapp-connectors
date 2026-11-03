@@ -41,6 +41,7 @@ FAMILY_DEFAULTS: dict[str, dict] = {
     ProviderFamily.HOSTING:   {"label": _("Hosting"),              "icon": "fad fa-server",           "color": "#14b8a6"},
     ProviderFamily.DNS:       {"label": _("DNS"),                  "icon": "fad fa-globe",            "color": "#0891b2"},
     ProviderFamily.APPSTORE:  {"label": _("App Stores"),           "icon": "fad fa-mobile-alt",       "color": "#a855f7"},
+    ProviderFamily.ERP:       {"label": _("ERP"),                  "icon": "fad fa-building",         "color": "#64748b"},
     ProviderFamily.ACCOUNTING: {"label": _("Accounting"),          "icon": "fad fa-calculator",       "color": "#0ea5e9"},
 }
 
