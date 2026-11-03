@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 AUTH_REFUSED_MESSAGE = (
     "SAGA Web a refuzat cheia de acces (HTTP 401/403). Generează o cheie nouă din Utilizatori → Integrare API."
 )
+COD_FISCAL_MESSAGE = "Codul fiscal trebuie să conțină doar cifre"
 _INVALID_ARTICLE_HINT = "cod de articol"
 
 
@@ -65,6 +66,18 @@ def base_url_error(base_url: str) -> str:
     if host != ALLOWED_HOST and not host.endswith("." + ALLOWED_HOST):
         return f"URL API trebuie să fie pe {ALLOWED_HOST}"
     return ""
+
+
+def clean_cod_fiscal(value: str) -> str:
+    """The CUI as SAGA wants it: no spaces, no ``RO`` prefix (``" RO 6716875"`` → ``"6716875"``)."""
+    cleaned = "".join((value or "").split())
+    if cleaned[:2].upper() == "RO":
+        cleaned = cleaned[2:]
+    return cleaned
+
+
+def _cod_fiscal_ok(value: str) -> bool:
+    return value.isascii() and value.isdigit()
 
 
 def _parsed(parser: Callable[[str], Any], text: str, *, is_envelope: bool = False) -> Any:
@@ -99,10 +112,11 @@ class SagaWebAdapter(AccountingPort):
         if http_client is None:
             http_client = ResilientHttpClient(base_url=base_url, provider_name="saga_web")
 
+        self._cod_fiscal = clean_cod_fiscal(credentials.get("cod_fiscal") or "")
         self.client = SagaWebApiClient(
             http_client=http_client,
-            token=credentials.get("token", ""),
-            cod_fiscal=credentials.get("cod_fiscal", ""),
+            token=(credentials.get("token") or "").strip(),
+            cod_fiscal=self._cod_fiscal,
             base_url=base_url,
             on_credentials_update=on_credentials_update,
         )
@@ -113,9 +127,16 @@ class SagaWebAdapter(AccountingPort):
     # ── BasePort ──
 
     def validate_credentials(self) -> bool:
-        return not self.manifest.auth.validate_credentials(self.credentials) and self._base_url_error == ""
+        return (
+            not self.manifest.auth.validate_credentials(self.credentials)
+            and self._base_url_error == ""
+            and _cod_fiscal_ok(self._cod_fiscal)
+            and bool(self.client.token)
+        )
 
     def test_connection(self) -> ConnectionTestResult:
+        if not _cod_fiscal_ok(self._cod_fiscal):
+            return ConnectionTestResult(success=False, message=COD_FISCAL_MESSAGE)
         try:
             balance = self.get_account_balance("5311", "D", date.today())
         except ConfigurationError as exc:

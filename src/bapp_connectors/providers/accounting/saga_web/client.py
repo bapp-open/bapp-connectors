@@ -60,8 +60,9 @@ class SagaWebApiClient:
         on_credentials_update: Callable[[dict], None] | None = None,
     ):
         self.http = http_client
-        self._token = _Secret(token)
-        self.cod_fiscal = cod_fiscal
+        # a pasted key often carries a trailing newline, which requests refuses in a header
+        self._token = _Secret((token or "").strip())
+        self.cod_fiscal = (cod_fiscal or "").strip()
         self.base_url = base_url.rstrip("/")
         self.on_credentials_update = on_credentials_update
 
@@ -121,6 +122,10 @@ class SagaWebApiClient:
                     retryable=False,
                 ) from None
             raise SagaWebError("SAGA Web nu a răspuns la timp") from None
+        except ValueError:
+            # requests refuses a header value (a newline inside the pasted key or CIF) and quotes
+            # the value in its message: only the type is reported
+            raise SagaWebError("Credențiale SAGA Web invalide (ValueError)", retryable=False) from None
         except requests.RequestException as exc:
             # the exception text may carry request details; only its type is reported
             raise SagaWebError(f"SAGA Web nu răspunde ({type(exc).__name__})") from None

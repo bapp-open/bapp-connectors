@@ -357,3 +357,35 @@ class TestSagaWebContract(AccountingContractTests):
         http.add("GET", "Situatii/GetSituatieStocuri", FakeResponse(200, text=(FIX / "situatie.xml").read_text()))
         http.add("POST", "Import", envelope(message="Import realizat cu succes."))
         return make_adapter(http)[0]
+
+
+# ── pasted credentials ──
+
+
+def test_cod_fiscal_and_token_are_cleaned():
+    http = FakeHttpClient()
+    http.add("GET", "GetSoldCont", envelope("1"))
+    adapter, _ = make_adapter(http, cod_fiscal=" RO6716875", token=KEY + "\n")
+    assert adapter.validate_credentials() is True
+    adapter.test_connection()
+    headers = http.last_call().kwargs["headers"]
+    assert headers["X-Saga-Cod-Fiscal"] == "6716875"
+    assert headers["Authorization"] == f"Bearer {KEY}"
+
+
+@pytest.mark.parametrize("value", ["ro 6716 875", "RO6716875 ", "6716875"])
+def test_clean_cod_fiscal(value):
+    from bapp_connectors.providers.accounting.saga_web.adapter import clean_cod_fiscal
+
+    assert clean_cod_fiscal(value) == "6716875"
+
+
+@pytest.mark.parametrize("value", ["RO67-16875", "J40/1/2020", "６７１６８７５", "RO"])
+def test_non_digit_cod_fiscal_is_refused(value):
+    http = FakeHttpClient()
+    adapter, _ = make_adapter(http, cod_fiscal=value)
+    assert adapter.validate_credentials() is False
+    result = adapter.test_connection()
+    assert result.success is False
+    assert result.message == "Codul fiscal trebuie să conțină doar cifre"
+    assert http.calls == []

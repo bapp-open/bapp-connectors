@@ -270,3 +270,28 @@ def test_repr_hides_token():
     client = make_client(FakeHttpClient())
     assert "K1" not in repr(client)
     assert "K1" not in repr(vars(client))
+
+
+def test_invalid_header_value_error_never_carries_the_key():
+    def boom(method, path, kwargs):
+        raise ValueError("Invalid leading whitespace, reserved character(s), or return character(s) in header value: 'Bearer KEY\\nX'")
+
+    http = FakeHttpClient()
+    http.add("GET", "X", boom)
+    with pytest.raises(SagaWebError) as exc_info:
+        make_client(http, token="KEY\nX").get_json("X", {})
+    assert str(exc_info.value) == "Credențiale SAGA Web invalide (ValueError)"
+    assert "KEY" not in str(exc_info.value)
+    assert exc_info.value.retryable is False
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__suppress_context__ is True
+
+
+def test_token_trailing_newline_is_stripped():
+    http = FakeHttpClient()
+    http.add("GET", "X", ok_envelope("1"))
+    client = SagaWebApiClient(http, token="KEY\n", cod_fiscal=" 6716875 ", base_url=BASE)
+    client.get_json("X", {})
+    headers = http.last_call().kwargs["headers"]
+    assert headers["Authorization"] == "Bearer KEY"
+    assert headers["X-Saga-Cod-Fiscal"] == "6716875"
