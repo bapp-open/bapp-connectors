@@ -58,11 +58,18 @@ def test_manifest():
     assert manifest.capabilities == [OAuthCapability, SocialDestinationsCapability]
     assert manifest.auth.oauth.display_name == "Conectează cu Meta"
     assert manifest.auth.oauth.scopes == META_SCOPES
+    assert manifest.requires_platform_app is True
     fields = {f.name: f for f in manifest.auth.required_fields}
     assert set(fields) == {"app_id", "app_secret", "token"}
     assert fields["token"].required is False
     assert fields["token"].sensitive is True
     assert fields["app_secret"].sensitive is True
+
+
+def test_other_providers_do_not_require_a_platform_app():
+    from bapp_connectors.providers.social.facebook.manifest import manifest as facebook_page
+
+    assert facebook_page.requires_platform_app is False
 
 
 def test_validate_credentials():

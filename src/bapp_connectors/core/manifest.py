@@ -196,6 +196,9 @@ class ProviderManifest:
     description: str = ""
     base_url: str = ""
     allow_multiple: bool = False
+    # The app credentials belong to the integrating platform (one app for every tenant), never to
+    # the end user: a platform that has not configured them should not offer the provider at all.
+    requires_platform_app: bool = False
 
     auth: AuthConfig = field(default_factory=AuthConfig)
     settings: SettingsConfig = field(default_factory=SettingsConfig)

@@ -26,6 +26,7 @@ manifest = ProviderManifest(
         "Instagram Business accounts linked to them."
     ),
     base_url="https://graph.facebook.com/v19.0/",
+    requires_platform_app=True,
     auth=AuthConfig(
         strategy=AuthStrategy.BEARER,
         required_fields=[
