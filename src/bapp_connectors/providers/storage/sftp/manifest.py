@@ -70,6 +70,16 @@ manifest = ProviderManifest(
                 help_text="Connection timeout in seconds.",
                 colspan=6,
             ),
+            SettingsField(
+                name="allow_legacy_host_key",
+                label="Allow legacy host key (ssh-rsa)",
+                field_type=FieldType.BOOL,
+                default=False,
+                help_text=(
+                    "Accept a server whose only host key algorithm is ssh-rsa (SHA-1). "
+                    "Turn on only if the connection fails with 'no acceptable host key'."
+                ),
+            ),
         ],
     ),
     capabilities=[

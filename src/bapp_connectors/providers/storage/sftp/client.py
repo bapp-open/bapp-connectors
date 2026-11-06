@@ -9,6 +9,7 @@ context manager for batch operations to reuse a single connection.
 from __future__ import annotations
 
 import contextlib
+import functools
 import logging
 import posixpath
 import socket
@@ -34,6 +35,46 @@ def _require_paramiko():
         )
 
 
+@functools.cache
+def _legacy_host_key_transport():
+    """A ``paramiko.Transport`` that also accepts a host key signed as ``ssh-rsa``.
+
+    Paramiko 5 removed ``ssh-rsa`` — RSA with a SHA-1 signature — from everything it
+    negotiates, and offers no switch to bring it back. A server that has nothing else
+    to offer (Cerberus FTP Server 9 is one) then fails the handshake with
+    "Incompatible ssh peer (no acceptable host key)", and nothing on our side of the
+    account can change what that server runs.
+
+    What is given back is narrow:
+
+    - the algorithm goes **last**, after everything paramiko prefers. The one that gets
+      used is the first of ours the server also offers, so a server with anything
+      better never reaches it;
+    - only the *server's* proof of its host key is affected. ``_preferred_pubkeys`` is
+      untouched, so what we sign with when authenticating by key stays SHA-2, and the
+      key exchange and MACs are paramiko's own;
+    - it is a subclass, not a patch on ``paramiko.Transport``: other connections in the
+      process negotiate exactly as before.
+
+    Built on first use because paramiko is an optional dependency, and once — the
+    class is the same for every client that asks.
+    """
+    if "ssh-rsa" in paramiko.Transport._preferred_keys:
+        # Paramiko 4 and older still negotiate it themselves.
+        return paramiko.Transport
+
+    from cryptography.hazmat.primitives import hashes
+
+    class _Sha1SignedHostKey(paramiko.RSAKey):
+        HASHES = {**paramiko.RSAKey.HASHES, "ssh-rsa": hashes.SHA1}
+
+    class _LegacyHostKeyTransport(paramiko.Transport):
+        _preferred_keys = (*paramiko.Transport._preferred_keys, "ssh-rsa")
+        _key_info = {**paramiko.Transport._key_info, "ssh-rsa": _Sha1SignedHostKey}
+
+    return _LegacyHostKeyTransport
+
+
 class SFTPClient:
     """
     Low-level SFTP client using paramiko.
@@ -52,6 +93,7 @@ class SFTPClient:
         default_folder: str = "/",
         timeout: int = 10,
         verify_host_key: bool = False,
+        allow_legacy_host_key: bool = False,
     ):
         """
         ``timeout`` bounds the TCP connect, the SSH banner and the authentication.
@@ -61,6 +103,13 @@ class SFTPClient:
         ``known_hosts`` the caller can point at, which no caller has yet; until one
         does, the flag stays out of the manifest so it is not offered as a setting
         that does nothing.
+
+        ``allow_legacy_host_key`` lets the handshake fall back to an ``ssh-rsa``
+        (SHA-1) host key when the server offers nothing newer — which paramiko 5
+        refuses outright. See `_legacy_host_key_transport` for what it does and does
+        not relax. Given that no host key is pinned here, it takes nothing away that
+        was being relied on; it is off by default all the same, so that reaching for
+        a deprecated algorithm is something a caller chose.
         """
         _require_paramiko()
         self.host = host
@@ -71,6 +120,7 @@ class SFTPClient:
         self.default_folder = default_folder.strip() or "/"
         self.timeout = timeout
         self.verify_host_key = verify_host_key
+        self.allow_legacy_host_key = allow_legacy_host_key
 
     def _get_pkey(self) -> paramiko.PKey | None:
         """Parse the private key string into a paramiko PKey."""
@@ -86,6 +136,12 @@ class SFTPClient:
             except Exception:
                 continue
         raise ValueError("Could not parse SSH private key. Supported types: RSA, Ed25519, ECDSA.")
+
+    def _transport_class(self) -> type[paramiko.Transport]:
+        """``paramiko.Transport``, unless this client may accept an ``ssh-rsa`` host key."""
+        if self.allow_legacy_host_key:
+            return _legacy_host_key_transport()
+        return paramiko.Transport
 
     def _connect_transport(self) -> paramiko.Transport:
         """Create an authenticated SSH transport, every phase bounded by ``self.timeout``.
@@ -107,7 +163,7 @@ class SFTPClient:
 
         sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
         try:
-            transport = paramiko.Transport(sock)
+            transport = self._transport_class()(sock)
         except Exception:
             sock.close()
             raise

@@ -47,6 +47,7 @@ class SFTPStorageAdapter(StoragePort):
             default_folder=config.get("default_folder", "/"),
             timeout=config.get("timeout", 10),
             verify_host_key=config.get("verify_host_key", False),
+            allow_legacy_host_key=bool(config.get("allow_legacy_host_key", False)),
         )
 
     # ── BasePort ──
