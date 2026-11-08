@@ -4,129 +4,129 @@
   "salesProceeds": {
    "basePriceTotal": {
     "currency": "RON",
-    "amount": 80.0
+    "amount": 8000
    },
    "basePriceDiscountedTotal": {
     "currency": "RON",
-    "amount": 78.0
+    "amount": 7800
    },
    "basePriceSellerDiscount": {
     "currency": "RON",
-    "amount": 2.0
+    "amount": 200
    },
    "basePriceOff": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "shippingTotalTaxExcl": {
     "currency": "RON",
-    "amount": 10.0
+    "amount": 1000
    },
    "shippingCustomerTotalTaxExcl": {
     "currency": "RON",
-    "amount": 10.0
+    "amount": 1000
    },
    "shippingTemuTotalTaxExcl": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "productTax": {
     "currency": "RON",
-    "amount": 18.05
+    "amount": 1805
    },
    "productTaxCustomerDiscounted": {
     "currency": "RON",
-    "amount": 18.05
+    "amount": 1805
    },
    "productTaxTemu": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "shippingTax": {
     "currency": "RON",
-    "amount": 1.9
+    "amount": 190
    },
    "shippingTaxCustomerDiscounted": {
     "currency": "RON",
-    "amount": 1.9
+    "amount": 190
    },
    "shippingTaxTemu": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "taxTemuDiscount": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "estimatedDeduction": {
     "currency": "RON",
-    "amount": 6.05
+    "amount": 605
    },
    "estimatedSettlementTotal": {
     "currency": "RON",
-    "amount": 90.0
+    "amount": 9000
    }
   },
   "customerPaid": {
    "retailPriceTotalTaxExcl": {
     "currency": "RON",
-    "amount": 100.0
+    "amount": 10000
    },
    "retailPriceSellerDiscountTaxExcl": {
     "currency": "RON",
-    "amount": 5.0
+    "amount": 500
    },
    "retailPriceTemuDiscountTaxExcl": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "retailPriceCustomerTotalTaxExcl": {
     "currency": "RON",
-    "amount": 95.0
+    "amount": 9500
    },
    "retailPriceTotalTaxIncl": {
     "currency": "RON",
-    "amount": 119.0
+    "amount": 11900
    },
    "shippingTotalTaxExcl": {
     "currency": "RON",
-    "amount": 10.0
+    "amount": 1000
    },
    "shippingTemuTotalTaxExcl": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "shippingCustomerTotalTaxExcl": {
     "currency": "RON",
-    "amount": 10.0
+    "amount": 1000
    },
    "shippingTotalTaxIncl": {
     "currency": "RON",
-    "amount": 11.9
+    "amount": 1190
    },
    "shippingTax": {
     "currency": "RON",
-    "amount": 1.9
+    "amount": 190
    },
    "shippingTaxTemuTotal": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "shippingTaxCustomerTotal": {
     "currency": "RON",
-    "amount": 1.9
+    "amount": 190
    },
    "productTaxCustomerTotal": {
     "currency": "RON",
-    "amount": 18.05
+    "amount": 1805
    },
    "productRefundsTotal": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "customerPaidTotal": {
     "currency": "RON",
-    "amount": 124.95
+    "amount": 12495
    }
   }
  },
@@ -136,105 +136,105 @@
    "quantity": 2,
    "unitRetailPriceTaxExcl": {
     "currency": "RON",
-    "amount": 50.0
+    "amount": 5000
    },
    "unitRetailPriceTaxIncl": {
     "currency": "RON",
-    "amount": 59.5
+    "amount": 5950
    },
    "productTaxRate": 19,
    "retailPriceTotalTaxExcl": {
     "currency": "RON",
-    "amount": 100.0
+    "amount": 10000
    },
    "retailPriceTotalTaxIncl": {
     "currency": "RON",
-    "amount": 119.0
+    "amount": 11900
    },
    "retailPriceDiscountedTotalTaxExcl": {
     "currency": "RON",
-    "amount": 95.0
+    "amount": 9500
    },
    "retailPriceSellerDiscountTaxExcl": {
     "currency": "RON",
-    "amount": 5.0
+    "amount": 500
    },
    "retailPriceTemuDiscountTaxExcl": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "unitBasePrice": {
     "currency": "RON",
-    "amount": 40.0
+    "amount": 4000
    },
    "basePriceTotal": {
     "currency": "RON",
-    "amount": 80.0
+    "amount": 8000
    },
    "basePriceDiscountedTotal": {
     "currency": "RON",
-    "amount": 78.0
+    "amount": 7800
    },
    "basePriceSellerDiscount": {
     "currency": "RON",
-    "amount": 2.0
+    "amount": 200
    },
    "basePriceOff": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "estimatedSettlementTotal": {
     "currency": "RON",
-    "amount": 90.0
+    "amount": 9000
    },
    "estimatedDeduction": {
     "currency": "RON",
-    "amount": 6.05
+    "amount": 605
    },
    "shippingTotalTaxExcl": {
     "currency": "RON",
-    "amount": 10.0
+    "amount": 1000
    },
    "shippingTotalTaxIncl": {
     "currency": "RON",
-    "amount": 11.9
+    "amount": 1190
    },
    "shippingCustomerTotalTaxExcl": {
     "currency": "RON",
-    "amount": 10.0
+    "amount": 1000
    },
    "shippingTemuTotalTaxExcl": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "shippingTax": {
     "currency": "RON",
-    "amount": 1.9
+    "amount": 190
    },
    "shippingTaxCustomerDiscounted": {
     "currency": "RON",
-    "amount": 1.9
+    "amount": 190
    },
    "shippingTaxTemu": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "shipTaxRate": 19,
    "productTax": {
     "currency": "RON",
-    "amount": 18.05
+    "amount": 1805
    },
    "productTaxCustomerDiscounted": {
     "currency": "RON",
-    "amount": 18.05
+    "amount": 1805
    },
    "productTaxTemu": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    },
    "taxTemuDiscount": {
     "currency": "RON",
-    "amount": 0.0
+    "amount": 0
    }
   }
  ]

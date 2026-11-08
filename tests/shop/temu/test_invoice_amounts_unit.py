@@ -42,8 +42,13 @@ def test_attach_credit_note_with_optional_fields(fake):
 
 
 def test_money_helper():
-    assert money({"currency": "RON", "amount": 59.5}) == Decimal("59.50")
-    assert money({"amount": "1"}) == Decimal("1.00") and money(None) == Decimal("0") and money({}) == Decimal("0")
+    # Temu's Amount objects carry `amount` as a Long in minor units: 712 is 7.12 RON (first real
+    # order, 2026-11-08: a 6.41 RON base price came back as unitRetailPriceTaxExcl 712).
+    assert money({"currency": "RON", "amount": 5950}) == Decimal("59.50")
+    assert money({"currency": "RON", "amount": 712}) == Decimal("7.12")
+    assert money({"amount": "1"}) == Decimal("0.01") and money(None) == Decimal("0") and money({}) == Decimal("0")
+    # a bare number (invoice.detail.query gives decimals such as 56.525) is already in major units
+    assert money(56.525) == Decimal("56.53") and money("10.0") == Decimal("10.00")
 
 
 def test_amounts_from_v2_fixture():

@@ -9,15 +9,15 @@
  "refundSummary": {
   "buyerTotalRefund": {
    "currency": "RON",
-   "amount": 59.5
+   "amount": 5950
   },
   "retailPriceRefundTaxExcl": {
    "currency": "RON",
-   "amount": 50.0
+   "amount": 5000
   },
   "taxTotalRefund": {
    "currency": "RON",
-   "amount": 9.5
+   "amount": 950
   },
   "shippingAmountRefundTaxExcl": {
    "currency": "RON",
@@ -39,7 +39,7 @@
    "applyAfterSalesGoodsNumber": 1,
    "applyRefundAmount": {
     "currency": "RON",
-    "amount": 59.5
+    "amount": 5950
    },
    "afterSalesReasonCode": 24,
    "afterSalesReasonDesc": "Damaged item",

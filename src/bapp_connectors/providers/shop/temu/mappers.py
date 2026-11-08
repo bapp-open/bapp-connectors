@@ -352,19 +352,25 @@ Q2 = Decimal("0.01")
 
 
 def money(value) -> Decimal:
-    """``{"currency", "amount"}`` (or a bare number) → Decimal with 2 decimals.
+    """``{"currency", "amount"}`` or a bare number → Decimal with 2 decimals.
 
-    The docs show ``amount`` as a plain number; treated as major currency units. Verify on the
-    first real order with the amount scope (if Temu sends minor units, divide by 100 here).
+    An Amount object carries ``amount`` as a Long in MINOR units (bani, cents): the first real
+    order (2026-11-08) came back with ``unitRetailPriceTaxExcl`` 712 for a 7.12 RON price, and the
+    host imported a 712 RON line. A bare number (``temu.pay.tax.invoice.detail.query`` gives
+    decimals such as 56.525) is already in major units.
     """
-    if isinstance(value, dict):
+    minor = isinstance(value, dict)
+    if minor:
         value = value.get("amount")
     if value in (None, ""):
         return Decimal("0")
     try:
-        return Decimal(str(value)).quantize(Q2, rounding=ROUND_HALF_UP)
+        amount = Decimal(str(value))
     except ArithmeticError:
         return Decimal("0")
+    if minor:
+        amount = amount / 100
+    return amount.quantize(Q2, rounding=ROUND_HALF_UP)
 
 
 def _rate(value) -> Decimal:
