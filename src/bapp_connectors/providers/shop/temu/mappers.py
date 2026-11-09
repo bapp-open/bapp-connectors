@@ -150,8 +150,20 @@ def order_from_temu(parent: dict, shipping: dict | None, site_currency: str, amo
             "customer_paid_total": str(amounts.customer_paid_total),
             "estimated_revenue": str(amounts.estimated_revenue),
             "estimated_revenue_deduction": str(amounts.estimated_revenue_deduction),
+            "shipping_excl_vat": str(amounts.shipping_excl_vat),
+            "shipping_incl_vat": str(amounts.shipping_incl_vat),
             "source": amounts.source,
         }
+        if amounts.shipping_incl_vat > 0:
+            # The shipping the buyer paid goes to the seller on Temu, so the host invoices it as a
+            # line: shop_orders.intake creates its transport line from `shipping_lines`. `total`
+            # follows the NET convention of the item prices (the host treats a connector without
+            # VAT-inclusive prices as net); the gross rides along for reference.
+            extra["shipping_lines"] = [{
+                "total": str(amounts.shipping_excl_vat),
+                "total_incl_vat": str(amounts.shipping_incl_vat),
+                "method_title": "Transport Temu",
+            }]
     return Order(
         order_id=parent_sn,
         external_id=parent_sn,

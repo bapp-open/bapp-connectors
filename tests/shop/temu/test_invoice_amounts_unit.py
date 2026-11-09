@@ -123,6 +123,45 @@ def test_get_order_uses_amounts_for_line_prices(fake):
     assert o.extra["amounts_missing"] is False and o.items[0].unit_price == Decimal("50.00") and o.items[0].tax_rate == Decimal("19")
     assert o.items[0].extra["subtotal"] == "119.00" and o.items[0].extra["unit_price_incl_vat"] == "59.50"
     assert o.total == Decimal("124.95") and o.extra["amounts"]["estimated_revenue"] == "90.00"
+    # the shipping the buyer paid is a line the host invoices (shop_orders.intake reads `shipping_lines`);
+    # `total` follows the NET convention of the item prices, the gross rides along for reference
+    assert o.extra["shipping_lines"] == [{"total": "10.00", "total_incl_vat": "11.90", "method_title": "Transport Temu"}]
+    assert o.extra["amounts"]["shipping_excl_vat"] == "10.00" and o.extra["amounts"]["shipping_incl_vat"] == "11.90"
+
+
+def test_free_shipping_adds_no_shipping_line(fake):
+    adapter = _adapter(fake)
+    detail = load("order_detail.json")
+    amounts = load("amount_v2.json")
+    paid = amounts["parentOrderMap"]["customerPaid"]
+    paid["shippingCustomerTotalTaxExcl"]["amount"] = 0
+    paid["shippingTaxCustomerTotal"]["amount"] = 0
+
+    def route(m, p, kw):
+        t = kw["json"]["type"]
+        return {"bg.order.detail.v2.get": ok(detail), "bg.order.shippinginfo.v2.get": ok(load("shipping_info.json")),
+                "temu.order.amount.v2.query": ok(amounts)}[t]
+
+    fake.add("POST", "openapi/router", route)
+    o = adapter.get_order(detail["parentOrderMap"]["parentOrderSn"])
+    assert "shipping_lines" not in o.extra
+
+
+def test_order_without_amounts_has_no_shipping_line(fake):
+    adapter = _adapter(fake)
+    detail = load("order_detail.json")
+
+    def route(m, p, kw):
+        t = kw["json"]["type"]
+        if t == "temu.order.amount.v2.query":
+            return err(3000032, "no scope")
+        if t == "temu.pay.tax.invoice.detail.query":
+            return ok({"invoiceDetailInfoList": None})
+        return {"bg.order.detail.v2.get": ok(detail), "bg.order.shippinginfo.v2.get": ok(load("shipping_info.json"))}[t]
+
+    fake.add("POST", "openapi/router", route)
+    o = adapter.get_order(detail["parentOrderMap"]["parentOrderSn"])
+    assert o.extra["amounts_missing"] is True and "shipping_lines" not in o.extra
 
 
 def test_amounts_line_with_zero_quantity_stays_zero():
