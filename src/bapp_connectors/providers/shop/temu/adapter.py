@@ -65,6 +65,9 @@ from bapp_connectors.providers.shop.temu.mappers import (
 from bapp_connectors.providers.shop.temu.models import SITE_CURRENCY, ShippingLabelStatus
 from bapp_connectors.providers.shop.temu.webhooks import parse_event
 
+#: câte SKU-uri pe o căutare de stoc (`temu.local.goods.sku.stock.query`, `outSkuSnList`)
+SKU_LOOKUP_CHUNK = 20
+
 if TYPE_CHECKING:
     from bapp_connectors.core.capabilities import OrderAmounts
     from bapp_connectors.core.dto import Contact
@@ -275,7 +278,17 @@ class TemuShopAdapter(
                                total=(data or {}).get("total"))
 
     def _edit_stock(self, goods_id: int, sku_ids: list[int], quantity: int) -> None:
-        self.client.edit_stock(goods_id, [{"skuId": sku_id, "stockTarget": int(quantity)} for sku_id in sku_ids], uuid.uuid4().hex)
+        result = self.client.edit_stock(goods_id, [{"skuId": sku_id, "stockTarget": int(quantity)} for sku_id in sku_ids],
+                                        uuid.uuid4().hex) or {}
+        # Temu answers success=true and says per SKU whether the stock actually changed
+        refused = [info for info in (result.get("skuStockEditStatusInfoList") or [])
+                   if isinstance(info, dict) and info.get("stockEditStatus") is False]
+        if refused:
+            reasons = "; ".join(f"SKU {info.get('skuId')}: {info.get('errorMsg') or info.get('errorCode') or 'refuzat'}"
+                                for info in refused)
+            raise ValidationError(f"Temu: stocul nu s-a schimbat ({reasons})")
+        if result.get("operateResult") is False:
+            raise ValidationError(f"Temu: stocul nu s-a schimbat ({result.get('msg') or 'operateResult=false'})")
 
     def _change_price(self, goods_id: int, sku_ids: list[int], price: Decimal, currency: str) -> None:
         """Asks Temu for a base-price change (it opens a price order Temu reviews; see the Price Management Guide)."""
@@ -323,22 +336,54 @@ class TemuShopAdapter(
             self.client.partial_update_goods(payload)
         self._apply_stock_and_price(update)
 
-    def _apply_stock_and_price(self, update: ProductUpdate) -> None:
-        """One SKU resolution for stock + price; the `sku` hint narrows the update to that SKU."""
+    def _apply_stock_and_price(self, update: ProductUpdate, resolved: tuple[int, list[int]] | None = None) -> None:
+        """One SKU resolution for stock + price; the `sku` hint narrows the update to that SKU. `resolved`
+        = (goodsId, [skuId]) already looked up for the whole batch (`_lookup_skus`)."""
         if update.stock is None and update.price is None:
             return
-        goods_id, sku_ids = self._resolve_skus(update.product_id, update.sku)
+        goods_id, sku_ids = resolved or self._resolve_skus(update.product_id, update.sku)
         if update.stock is not None:
             self._edit_stock(goods_id, sku_ids, update.stock)
         if update.price is not None:
             self._change_price(goods_id, sku_ids, update.price, update.currency or "")
 
+    def _lookup_skus(self, updates: list[ProductUpdate]) -> tuple[dict[str, tuple[int, list[int]]], set[str]]:
+        """({SKU: (goodsId, [skuId])}, SKUs actually asked) for the rows addressed by SKU, one stock query per chunk.
+
+        Temu edits stock one goods per call (`bg.local.goods.stock.edit`), but the SKU lookup takes a list:
+        without this a stock push costs two calls per product. A failed lookup leaves the rows to the
+        per-row resolution (and its error)."""
+        skus = list(dict.fromkeys(
+            str(u.sku or u.product_id) for u in updates
+            if (u.stock is not None or u.price is not None) and not str(u.product_id).isdigit()))
+        found: dict[str, tuple[int, list[int]]] = {}
+        asked: set[str] = set()
+        for start in range(0, len(skus), SKU_LOOKUP_CHUNK):
+            chunk = skus[start:start + SKU_LOOKUP_CHUNK]
+            try:
+                rows = skus_from_stock_query(self.client.sku_stock_query(out_sku_sn_list=chunk))
+            except ConnectorError:
+                continue
+            wanted = set(chunk)
+            asked |= wanted
+            for goods_id, sku_id, out_sku in rows:
+                if out_sku in wanted and goods_id:
+                    known = found.setdefault(out_sku, (goods_id, []))
+                    if known[0] == goods_id:
+                        known[1].append(sku_id)
+        return found, asked
+
     def bulk_update_products(self, updates: list[ProductUpdate]) -> BulkResult:
         """Stock/price per row; `product_id` may be the goods id or (host stock push) the SKU itself."""
         result = BulkResult(total=len(updates))
+        looked_up, asked = self._lookup_skus(updates)
         for update in updates:
             try:
-                self._apply_stock_and_price(update)
+                key = str(update.sku or update.product_id)
+                resolved = None if str(update.product_id).isdigit() else looked_up.get(key)
+                if resolved is None and key in asked and not str(update.product_id).isdigit():
+                    raise ValidationError(f"Temu: nu am găsit SKU-ul {key}")
+                self._apply_stock_and_price(update, resolved)
                 result.succeeded += 1
             except (ConnectorError, ValueError) as exc:
                 result.failed += 1

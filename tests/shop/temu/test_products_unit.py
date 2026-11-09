@@ -221,3 +221,42 @@ def test_unknown_sku_is_a_failed_row(fake):
     fake.add("POST", "openapi/router", ok({"stockList": []}))
     res = adapter.bulk_update_products([ProductUpdate(product_id="NOPE", sku="NOPE", stock=1)])
     assert res.failed == 1 and "NOPE" in res.errors[0]["error"]
+
+
+def test_stock_push_looks_up_the_whole_batch_in_one_call(fake):
+    # the host's stock push: ProductUpdate(product_id=<sku>, sku=<sku>); one SKU lookup per batch, not per product
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config=CFG)
+    calls = []
+
+    def route(method, path, kwargs):
+        body = kwargs["json"]
+        calls.append(body["type"])
+        if body["type"] == "temu.local.goods.sku.stock.query":
+            assert body["outSkuSnList"] == ["SKU-A", "SKU-B", "SKU-C"]
+            return ok({"stockList": [
+                {"goodsId": 500, "skuStockInfoList": [{"skuId": 11, "outSkuSn": "SKU-A"}]},
+                {"goodsId": 600, "skuStockInfoList": [{"skuId": 21, "outSkuSn": "SKU-B"}, {"skuId": 22, "outSkuSn": "SKU-OTHER"}]},
+            ]})
+        return ok({"operateResult": True, "skuStockEditStatusInfoList": [{"skuId": s["skuId"], "stockEditStatus": True}
+                                                                        for s in body["skuStockTargetList"]]})
+
+    fake.add("POST", "openapi/router", route)
+    res = adapter.bulk_update_products([ProductUpdate(product_id=s, sku=s, stock=q) for s, q in (("SKU-A", 1), ("SKU-B", 2), ("SKU-C", 3))])
+    assert calls == ["temu.local.goods.sku.stock.query", "bg.local.goods.stock.edit", "bg.local.goods.stock.edit"]
+    edits = [c.kwargs["json"] for c in fake.calls if c.kwargs["json"]["type"] == "bg.local.goods.stock.edit"]
+    assert [(e["goodsId"], e["skuStockTargetList"]) for e in edits] == [
+        (500, [{"skuId": 11, "stockTarget": 1}]), (600, [{"skuId": 21, "stockTarget": 2}])]
+    assert (res.succeeded, res.failed) == (2, 1)
+    assert res.errors[0]["product_id"] == "SKU-C" and "SKU-C" in res.errors[0]["error"]
+
+
+def test_a_variant_temu_refused_in_the_stock_edit_is_an_error(fake):
+    # Temu answers success=true and reports per SKU whether the stock changed
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config=CFG)
+    refused = ok({"operateResult": False, "goodsId": 500,
+                  "skuStockEditStatusInfoList": [{"skuId": 11, "stockEditStatus": False, "errorCode": 150013999,
+                                                  "errorMsg": "Product is under review"}]})
+    fake.add("POST", "openapi/router", _stock_router({"bg.local.goods.stock.edit": refused}))
+    res = adapter.bulk_update_products([ProductUpdate(product_id="500", sku="SKU-1", stock=3)])
+    assert (res.succeeded, res.failed) == (0, 1)
+    assert "under review" in res.errors[0]["error"]
