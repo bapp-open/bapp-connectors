@@ -25,6 +25,14 @@ def err(code, msg):
     return {"success": False, "errorCode": code, "errorMsg": msg, "requestId": "eu-2"}
 
 
+@pytest.fixture(autouse=True)
+def _no_backoff_sleep(monkeypatch):
+    """The client waits between retries of rate-limited / transient answers; tests don't."""
+    import bapp_connectors.providers.shop.temu.client as temu_client
+
+    monkeypatch.setattr(temu_client.time, "sleep", lambda seconds: None)
+
+
 @pytest.fixture
 def fake():
     return FakeHttpClient()

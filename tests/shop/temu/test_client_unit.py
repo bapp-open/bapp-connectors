@@ -134,3 +134,46 @@ def test_log_body_only_on_write_calls(client, fake):
     assert fake.last_call().kwargs.get("log_body") is True
     client.upload_invoice(parentOrderSn="PO-1")
     assert fake.last_call().kwargs.get("log_body") is True
+
+
+def _sequence(*answers):
+    """A router that answers in order and then repeats the last answer; records how many calls it got."""
+    state = {"calls": 0}
+
+    def route(method, path, kwargs):
+        state["calls"] += 1
+        return answers[min(state["calls"], len(answers)) - 1]
+    return route, state
+
+
+@pytest.mark.parametrize("code", [4000004, 150010005])
+def test_rate_limited_call_is_retried_even_for_writes(client, fake, code):
+    # 09.11 AZ STORE stock push: "too frequent requests, exceeding rate limit" (4000004) failed 64 products.
+    # A rate-limited request was not executed, so retrying it is safe for writes too (stock.edit is retry=False)
+    route, state = _sequence(err(code, "too frequent requests"), err(code, "too frequent requests"), ok({"done": True}))
+    fake.add("POST", "openapi/router", route)
+    assert client.call("bg.local.goods.stock.edit", retry=False) == {"done": True}
+    assert state["calls"] == 3
+
+
+def test_rate_limit_that_does_not_clear_is_raised(client, fake):
+    route, state = _sequence(err(4000004, "too frequent requests"))
+    fake.add("POST", "openapi/router", route)
+    with pytest.raises(RateLimitError):
+        client.call("bg.local.goods.stock.edit", retry=False)
+    assert state["calls"] == 1 + len(client.RATE_LIMIT_BACKOFF)
+
+
+def test_transient_service_error_is_retried_on_reads_only(client, fake):
+    # 09.11: temu.order.amount.v2.query answered 7000000 BUSINESS_SERVICE_ERROR once and failed the whole order pull
+    route, state = _sequence(err(7000000, "BUSINESS_SERVICE_ERROR"), ok({"amount": 1}))
+    fake.add("POST", "openapi/router", route)
+    assert client.call("temu.order.amount.v2.query") == {"amount": 1} and state["calls"] == 2
+
+
+def test_transient_service_error_on_a_write_is_not_repeated(client, fake):
+    route, state = _sequence(err(7000000, "BUSINESS_SERVICE_ERROR"), ok({"amount": 1}))
+    fake.add("POST", "openapi/router", route)
+    with pytest.raises(TemuError):
+        client.call("temu.local.goods.v3.add", retry=False)   # a write may have gone through: not repeated
+    assert state["calls"] == 1

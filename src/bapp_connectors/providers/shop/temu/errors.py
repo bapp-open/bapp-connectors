@@ -22,8 +22,10 @@ AUTH_CODES = frozenset({3000030, 3000032, 7000013})
 VALIDATION_CODES = frozenset({130010001, 150010003, 200040002, 200040003})
 #: service not supported (finance reports) / not a self-issued-invoice merchant
 UNSUPPORTED_CODES = frozenset({200040005, 200030004})
-#: try again later
-RATE_LIMIT_CODES = frozenset({150010005})
+#: try again later / "too frequent requests, exceeding rate limit" (live 2026-11-09, bg.local.goods.stock.edit)
+RATE_LIMIT_CODES = frozenset({150010005, 4000004})
+#: BUSINESS_SERVICE_ERROR: Temu's side failed (live 2026-11-09 once on temu.order.amount.v2.query); retried on reads
+TRANSIENT_CODES = frozenset({7000000})
 #: ``bg.order.shippinginfo.v2.get`` on a cancelled order (live 2026-10-26: every status-3 order): Temu hides the
 #: buyer once the order is cancelled. Not an error of ours — the order is imported without a contact.
 SHIPPING_HIDDEN_CODE = 180020006

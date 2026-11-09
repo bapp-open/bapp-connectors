@@ -14,7 +14,7 @@ import requests
 
 from bapp_connectors.core.errors import ConnectorError, ProviderError
 from bapp_connectors.core.http import ResilientHttpClient
-from bapp_connectors.providers.shop.temu.errors import classify_temu_error
+from bapp_connectors.providers.shop.temu.errors import RATE_LIMIT_CODES, TRANSIENT_CODES, classify_temu_error
 from bapp_connectors.providers.shop.temu.signing import sign_params, signed_document_headers
 
 ROUTERS = {
@@ -26,6 +26,10 @@ DEFAULT_PAGE_SIZE = 50
 
 
 class TemuApiClient:
+    #: pauses (s) before retrying an answer Temu rate-limited: the request was not executed, so writes retry too
+    RATE_LIMIT_BACKOFF = (1, 2, 4)
+    #: pauses (s) before retrying a transient service error; reads only (a write may have gone through)
+    TRANSIENT_BACKOFF = (1, 3)
     def __init__(
         self,
         app_key: str,
@@ -48,6 +52,22 @@ class TemuApiClient:
         """One signed POST. `log_body=True` keeps request+response in the host's execution log: used only
         on writes (the answer is what we need when something goes wrong); never on calls that return the
         buyer's personal data (shipping info, decrypted shipping info)."""
+        rate_waits, transient_waits = list(self.RATE_LIMIT_BACKOFF), list(self.TRANSIENT_BACKOFF) if retry else []
+        while True:
+            response = self._post(api_type, retry, log_body, params)
+            if response.get("success"):
+                return response.get("result")
+            code = int(response.get("errorCode") or 0)
+            if code in RATE_LIMIT_CODES and rate_waits:
+                time.sleep(rate_waits.pop(0))
+                continue
+            if code in TRANSIENT_CODES and transient_waits:
+                time.sleep(transient_waits.pop(0))
+                continue
+            raise classify_temu_error(code, str(response.get("errorMsg") or ""), str(response.get("requestId") or ""), api_type)
+
+    def _post(self, api_type: str, retry: bool, log_body: bool, params: dict) -> dict:
+        """One signed POST (a fresh timestamp and signature per attempt); the raw answer dict."""
         body = {
             "type": api_type,
             "app_key": self.app_key,
@@ -71,14 +91,7 @@ class TemuApiClient:
             raise ProviderError(f"Temu {api_type}: transport error: {exc}", retryable=True) from exc
         if not isinstance(response, dict):
             raise ProviderError(f"Temu {api_type}: unexpected response {str(response)[:200]!r}")
-        if not response.get("success"):
-            raise classify_temu_error(
-                int(response.get("errorCode") or 0),
-                str(response.get("errorMsg") or ""),
-                str(response.get("requestId") or ""),
-                api_type,
-            )
-        return response.get("result")
+        return response
 
     def download_signed(self, url: str) -> bytes:
         """GET a signed document URL (label PDF, report file) with the ``toa-*`` headers."""
