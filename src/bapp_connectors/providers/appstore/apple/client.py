@@ -8,10 +8,12 @@ Doua host-uri:
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import parse_qs, urlsplit
 
 from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ValidationError
 from bapp_connectors.providers.appstore.apple.errors import raise_for_report_response
 
 if TYPE_CHECKING:
@@ -27,6 +29,30 @@ SALES_REPORT_VERSION = "1_1"
 
 
 AI_VERSION_FIELDS = "platform,versionString,appStoreState,appVersionState,releaseType,earliestReleaseDate,createdDate"
+
+
+CONNECT_HOST = "api.appstoreconnect.apple.com"
+_APP_ID = re.compile(r"[0-9]+")
+
+
+def _app_id(value: str) -> str:
+    """An App Store Connect app id: digits only (it goes into the URL path)."""
+    if not isinstance(value, str) or not _APP_ID.fullmatch(value):
+        raise ValidationError("app_id must be a numeric App Store Connect app id.")
+    return value
+
+
+def connect_next_link(page: dict) -> str | None:
+    """``links.next`` of a page when it is an https URL on the App Store Connect host, else None.
+
+    The client's JWT goes with every call, so a link to any other host is never followed."""
+    link = (page.get("links") or {}).get("next") if isinstance(page, dict) else None
+    if not isinstance(link, str) or not link:
+        return None
+    parts = urlsplit(link)
+    if parts.scheme != "https" or parts.hostname != CONNECT_HOST or parts.port is not None or parts.username:
+        return None
+    return link
 
 
 def next_cursor(page: dict) -> str | None:
@@ -112,7 +138,7 @@ class AppleApiClient:
         while path:
             page = self.http.call("GET", path, params=params)
             items.extend(page.get("data", []))
-            path = (page.get("links") or {}).get("next")
+            path = connect_next_link(page)
             params = None  # link-ul `next` e absolut si contine deja parametrii
         return items
 
@@ -138,7 +164,7 @@ class AppleApiClient:
         params = {"sort": "-createdDate", "include": "response", "limit": str(max(1, min(int(limit), 200)))}
         if cursor:
             params["cursor"] = cursor
-        page = self.http.call("GET", f"apps/{app_id}/customerReviews", params=params)
+        page = self.http.call("GET", f"apps/{_app_id(app_id)}/customerReviews", params=params)
         return {"data": page.get("data", []), "included": page.get("included", []), "next_cursor": next_cursor(page)}
 
     @ai_method(
@@ -152,7 +178,7 @@ class AppleApiClient:
         params = {"fields[appStoreVersions]": AI_VERSION_FIELDS, "limit": str(max(1, min(int(limit), 200)))}
         if cursor:
             params["cursor"] = cursor
-        page = self.http.call("GET", f"apps/{app_id}/appStoreVersions", params=params)
+        page = self.http.call("GET", f"apps/{_app_id(app_id)}/appStoreVersions", params=params)
         return {"data": page.get("data", []), "next_cursor": next_cursor(page)}
 
     @ai_method("write", "Reply to a customer review (one developer response per review).")

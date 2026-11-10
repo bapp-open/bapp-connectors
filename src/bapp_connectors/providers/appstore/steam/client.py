@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date  # noqa: TC003 -- runtime: get_type_hints on the AI reads
 from typing import TYPE_CHECKING, Annotated
 
 from bapp_connectors.core.ai import ai_method
-from bapp_connectors.core.errors import PermanentProviderError
+from bapp_connectors.core.errors import PermanentProviderError, ValidationError
 from bapp_connectors.providers.appstore.steam.errors import check_steam_response
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
+
+_APP_ID = re.compile(r"[0-9]+")
+
+
+def _app_id(value: str) -> str:
+    """A Steam appid: digits only (it goes into a store URL path or a query)."""
+    if not _APP_ID.fullmatch(str(value)):
+        raise ValidationError("app_id must be a numeric Steam appid.")
+    return str(value)
+
 
 STORE_APPDETAILS_URL = "https://store.steampowered.com/api/appdetails"
 STORE_REVIEWS_URL = "https://store.steampowered.com/appreviews/"
@@ -53,7 +64,7 @@ class SteamApiClient:
 
     @ai_method("read", "Public store details of a Steam app (name, type, description, price, platforms).")
     def get_app_details(self, app_id: str) -> dict:
-        return self.http.call("GET", STORE_APPDETAILS_URL, params={"appids": str(app_id), "filters": "basic"})
+        return self.http.call("GET", STORE_APPDETAILS_URL, params={"appids": _app_id(app_id), "filters": "basic"})
 
     @ai_method(
         "read",
@@ -61,15 +72,15 @@ class SteamApiClient:
         "Pass back the returned cursor to get the next page ('*' = first page).",
     )
     def get_reviews(self, app_id: str, cursor: Annotated[str, "free_text"] = "*", num_per_page: int = 100) -> dict:
-        return self.http.call("GET", f"{STORE_REVIEWS_URL}{app_id}", params={"json": "1", "cursor": cursor, "num_per_page": str(num_per_page), "filter": "recent", "language": "all", "purchase_type": "all"})
+        return self.http.call("GET", f"{STORE_REVIEWS_URL}{_app_id(app_id)}", params={"json": "1", "cursor": cursor, "num_per_page": str(num_per_page), "filter": "recent", "language": "all", "purchase_type": "all"})
 
     @ai_method("read", "Wishlist adds, deletes, purchases and gifts of a Steam app on one day (YYYY-MM-DD).")
     def get_wishlist_reporting(self, app_id: str, day: date) -> dict:
-        payload = self.http.call("GET", "IPartnerFinancialsService/GetAppWishlistReporting/v001/", params={"key": self.api_key, "appid": str(app_id), "date": day.isoformat()})
+        payload = self.http.call("GET", "IPartnerFinancialsService/GetAppWishlistReporting/v001/", params={"key": self.api_key, "appid": _app_id(app_id), "date": day.isoformat()})
         return check_steam_response(payload, what=f"GetAppWishlistReporting {day}")
 
     @ai_method("read", "Number of players currently in a Steam app.")
     def get_current_players(self, app_id: str) -> int:
         """Endpoint public: fara cheie."""
-        payload = self.http.call("GET", STORE_PLAYERS_URL, params={"appid": str(app_id)})
+        payload = self.http.call("GET", STORE_PLAYERS_URL, params={"appid": _app_id(app_id)})
         return int(((payload or {}).get("response") or {}).get("player_count", 0) or 0)

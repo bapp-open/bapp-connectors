@@ -8,10 +8,11 @@ bearer token (required for `mine=true` channel access).
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Annotated
 
 from bapp_connectors.core.ai import ai_method
-from bapp_connectors.core.errors import ProviderError
+from bapp_connectors.core.errors import ProviderError, ValidationError
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
@@ -21,6 +22,16 @@ logger = logging.getLogger(__name__)
 # Resumable upload endpoint (videos.insert) — outside the Data API base URL,
 # passed as an absolute URL (the shared http client accepts those).
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
+
+
+_YT_ID = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def youtube_id(value: str, what: str) -> str:
+    """A channel/playlist/video id: letters, digits, ``_`` and ``-`` only."""
+    if not isinstance(value, str) or not _YT_ID.fullmatch(value):
+        raise ValidationError(f"{what} must contain only letters, digits, '_' and '-'.")
+    return value
 
 
 def with_cursor(page: dict) -> dict:
@@ -71,7 +82,7 @@ class YouTubeApiClient:
         """channels.list — fetch a channel by ID, or the authorized user's channel when omitted."""
         params: dict = {"part": "snippet,statistics,contentDetails"}
         if channel_id:
-            params["id"] = channel_id
+            params["id"] = youtube_id(channel_id, "channel_id")
         else:
             params["mine"] = "true"
         return self._get("channels", **params)
@@ -83,7 +94,7 @@ class YouTubeApiClient:
         return self._get(
             "playlistItems",
             part="snippet,contentDetails",
-            playlistId=playlist_id,
+            playlistId=youtube_id(playlist_id, "playlist_id"),
             maxResults=max_results,
             pageToken=page_token,
         )
@@ -96,7 +107,7 @@ class YouTubeApiClient:
         return self._get(
             "videos",
             part="snippet,statistics,contentDetails,status",
-            id=",".join(video_ids),
+            id=",".join(youtube_id(v, "video_ids") for v in video_ids),
         )
 
     @ai_method(
@@ -122,7 +133,7 @@ class YouTubeApiClient:
         page = self._get(
             "commentThreads",
             part="snippet,replies",
-            videoId=video_id,
+            videoId=youtube_id(video_id, "video_id"),
             maxResults=max_results,
             order="time",
             textFormat="plainText",

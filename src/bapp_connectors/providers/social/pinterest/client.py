@@ -9,15 +9,26 @@ returned as-is and normalized in the adapter via mappers.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Sequence  # noqa: TC003 -- runtime: get_type_hints on the AI reads
 from typing import TYPE_CHECKING, Annotated
 
 from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ValidationError
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 logger = logging.getLogger(__name__)
+
+_PIN_ID = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def _pin_id(value: str) -> str:
+    """A pin id going into the URL path: letters, digits, ``_`` and ``-`` only."""
+    if not isinstance(value, str) or not _PIN_ID.fullmatch(value):
+        raise ValidationError("pin_id must contain only letters, digits, '_' and '-'.")
+    return value
 
 
 class PinterestApiClient:
@@ -49,7 +60,7 @@ class PinterestApiClient:
     @ai_method("read", "Get one pin by its ID.")
     def get_pin(self, pin_id: str) -> dict:
         """GET pins/{pin_id} — a single pin."""
-        return self.http.call("GET", f"pins/{pin_id}")
+        return self.http.call("GET", f"pins/{_pin_id(pin_id)}")
 
     @ai_method(
         "read",
@@ -69,7 +80,7 @@ class PinterestApiClient:
             "end_date": end_date,
             "metric_types": ",".join(metric_types),
         }
-        return self.http.call("GET", f"pins/{pin_id}/analytics", params=params)
+        return self.http.call("GET", f"pins/{_pin_id(pin_id)}/analytics", params=params)
 
     @ai_method("read", "Account-level metrics between start_date and end_date (YYYY-MM-DD).")
     def get_user_analytics(self, start_date: str, end_date: str) -> dict:

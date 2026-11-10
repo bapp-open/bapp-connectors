@@ -10,6 +10,7 @@ multipart. Reels upload their bytes through the separate rupload host.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
@@ -35,7 +36,9 @@ AI_POST_FIELDS = (
 AI_COMMENT_FIELDS = "id,message,created_time,from{id,name},like_count,comment_count,parent{id}"
 AI_POST_INSIGHT_METRICS = "post_impressions,post_impressions_unique,post_clicks,post_video_views"
 AI_PAGE_INSIGHT_METRICS = "page_impressions,page_impressions_unique,page_post_engagements,page_fans"
-AI_VIDEO_STATUS_FIELDS = "status,permalink_url"
+AI_VIDEO_STATUS_FIELDS = "status,permalink_url,from{id}"
+
+_NUMERIC_ID = re.compile(r"[0-9]+")
 
 InsightsPeriod = Literal["day", "week", "days_28"]
 
@@ -61,6 +64,19 @@ def scrub_graph_paging(value: Any) -> Any:
         else:
             out[key] = scrub_graph_paging(item)
     return out
+
+
+def numeric_id(value: str, what: str) -> str:
+    """A Graph object id from an agent: digits only (no ``me``, aliases or ``debug_token``)."""
+    if not isinstance(value, str) or not _NUMERIC_ID.fullmatch(value):
+        raise ValidationError(f"{what} must be a numeric Meta id.")
+    return value
+
+
+def owner_id(obj: dict, field: str) -> str:
+    """``obj[field]['id']`` as a string ('' when absent): the owner Graph reports for an object."""
+    owner = obj.get(field) if isinstance(obj, dict) else None
+    return str(owner.get("id", "")) if isinstance(owner, dict) else ""
 
 
 def day_timestamp(day: date | None, *, end: bool = False) -> int | None:
@@ -150,6 +166,24 @@ class FacebookGraphClient:
             raise ValidationError("The Facebook connection has no page_id")
         return self.page_id
 
+    def _own_post_id(self, post_id: str) -> str:
+        """A post id of the connected Page: ``{page_id}_{digits}`` (Graph post ids carry their Page)."""
+        page = self._page()
+        if not isinstance(post_id, str) or not re.fullmatch(rf"{re.escape(page)}_[0-9]+", post_id):
+            raise ValidationError("post_id must be a post of the connected Page ({page_id}_{post_id}).")
+        return post_id
+
+    def _check_post_owner(self, post: dict, post_id: str) -> dict:
+        if owner_id(post, "from") != self._page():
+            raise ValidationError(f"Post {post_id} does not belong to the connected Page.")
+        return post
+
+    def _own_post(self, post_id: str) -> str:
+        """Check (one GET of ``from{id}``) that the post is the connected Page's; return its id."""
+        post_id = self._own_post_id(post_id)
+        self._check_post_owner(self.get_object(post_id, "from{id}"), post_id)
+        return post_id
+
     @ai_method("read", "The connected Facebook Page: name, username, link, category, followers and fans.")
     def get_page_profile(self) -> dict:
         return self.get_object(self._page(), AI_PAGE_FIELDS)
@@ -162,24 +196,31 @@ class FacebookGraphClient:
     def list_page_posts(self, limit: int | None = None, after: Annotated[str, "free_text"] | None = None) -> dict:
         return scrub_graph_paging(self.get_edge(self._page(), "posts", fields=AI_POST_FIELDS, limit=limit, after=after))
 
-    @ai_method("read", "Get one Page post by its ID ({page_id}_{post_id}).")
+    @ai_method("read", "Get one post of the connected Page by its ID ({page_id}_{post_id}).")
     def get_post_details(self, post_id: str) -> dict:
-        return scrub_graph_paging(self.get_object(post_id, AI_POST_FIELDS))
+        post_id = self._own_post_id(post_id)
+        post = self.get_object(post_id, f"{AI_POST_FIELDS},from{{id}}")
+        return scrub_graph_paging(self._check_post_owner(post, post_id))
 
     @ai_method(
         "read",
-        "List the comments of a Page post (or the replies of a comment), oldest first. "
+        "List the comments of a post of the connected Page, oldest first. "
         "Paginate with the 'after' cursor from paging.cursors.",
     )
     def list_post_comments(
         self, post_id: str, limit: int | None = None, after: Annotated[str, "free_text"] | None = None
     ) -> dict:
+        post_id = self._own_post(post_id)
         return scrub_graph_paging(
             self.get_edge(post_id, "comments", fields=AI_COMMENT_FIELDS, limit=limit, after=after)
         )
 
-    @ai_method("read", "Lifetime insights of a Page post: impressions, unique impressions, clicks, video views.")
+    @ai_method(
+        "read",
+        "Lifetime insights of a post of the connected Page: impressions, unique impressions, clicks, video views.",
+    )
     def get_post_insights(self, post_id: str) -> dict:
+        post_id = self._own_post(post_id)
         return scrub_graph_paging(self.get_insights(post_id, AI_POST_INSIGHT_METRICS))
 
     @ai_method(
@@ -199,6 +240,13 @@ class FacebookGraphClient:
         )
         return scrub_graph_paging(payload)
 
-    @ai_method("read", "Processing/publishing status of a video or Reel uploaded to the Page, by its video ID.")
+    @ai_method(
+        "read",
+        "Processing/publishing status of a video or Reel uploaded to the connected Page, by its numeric video ID.",
+    )
     def get_video_publish_status(self, video_id: str) -> dict:
-        return self.get_object(video_id, AI_VIDEO_STATUS_FIELDS)
+        page = self._page()
+        video = self.get_object(numeric_id(video_id, "video_id"), AI_VIDEO_STATUS_FIELDS)
+        if owner_id(video, "from") != page:
+            raise ValidationError(f"Video {video_id} does not belong to the connected Page.")
+        return video

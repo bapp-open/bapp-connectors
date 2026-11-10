@@ -15,7 +15,8 @@ from datetime import date  # noqa: TC003 -- runtime: get_type_hints on the AI re
 from typing import TYPE_CHECKING, Annotated
 
 from bapp_connectors.core.ai import ai_method
-from bapp_connectors.providers.social.facebook.client import day_timestamp, scrub_graph_paging
+from bapp_connectors.core.errors import ValidationError
+from bapp_connectors.providers.social.facebook.client import day_timestamp, numeric_id, owner_id, scrub_graph_paging
 from bapp_connectors.providers.social.threads.errors import check_payload
 
 if TYPE_CHECKING:
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Fixed field lists of the AI-agent reads (the generic get_object/get_edge/get_insights take any
 # object, edge and ``fields``; they are never offered to an agent). "me" is the token owner.
 AI_USER_FIELDS = "id,username,name,threads_profile_picture_url,threads_biography"
-AI_MEDIA_FIELDS = "id,text,media_type,media_url,permalink,timestamp,username,is_quote_post"
+AI_MEDIA_FIELDS = "id,text,media_type,media_url,permalink,timestamp,username,is_quote_post,owner{id}"
 AI_REPLY_FIELDS = "id,text,username,timestamp,permalink,media_type,has_replies,hide_status"
 AI_CONTAINER_FIELDS = "status,error_message"
 AI_MEDIA_INSIGHT_METRICS = "views,likes,replies,reposts,quotes,shares"
@@ -45,6 +46,7 @@ class ThreadsApiClient:
 
     def __init__(self, http_client: ResilientHttpClient):
         self.http = http_client
+        self._me_id: str | None = None
 
     def get_object(self, object_id: str, fields: str, **params) -> dict:
         """GET {object_id} — fetch a single Threads object ("me" = token owner)."""
@@ -85,6 +87,26 @@ class ThreadsApiClient:
 
     # ── AI-agent reads: the token owner, fixed edges and fields ──
 
+    def _my_id(self) -> str:
+        """The token owner's Threads user id (one GET, then cached)."""
+        if not self._me_id:
+            me_id = str(self.get_object("me", "id").get("id", ""))
+            if not me_id:
+                raise ValidationError("Threads did not return the connected user's id")
+            self._me_id = me_id
+        return self._me_id
+
+    def _check_owner(self, media: dict, media_id: str) -> dict:
+        if owner_id(media, "owner") != self._my_id():
+            raise ValidationError(f"Thread {media_id} does not belong to the connected Threads profile.")
+        return media
+
+    def _own_media(self, media_id: str) -> str:
+        """Check (one GET of ``owner{id}``) that the thread is the token owner's; return its id."""
+        media_id = numeric_id(media_id, "media_id")
+        self._check_owner(self.get_object(media_id, "owner{id}"), media_id)
+        return media_id
+
     @ai_method("read", "The connected Threads profile: username, name, picture, biography.")
     def get_profile(self) -> dict:
         return self.get_object("me", AI_USER_FIELDS)
@@ -96,21 +118,26 @@ class ThreadsApiClient:
     def list_threads(self, limit: int | None = None, after: Annotated[str, "free_text"] | None = None) -> dict:
         return scrub_graph_paging(self.get_edge("me", "threads", fields=AI_MEDIA_FIELDS, limit=limit, after=after))
 
-    @ai_method("read", "Get one thread by its media ID.")
+    @ai_method("read", "Get one thread of the connected profile by its numeric media ID.")
     def get_thread(self, media_id: str) -> dict:
-        return self.get_object(media_id, AI_MEDIA_FIELDS)
+        media_id = numeric_id(media_id, "media_id")
+        return self._check_owner(self.get_object(media_id, AI_MEDIA_FIELDS), media_id)
 
     @ai_method(
         "read",
-        "List the direct replies to a thread. Paginate with the 'after' cursor from paging.cursors.",
+        "List the direct replies to a thread of the connected profile. Paginate with the 'after' cursor from paging.cursors.",
     )
     def list_replies(
         self, media_id: str, limit: int | None = None, after: Annotated[str, "free_text"] | None = None
     ) -> dict:
+        media_id = self._own_media(media_id)
         return scrub_graph_paging(self.get_edge(media_id, "replies", fields=AI_REPLY_FIELDS, limit=limit, after=after))
 
-    @ai_method("read", "Insights of one thread: views, likes, replies, reposts, quotes, shares.")
+    @ai_method(
+        "read", "Insights of one thread of the connected profile: views, likes, replies, reposts, quotes, shares."
+    )
     def get_thread_insights(self, media_id: str) -> dict:
+        media_id = self._own_media(media_id)
         return scrub_graph_paging(self.get_insights(media_id, AI_MEDIA_INSIGHT_METRICS))
 
     @ai_method(
@@ -129,4 +156,5 @@ class ThreadsApiClient:
 
     @ai_method("read", "Status of a media container being published (IN_PROGRESS, FINISHED, ERROR, ...), by its ID.")
     def get_container_status(self, container_id: str) -> dict:
-        return self.get_object(container_id, AI_CONTAINER_FIELDS)
+        # A container has no owner field; it carries nothing but its status (fixed fields).
+        return self.get_object(numeric_id(container_id, "container_id"), AI_CONTAINER_FIELDS)

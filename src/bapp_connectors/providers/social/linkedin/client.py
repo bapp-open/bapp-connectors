@@ -11,6 +11,7 @@ rather than the body, hence ``direct_response=True`` on that call.
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
@@ -21,6 +22,9 @@ if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 logger = logging.getLogger(__name__)
+
+#: A post URN an AI read accepts (organization posts are shares or UGC posts).
+POST_URN_RE = re.compile(r"urn:li:(?:share|ugcPost):[0-9]+")
 
 
 class LinkedInApiClient:
@@ -82,7 +86,6 @@ class LinkedInApiClient:
             headers=self._headers(),
         )
 
-    @ai_method("read", "Get one LinkedIn post by its URN (urn:li:share:... or urn:li:ugcPost:...).")
     def get_post(self, post_urn: str) -> dict:
         """GET posts/{post_urn} — fetch a single post by its URN."""
         return self.http.call("GET", f"posts/{quote(post_urn, safe='')}", headers=self._headers())
@@ -146,9 +149,25 @@ class LinkedInApiClient:
         return self.list_posts(self._org_urn(), count=int(count), start=int(start))
 
     @ai_method(
+        "read", "Get one post of the connected organization by its URN (urn:li:share:N or urn:li:ugcPost:N)."
+    )
+    def get_organization_post(self, post_urn: str) -> dict:
+        org_urn = self._org_urn()
+        if not isinstance(post_urn, str) or not POST_URN_RE.fullmatch(post_urn):
+            raise ValidationError("post_urn must look like urn:li:share:<digits> or urn:li:ugcPost:<digits>.")
+        post = self.get_post(post_urn)
+        if not isinstance(post, dict) or post.get("author") != org_urn:
+            raise ValidationError(f"Post {post_urn} does not belong to the connected organization.")
+        return post
+
+    @ai_method(
         "read",
         "Lifetime share statistics (impressions, clicks, likes, comments, shares, engagement) of the "
         "organization, or of the given post URNs.",
     )
     def get_organization_share_statistics(self, share_urns: list[str] | None = None) -> dict:
-        return self.get_share_statistics(self._org_urn(), share_urns)
+        org_urn = self._org_urn()
+        for urn in share_urns or []:
+            if not isinstance(urn, str) or not POST_URN_RE.fullmatch(urn):
+                raise ValidationError("share_urns must look like urn:li:share:<digits> or urn:li:ugcPost:<digits>.")
+        return self.get_share_statistics(org_urn, share_urns)

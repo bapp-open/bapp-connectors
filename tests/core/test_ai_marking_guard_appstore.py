@@ -141,6 +141,41 @@ def test_apple_versions_last_page():
     assert "versionString" in call.kwargs["params"]["fields[appStoreVersions]"]
 
 
+@pytest.mark.parametrize(
+    "link",
+    [
+        "https://evil.example.com/v1/apps?cursor=x",
+        "http://api.appstoreconnect.apple.com/v1/apps?cursor=x",
+        "https://api.appstoreconnect.apple.com.evil.com/v1/apps",
+        "https://user@api.appstoreconnect.apple.com/v1/apps",
+        "https://api.appstoreconnect.apple.com:8443/v1/apps",
+    ],
+)
+def test_apple_list_apps_never_follows_a_foreign_next_link(link):
+    client, http = _apple({"data": [{"id": "1"}], "links": {"next": link}})
+    assert client.list_apps() == [{"id": "1"}]
+    assert http.call.call_count == 1
+
+
+def test_apple_list_apps_follows_the_connect_host():
+    client, http = _apple(None)
+    http.call.side_effect = [
+        {"data": [{"id": "1"}], "links": {"next": "https://api.appstoreconnect.apple.com/v1/apps?cursor=x"}},
+        {"data": [{"id": "2"}], "links": {}},
+    ]
+    assert client.list_apps() == [{"id": "1"}, {"id": "2"}]
+    assert http.call.call_args.args[1] == "https://api.appstoreconnect.apple.com/v1/apps?cursor=x"
+
+
+@pytest.mark.parametrize("app_id", ["me", "1/../x", "1a", ""])
+def test_apple_app_ids_are_numeric(app_id):
+    client, http = _apple({})
+    for read in (client.list_app_reviews, client.list_app_versions):
+        with pytest.raises(ValidationError):
+            read(app_id)
+    http.call.assert_not_called()
+
+
 # ── Google Play ──
 
 
@@ -185,3 +220,22 @@ def test_steam_reviews_cursor_stays_in_the_query():
     call = http.call.call_args
     assert call.args == ("GET", "https://store.steampowered.com/appreviews/570")
     assert call.kwargs["params"]["cursor"] == "AoJ/abc+="
+
+
+@pytest.mark.parametrize("app_id", ["@evil.com", "570/x", "570a", ""])
+def test_steam_app_ids_are_numeric(app_id):
+    from datetime import date
+
+    from bapp_connectors.providers.appstore.steam.client import SteamApiClient
+
+    http = MagicMock()
+    client = SteamApiClient(http, api_key="k" * 32)
+    for read in (
+        lambda: client.get_app_details(app_id),
+        lambda: client.get_reviews(app_id),
+        lambda: client.get_wishlist_reporting(app_id, date(2026, 1, 1)),
+        lambda: client.get_current_players(app_id),
+    ):
+        with pytest.raises(ValidationError):
+            read()
+    http.call.assert_not_called()
