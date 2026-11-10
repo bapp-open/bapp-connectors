@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import ValidationError
+from bapp_connectors.providers.social.facebook.client import scrub_graph_paging
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
@@ -28,13 +29,6 @@ def _ai_match(pattern: re.Pattern, value: Any, what: str) -> str:
     if not isinstance(value, str) or not pattern.fullmatch(value):
         raise ValidationError(f"{what} has an invalid format.")
     return value
-
-
-def _ai_strip_paging(response: Any) -> Any:
-    """Drop Graph's ``paging.next``/``paging.previous`` URLs (they carry ``access_token=``); keep the cursors."""
-    if isinstance(response, dict) and isinstance(response.get("paging"), dict):
-        response["paging"] = {k: v for k, v in response["paging"].items() if k not in ("next", "previous")}
-    return response
 
 
 class MessengerApiClient:
@@ -190,7 +184,7 @@ class MessengerApiClient:
         params: dict[str, Any] = {"fields": AI_CONVERSATION_FIELDS, "limit": max(1, min(int(limit), 100))}
         if after:
             params["after"] = after
-        return _ai_strip_paging(self.http.call("GET", f"{self.page_id}/conversations", params=params))
+        return scrub_graph_paging(self.http.call("GET", f"{self.page_id}/conversations", params=params))
 
     @ai_method(
         "read",
@@ -202,10 +196,18 @@ class MessengerApiClient:
     ) -> dict:
         """GET /{conversation_id}/messages with fixed fields."""
         conversation_id = _ai_match(_CONVERSATION_ID, conversation_id, "conversation_id")
+        self._ai_own_conversation(conversation_id)
         params: dict[str, Any] = {"fields": AI_MESSAGE_FIELDS, "limit": max(1, min(int(limit), 100))}
         if after:
             params["after"] = after
-        return _ai_strip_paging(self.http.call("GET", f"{conversation_id}/messages", params=params))
+        return scrub_graph_paging(self.http.call("GET", f"{conversation_id}/messages", params=params))
+
+    def _ai_own_conversation(self, conversation_id: str) -> None:
+        """Refuse a thread the connected Page is not a participant of (a multi-Page token sees others)."""
+        info = self.http.call("GET", conversation_id, params={"fields": "participants"}) or {}
+        participants = (info.get("participants") or {}).get("data") or [] if isinstance(info, dict) else []
+        if not any(isinstance(p, dict) and str(p.get("id", "")) == str(self.page_id) for p in participants):
+            raise ValidationError(f"Conversation {conversation_id} does not belong to the connected Page.")
 
     @ai_method("read", "First and last name of a user (page-scoped id, PSID) who messaged the Page.")
     def get_customer_profile(self, psid: str) -> dict:

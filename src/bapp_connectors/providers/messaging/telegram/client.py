@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 # A chat for getChat: a numeric id (negative for groups/channels) or a public @username.
 _CHAT_ID = re.compile(r"-?[0-9]{1,20}|@[A-Za-z][A-Za-z0-9_]{3,31}")
+# getChat fields that grant access (join links) or carry chat content rather than chat info.
+_CHAT_LINK_FIELDS = ("invite_link", "pinned_message")
 _BOT_TOKEN_IN_URL = re.compile(r"/bot([^/]+)/?$")
 
 
@@ -101,7 +103,12 @@ class TelegramApiClient:
         """getChat — no side effect; the update queue (getUpdates) is never touched."""
         if not isinstance(chat_id, str) or not _CHAT_ID.fullmatch(chat_id):
             raise ValidationError("chat_id must be a numeric Telegram chat id or '@username'.")
-        return self._ai_call("getChat", chat_id=chat_id)
+        result = self._ai_call("getChat", chat_id=chat_id)
+        if isinstance(result, dict):
+            # An invite link lets anyone holding it join a private chat: a bearer capability, not chat info.
+            for key in _CHAT_LINK_FIELDS:
+                result.pop(key, None)
+        return result
 
     def test_auth(self) -> bool:
         """Verify credentials by calling getMe."""

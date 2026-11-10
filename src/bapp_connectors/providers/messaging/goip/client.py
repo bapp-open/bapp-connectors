@@ -16,11 +16,14 @@ import time
 from typing import TYPE_CHECKING
 
 from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ProviderError
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 logger = logging.getLogger(__name__)
+
+_STATUS_MAX_BYTES = 16 * 1024
 
 
 class GoIPApiClient:
@@ -92,10 +95,22 @@ class GoIPApiClient:
 
     # ── Status ──
 
-    @ai_method("read", "The GoIP device's outgoing SMS queue status per line (send_status.xml), as raw XML text.")
     def get_send_status(self) -> str:
         """GET /send_status.xml — get the send queue status."""
         return self._get_text("send_status.xml")
+
+    @ai_method("read", "The GoIP device's outgoing SMS queue status per line (send_status.xml), as XML text.")
+    def get_send_queue_status(self) -> str:
+        """send_status.xml for an agent: only a 2xx answer in the expected XML shape, size-capped."""
+        response = self.http.call("GET", "send_status.xml", direct_response=True)
+        status = getattr(response, "status_code", None)
+        if not isinstance(status, int) or not 200 <= status < 300:
+            raise ProviderError(f"GoIP send_status.xml answered HTTP {status}.", status_code=status)
+        raw = getattr(response, "content", b"") or b""
+        text = raw[:_STATUS_MAX_BYTES].decode("utf-8", errors="replace") if isinstance(raw, bytes) else ""
+        if "<send-sms-status" not in text[:512]:
+            raise ProviderError("GoIP send_status.xml did not return the expected <send-sms-status> XML.")
+        return text
 
     # ── History Management ──
 

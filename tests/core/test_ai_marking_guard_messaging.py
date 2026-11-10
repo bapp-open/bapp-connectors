@@ -32,13 +32,13 @@ REVIEWED_READ_METHODS: dict[str, set[str]] = {
     "discord": {
         "get_current_user",  # GET users/@me (bot user, no token)
         "list_guilds",  # GET users/@me/guilds
-        "get_guild",  # GET guilds/{snowflake}
-        "get_guild_channels",  # GET guilds/{snowflake}/channels
-        "get_channel",  # GET channels/{snowflake}
+        "get_guild_info",  # GET guilds/{snowflake} (validating wrapper of get_guild)
+        "list_guild_channels",  # GET guilds/{snowflake}/channels (wrapper of get_guild_channels)
+        "get_channel_info",  # GET channels/{snowflake} (wrapper of get_channel)
         "get_channel_messages",  # GET channels/{snowflake}/messages (history, no ack)
     },
     "goip": {
-        "get_send_status",  # GET send_status.xml (queue status, nothing deleted)
+        "get_send_queue_status",  # GET send_status.xml: 2xx + <send-sms-status> XML only, size-capped
     },
     "instagram": {
         "get_account_info",  # GET {ig_user_id}?fields=id,name,username
@@ -51,12 +51,12 @@ REVIEWED_READ_METHODS: dict[str, set[str]] = {
     "messenger": {
         "get_page_info",  # GET {page_id}?fields=id,name
         "list_conversations",  # GET {page_id}/conversations, fixed fields, paging URLs dropped
-        "get_conversation_messages",  # GET {t_...}/messages, fixed fields, paging URLs dropped
+        "get_conversation_messages",  # GET {t_...}?fields=participants (Page must be one), then /messages
         "get_customer_profile",  # GET {psid}?fields=first_name,last_name
     },
     "telegram": {
         "get_bot_info",  # getMe, errors scrubbed of the token
-        "get_chat",  # getChat, errors scrubbed of the token
+        "get_chat",  # getChat without invite_link/pinned_message, errors scrubbed of the token
     },
     "whatsapp": {
         "get_phone_number_info",  # GET {phone_number_id}, fixed fields
@@ -77,6 +77,9 @@ REVIEWED_FREE_TEXT: set[tuple[str, str, str]] = {
 _SEND = "sends or changes messages; not a read"
 UNMARKED_ON_PURPOSE: dict[tuple[str, str], str] = {
     ("discord", "test_auth"): "connection test helper",
+    ("discord", "get_channel"): "unvalidated id (existing callers); the agent uses get_channel_info",
+    ("discord", "get_guild"): "unvalidated id (existing callers); the agent uses get_guild_info",
+    ("discord", "get_guild_channels"): "unvalidated id (existing callers); the agent uses list_guild_channels",
     ("discord", "send_message"): _SEND + " (dict embeds)",
     ("discord", "send_file"): "multipart upload",
     ("discord", "edit_message"): _SEND,
@@ -84,6 +87,7 @@ UNMARKED_ON_PURPOSE: dict[tuple[str, str], str] = {
     ("discord", "add_reaction"): _SEND,
     ("discord", "respond_to_interaction"): "takes an interaction token",
     ("goip", "test_auth"): "connection test helper",
+    ("goip", "get_send_status"): "returns any body (no status/format check); the agent uses get_send_queue_status",
     ("goip", "send_sms"): "sends; puts the device password in the query",
     ("goip", "clear_received_history"): "deletes the device inbox",
     ("goip", "clear_sent_history"): "deletes the device outbox",
@@ -113,7 +117,10 @@ UNMARKED_ON_PURPOSE: dict[tuple[str, str], str] = {
     ("messenger", "send_raw"): "raw payload",
     ("robosms", "test_auth"): "sends a dummy SMS",
     ("telegram", "test_auth"): "connection test helper",
-    ("telegram", "get_me"): "errors may quote the URL with the bot token; the agent uses get_bot_info",
+    ("telegram", "get_me"): (
+        "errors may quote the URL-encoded bot token (aio masks only the raw value); "
+        "the agent uses the scrubbing get_bot_info"
+    ),
     ("telegram", "get_webhook_info"): "webhook URL usually carries a secret path",
     ("telegram", "set_webhook"): "changes the webhook",
     ("telegram", "delete_webhook"): "changes the webhook / drops pending updates",
@@ -213,10 +220,10 @@ def test_discord_reads_hit_fixed_paths():
     client, http = _discord()
     client.get_current_user()
     client.list_guilds()
-    client.get_guild("123")
-    client.get_guild_channels("123")
-    client.get_channel("456")
-    client.get_channel_messages("456", limit=500, before="789")
+    client.get_guild_info("123")
+    client.list_guild_channels(123)
+    client.get_channel_info("456")
+    client.get_channel_messages(456, limit=500, before="789")
     assert [c.args for c in http.call.call_args_list] == [
         ("GET", "users/@me"),
         ("GET", "users/@me/guilds"),
@@ -232,9 +239,9 @@ def test_discord_reads_hit_fixed_paths():
 def test_discord_refuses_non_snowflakes(bad):
     client, http = _discord()
     for call in (
-        lambda: client.get_guild(bad),
-        lambda: client.get_guild_channels(bad),
-        lambda: client.get_channel(bad),
+        lambda: client.get_guild_info(bad),
+        lambda: client.list_guild_channels(bad),
+        lambda: client.get_channel_info(bad),
         lambda: client.get_channel_messages(bad),
         lambda: client.get_channel_messages("1", before=bad or "x"),
         lambda: client.get_channel_messages("1", after=bad or "x"),
@@ -302,25 +309,26 @@ def test_matrix_room_v12_ids_without_server_are_accepted():
     assert http.call.call_args.args[1].startswith("rooms/%2131hneApxJ_1o-63DmFrpeqnkFfWppnzWso1JvH3ogLM/")
 
 
-# ── Messenger: fixed fields, Page conversations, paging URLs dropped ──
+# ── Messenger: fixed fields, Page conversations only, paging URLs dropped at any depth ──
+
+_PAGING = {
+    "cursors": {"after": "A"},
+    "next": "https://graph.facebook.com/v21.0/1/conversations?access_token=SECRET",
+    "previous": "https://graph.facebook.com/v21.0/1/conversations?access_token=SECRET",
+}
 
 
-def _messenger(response=None):
+def _messenger(participants=("111", "42")):
     from bapp_connectors.providers.messaging.messenger.client import MessengerApiClient
 
     http = MagicMock()
-    http.call.return_value = (
-        response
-        if response is not None
-        else {
-            "data": [],
-            "paging": {
-                "cursors": {"after": "A"},
-                "next": "https://graph.facebook.com/v21.0/1/conversations?access_token=SECRET",
-                "previous": "https://graph.facebook.com/v21.0/1/conversations?access_token=SECRET",
-            },
-        }
-    )
+
+    def call(method, path, **kwargs):
+        if kwargs.get("params", {}).get("fields") == "participants":
+            return {"id": path, "participants": {"data": [{"id": p} for p in participants], "paging": dict(_PAGING)}}
+        return {"data": [{"id": "x", "to": {"data": [], "paging": dict(_PAGING)}}], "paging": dict(_PAGING)}
+
+    http.call.side_effect = call
     return MessengerApiClient(http, page_id="111"), http
 
 
@@ -331,10 +339,13 @@ def test_messenger_reads_use_fixed_fields_and_drop_paging_urls():
     client.get_customer_profile("42")
     client.get_page_info()
     for out in (out1, out2):
-        assert out["paging"] == {"cursors": {"after": "A"}}
+        assert "SECRET" not in repr(out)
+        assert out["paging"]["cursors"] == {"after": "A"}
+        assert "next" not in out["data"][0]["to"]["paging"]
     calls = http.call.call_args_list
     assert [c.args for c in calls] == [
         ("GET", "111/conversations"),
+        ("GET", "t_123"),
         ("GET", "t_123/messages"),
         ("GET", "42"),
         ("GET", "111"),
@@ -342,6 +353,15 @@ def test_messenger_reads_use_fixed_fields_and_drop_paging_urls():
     for c in calls:
         assert "access_token" not in c.kwargs["params"]["fields"]
     assert calls[0].kwargs["params"]["after"] == "A"
+    assert calls[1].kwargs["params"] == {"fields": "participants"}
+
+
+@pytest.mark.parametrize("participants", [("222", "42"), (), ("1111",)])
+def test_messenger_refuses_a_thread_of_another_page(participants):
+    client, http = _messenger(participants=participants)
+    with pytest.raises(ValidationError):
+        client.get_conversation_messages("t_123")
+    assert [c.args[1] for c in http.call.call_args_list] == ["t_123"]
 
 
 @pytest.mark.parametrize("bad", ["111", "t_1/messages", "t_1..x", "me", "", "t_", "t_a%2Fb"])
@@ -428,3 +448,67 @@ def test_telegram_update_queue_is_not_reachable():
 
     assert not hasattr(TelegramApiClient, "get_updates")
     assert "get_webhook_info" not in ai_methods(TelegramApiClient)
+
+
+def test_telegram_get_chat_drops_invite_link():
+    client, http = _telegram()
+    http.call.return_value = {
+        "ok": True,
+        "result": {"id": -100, "title": "G", "invite_link": "https://t.me/+secret", "pinned_message": {"text": "x"}},
+    }
+    out = client.get_chat("-100")
+    assert out == {"id": -100, "title": "G"}
+
+
+# ── Discord: existing methods unchanged ──
+
+
+def test_discord_existing_methods_still_take_any_id():
+    client, http = _discord()
+    client.get_channel(456)
+    client.get_guild(123)
+    client.get_guild_channels(123)
+    assert [c.args for c in http.call.call_args_list] == [
+        ("GET", "channels/456"),
+        ("GET", "guilds/123"),
+        ("GET", "guilds/123/channels"),
+    ]
+
+
+# ── GoIP: only a 2xx answer in the expected XML shape ──
+
+
+def _goip(status=200, content=b'<?xml version="1.0"?><send-sms-status><id1>1</id1></send-sms-status>'):
+    from bapp_connectors.providers.messaging.goip.client import GoIPApiClient
+
+    http = MagicMock()
+    http.call.return_value = MagicMock(status_code=status, content=content)
+    return GoIPApiClient(http, username="u", password="p"), http
+
+
+def test_goip_send_queue_status_returns_the_xml():
+    client, http = _goip()
+    assert "<send-sms-status>" in client.get_send_queue_status()
+    assert http.call.call_args.args == ("GET", "send_status.xml")
+
+
+@pytest.mark.parametrize(
+    ("status", "content"),
+    [
+        (401, b"<send-sms-status/>"),
+        (404, b"not found"),
+        (302, b""),
+        (200, b"<html><body>login</body></html>"),
+        (200, b"\xff\xfe garbage"),
+        (200, b""),
+    ],
+)
+def test_goip_send_queue_status_refuses_errors_and_other_bodies(status, content):
+    client, _http = _goip(status, content)
+    with pytest.raises(ProviderError):
+        client.get_send_queue_status()
+
+
+def test_goip_send_queue_status_is_size_capped():
+    client, _http = _goip(content=b"<send-sms-status>" + b"a" * 100_000)
+    assert len(client.get_send_queue_status()) <= 16 * 1024

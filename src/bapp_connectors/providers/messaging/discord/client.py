@@ -20,7 +20,9 @@ _SNOWFLAKE = re.compile(r"[0-9]{1,20}")
 
 
 def _ai_snowflake(value: Any, what: str) -> str:
-    """A Discord id from an agent: ASCII digits only, so it stays one path segment."""
+    """A Discord id from an agent: ASCII digits only (an int is accepted), so it stays one path segment."""
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        value = str(value)
     if not isinstance(value, str) or not _SNOWFLAKE.fullmatch(value):
         raise ValidationError(f"{what} must be a numeric Discord id (snowflake).")
     return value
@@ -104,10 +106,14 @@ class DiscordApiClient:
 
     # ── Channels ──
 
-    @ai_method("read", "One Discord channel the bot can see: name, type, topic, guild.")
     def get_channel(self, channel_id: str) -> dict:
         """GET /channels/{channel_id}"""
-        return self.http.call("GET", f"channels/{_ai_snowflake(channel_id, 'channel_id')}")
+        return self.http.call("GET", f"channels/{channel_id}")
+
+    @ai_method("read", "One Discord channel the bot can see: name, type, topic, guild.")
+    def get_channel_info(self, channel_id: str) -> dict:
+        """``get_channel`` for an agent: the id must be a snowflake."""
+        return self.get_channel(_ai_snowflake(channel_id, "channel_id"))
 
     @ai_method(
         "read",
@@ -136,15 +142,23 @@ class DiscordApiClient:
         """GET /users/@me/guilds"""
         return self.http.call("GET", "users/@me/guilds")
 
-    @ai_method("read", "One Discord server (guild) the bot is in: name, owner, roles, features.")
     def get_guild(self, guild_id: str) -> dict:
         """GET /guilds/{guild_id}"""
-        return self.http.call("GET", f"guilds/{_ai_snowflake(guild_id, 'guild_id')}")
+        return self.http.call("GET", f"guilds/{guild_id}")
 
-    @ai_method("read", "The channels of a Discord server (guild) the bot is in.")
     def get_guild_channels(self, guild_id: str) -> list:
         """GET /guilds/{guild_id}/channels"""
-        return self.http.call("GET", f"guilds/{_ai_snowflake(guild_id, 'guild_id')}/channels")
+        return self.http.call("GET", f"guilds/{guild_id}/channels")
+
+    @ai_method("read", "One Discord server (guild) the bot is in: name, owner, roles, features.")
+    def get_guild_info(self, guild_id: str) -> dict:
+        """``get_guild`` for an agent: the id must be a snowflake."""
+        return self.get_guild(_ai_snowflake(guild_id, "guild_id"))
+
+    @ai_method("read", "The channels of a Discord server (guild) the bot is in.")
+    def list_guild_channels(self, guild_id: str) -> list:
+        """``get_guild_channels`` for an agent: the id must be a snowflake."""
+        return self.get_guild_channels(_ai_snowflake(guild_id, "guild_id"))
 
     # ── Interactions (webhook responses) ──
 
