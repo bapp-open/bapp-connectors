@@ -8,11 +8,11 @@ bearer token (required for `mine=true` channel access).
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING, Annotated
 
 from bapp_connectors.core.ai import ai_method
-from bapp_connectors.core.errors import ProviderError, ValidationError
+from bapp_connectors.core.errors import ProviderError
+from bapp_connectors.core.ids import plain_id
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
@@ -24,21 +24,17 @@ logger = logging.getLogger(__name__)
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
 
 
-_YT_ID = re.compile(r"[A-Za-z0-9_-]+")
-
-
 def youtube_id(value: str, what: str) -> str:
     """A channel/playlist/video id: letters, digits, ``_`` and ``-`` only."""
-    if not isinstance(value, str) or not _YT_ID.fullmatch(value):
-        raise ValidationError(f"{what} must contain only letters, digits, '_' and '-'.")
-    return value
+    return plain_id(value, what)
 
 
 def with_cursor(page: dict) -> dict:
     """A Data API list page with ``nextPageToken``/``prevPageToken`` renamed ``next_cursor``/``prev_cursor``.
 
-    BAPP redacts every key containing "token" in what an AI read returns, so the agent would
-    never see the page token it has to send back.
+    Kept for one uniform ``next_cursor`` key across the AI reads (App Store, Google Play,
+    YouTube). BAPP no longer redacts exact page-token keys such as ``nextPageToken``, so the
+    rename is not needed for the agent to see the cursor.
     """
     out = {k: v for k, v in page.items() if k not in ("nextPageToken", "prevPageToken")}
     out["next_cursor"] = page.get("nextPageToken")

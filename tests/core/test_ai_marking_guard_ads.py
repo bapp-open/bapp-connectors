@@ -290,8 +290,28 @@ def test_facebook_wrappers_drop_paging_urls_keep_cursors():
     ):
         client, _http = _meta_client(json.loads(json.dumps(envelope)))
         out = call(client)
-        assert out["paging"] == {"cursors": {"before": "b", "after": "a"}}
+        assert out["paging"] == {"cursors": {"before": "b", "after": "a"}, "has_next": True}
         assert "access_token" not in repr(out)
+
+
+def test_facebook_wrappers_drop_nested_paging_urls_and_report_the_last_page():
+    envelope = {
+        "data": [
+            {
+                "id": "1",
+                "ads": {
+                    "data": [],
+                    "paging": {"next": "https://graph.facebook.com/v19.0/1/ads?access_token=EAAB&after=x"},
+                },
+            }
+        ],
+        "paging": {"cursors": {"before": "b", "after": "a"}},
+    }
+    client, _http = _meta_client(envelope)
+    out = client.list_account_campaigns()
+    assert "access_token" not in repr(out)
+    assert out["paging"] == {"cursors": {"before": "b", "after": "a"}, "has_next": False}
+    assert out["data"][0]["ads"]["paging"] == {"cursors": {}, "has_next": True}
 
 
 # ── Google: GAQL allow-list ──

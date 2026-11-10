@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from datetime import date  # noqa: TC003 -- runtime: get_type_hints on the AI reads
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import ValidationError
 from bapp_connectors.providers.ads.facebook.errors import check_payload
+from bapp_connectors.providers.social.facebook.client import numeric_id, scrub_graph_paging
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
@@ -65,23 +65,6 @@ DatePreset = Literal[
     "maximum",
 ]
 TimeIncrement = Literal["daily", "monthly", "all_days"]
-_NUMERIC_ID = re.compile(r"[0-9]+")
-
-
-def _ai_numeric_id(value: str, what: str) -> str:
-    """A Graph object id from an agent: digits only (no ``act_``, ``me``, Page or app aliases)."""
-    if not isinstance(value, str) or not _NUMERIC_ID.fullmatch(value):
-        raise ValidationError(f"{what} must be a numeric Meta id.")
-    return value
-
-
-def _ai_strip_paging(response: Any) -> Any:
-    """Drop Graph's ``paging.next``/``paging.previous`` URLs (they carry ``access_token=``); keep the cursors."""
-    if isinstance(response, dict) and isinstance(response.get("paging"), dict):
-        response["paging"] = {k: v for k, v in response["paging"].items() if k not in ("next", "previous")}
-    return response
-
-
 _TIME_INCREMENT = {"daily": "1", "monthly": "monthly", "all_days": "all_days"}
 
 
@@ -139,11 +122,11 @@ class MetaAdsClient:
 
     def _account_edge(self, edge: str, fields: str, limit: int | None, after: str | None, filtering=None) -> dict:
         response = self.list_edge(self.account_path(edge), fields=fields, limit=limit, after=after, filtering=filtering)
-        return _ai_strip_paging(response)
+        return scrub_graph_paging(response)
 
     def _own_object(self, object_id: str, fields: str, what: str) -> dict:
         """GET one campaign/ad set/ad of the connected ad account; refuse an object of another account."""
-        obj = self.get_object(_ai_numeric_id(object_id, what), fields=f"{fields},account_id")
+        obj = self.get_object(numeric_id(object_id, what), fields=f"{fields},account_id")
         if str((obj or {}).get("account_id", "")) != str(self.ad_account_id):
             raise ValidationError(f"{what} {object_id} does not belong to the connected ad account.")
         return obj
@@ -164,9 +147,7 @@ class MetaAdsClient:
     ) -> dict:
         filtering = None
         if campaign_id:
-            filtering = [
-                {"field": "campaign.id", "operator": "EQUAL", "value": _ai_numeric_id(campaign_id, "campaign_id")}
-            ]
+            filtering = [{"field": "campaign.id", "operator": "EQUAL", "value": numeric_id(campaign_id, "campaign_id")}]
         return self._account_edge("adsets", AI_ADSET_FIELDS, limit, after, filtering)
 
     @ai_method("read", "List the ad account's ads, optionally only those of one ad set.")
@@ -175,7 +156,7 @@ class MetaAdsClient:
     ) -> dict:
         filtering = None
         if ad_set_id:
-            filtering = [{"field": "adset.id", "operator": "EQUAL", "value": _ai_numeric_id(ad_set_id, "ad_set_id")}]
+            filtering = [{"field": "adset.id", "operator": "EQUAL", "value": numeric_id(ad_set_id, "ad_set_id")}]
         return self._account_edge("ads", AI_AD_FIELDS, limit, after, filtering)
 
     @ai_method("read", "List the ad account's ad creatives (name, title, body, image).")
@@ -239,7 +220,7 @@ class MetaAdsClient:
             params["after"] = after
         # Always the connected account's insights edge, narrowed by filtering (never another object's edge).
         filtering = [
-            {"field": field, "operator": "EQUAL", "value": _ai_numeric_id(value, name)}
+            {"field": field, "operator": "EQUAL", "value": numeric_id(value, name)}
             for field, value, name in (
                 ("campaign.id", campaign_id, "campaign_id"),
                 ("adset.id", ad_set_id, "ad_set_id"),
@@ -249,7 +230,7 @@ class MetaAdsClient:
         ]
         if filtering:
             params["filtering"] = json.dumps(filtering)
-        return _ai_strip_paging(self.get_insights(f"act_{self.ad_account_id}", params))
+        return scrub_graph_paging(self.get_insights(f"act_{self.ad_account_id}", params))
 
     # ── Writes ──
 
