@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from bapp_connectors.core.ai import ai_method
 from bapp_connectors.providers.shop.emag.errors import EmagError, EmagIPWhitelistError
@@ -312,7 +312,7 @@ class EmagApiClient:
     def get_invoices(
         self,
         category: str | None = None,
-        number: str | None = None,
+        number: Annotated[str, "free_text"] | None = None,
         date_start: str | None = None,
         date_end: str | None = None,
         page: int = 1,
@@ -349,7 +349,7 @@ class EmagApiClient:
         self,
         category: str | None = None,
         order_id: int | None = None,
-        number: str | None = None,
+        number: Annotated[str, "free_text"] | None = None,
         date_start: str | None = None,
         date_end: str | None = None,
         page: int = 1,

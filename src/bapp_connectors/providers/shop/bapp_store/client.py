@@ -4,7 +4,7 @@ Company Store API client: raw HTTP calls against the store's /api/ surface, no b
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 import requests
 
@@ -67,7 +67,7 @@ class BappStoreClient:
         return rows
 
     @ai_method("read", "Store products, one page per call (page), optionally by product code.")
-    def find_products(self, code: str | None = None, page: int = 1) -> dict:
+    def find_products(self, code: Annotated[str, "free_text"] | None = None, page: int = 1) -> dict:
         params: dict[str, Any] = {"page_size": PAGE_LIMIT, "page": page}
         if code:
             params["code"] = code
@@ -83,7 +83,7 @@ class BappStoreClient:
         return self._call("GET", ORDERS_EXPORT_PATH, params=params)
 
     @ai_method("read", "One order by its store number.")
-    def export_order(self, number: str) -> dict:
+    def export_order(self, number: Annotated[str, "free_text"]) -> dict:
         return self._call("GET", ORDER_EXPORT_PATH, params={"number": number})
 
     def set_webhook(self, url: str, secret_token: str) -> dict:

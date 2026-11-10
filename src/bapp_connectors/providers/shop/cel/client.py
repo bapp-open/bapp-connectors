@@ -8,13 +8,12 @@ passed in the AUTH header for subsequent requests.
 from __future__ import annotations
 
 import logging
+from datetime import datetime  # noqa: TC003 -- resolved at runtime by the AI tool schema
 from typing import TYPE_CHECKING, Any
 
 from bapp_connectors.core.ai import ai_method
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from bapp_connectors.core.http import ResilientHttpClient
 
 logger = logging.getLogger(__name__)

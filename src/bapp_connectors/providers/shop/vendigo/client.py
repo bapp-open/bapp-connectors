@@ -6,13 +6,12 @@ Extends ResilientHttpClient for retry, rate limiting, and auth.
 
 from __future__ import annotations
 
+from datetime import datetime  # noqa: TC003 -- resolved at runtime by the AI tool schema
 from typing import TYPE_CHECKING, Any
 
 from bapp_connectors.core.ai import ai_method
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from bapp_connectors.core.http import ResilientHttpClient
 
 

@@ -12,6 +12,7 @@ import importlib
 import inspect
 import pkgutil
 import re
+import typing
 
 import pytest
 
@@ -291,6 +292,46 @@ def test_no_marked_method_returns_bytes(provider):
         assert not re.search(r"\b(bytes|bytearray|Response)\b", text), f"{provider}.{name} ({info.kind}) returns {text}"
 
 
+LAZY_RETURN = re.compile(
+    r"\b(Iterator|Iterable|Generator|AsyncIterator|AsyncIterable|AsyncGenerator|Awaitable|Coroutine)\b"
+)
+
+
+@pytest.mark.parametrize("provider", SHOP_PROVIDERS)
+def test_read_methods_return_materialised_data(provider):
+    """BAPP refuses lazy results (generators, iterators, awaitables): a read returns its data."""
+    for name, fn, _info in _read_methods(provider):
+        assert not inspect.isgeneratorfunction(fn) and not inspect.iscoroutinefunction(fn), f"{provider}.{name}"
+        assert not inspect.isasyncgenfunction(fn), f"{provider}.{name}"
+        returns = inspect.signature(fn).return_annotation
+        assert returns is not inspect.Signature.empty, f"{provider}.{name}: no return annotation"
+        text = returns if isinstance(returns, str) else str(returns)
+        assert not LAZY_RETURN.search(text), f"{provider}.{name} returns {text}"
+
+
+# Read params that accept free text (BAPP skips its path-safety check on them). Each one only
+# ever reaches a query string or a JSON body, never a URL path.
+REVIEWED_FREE_TEXT = {
+    ("emag", "get_invoices", "number"),
+    ("emag", "get_customer_invoices", "number"),
+    ("bapp_store", "find_products", "code"),
+    ("bapp_store", "export_order", "number"),
+}
+
+
+@pytest.mark.parametrize("provider", SHOP_PROVIDERS)
+def test_free_text_params_are_reviewed(provider):
+    cls = _client_cls(provider)
+    found = set()
+    for name, info in ai_methods(cls).items():
+        for param in inspect.signature(getattr(cls, name)).parameters.values():
+            ann = param.annotation
+            if "free_text" in (ann if isinstance(ann, str) else repr(ann)):
+                assert info.kind == "read" or (provider, name, param.name) in REVIEWED_FREE_TEXT
+                found.add((provider, name, param.name))
+    assert found == {t for t in REVIEWED_FREE_TEXT if t[0] == provider}
+
+
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_marks_sit_on_plain_methods_only(provider):
     """`ai_methods` skips a mark put above @staticmethod/@classmethod; none may exist."""
@@ -369,3 +410,11 @@ def test_temu_parameters_cannot_replace_the_api_type():
     client.list_goods(1, type="temu.local.goods.delete", access_token="other", goodsId=5)
     assert http.sent["type"] == "bg.local.goods.list.query"
     assert http.sent["access_token"] == "token"
+
+
+@pytest.mark.parametrize("provider", SHOP_PROVIDERS)
+def test_marked_method_annotations_resolve_at_runtime(provider):
+    """BAPP builds the tool schema from the type hints; a TYPE_CHECKING-only import breaks it."""
+    cls = _client_cls(provider)
+    for name in ai_methods(cls):
+        typing.get_type_hints(getattr(cls, name), include_extras=True)
