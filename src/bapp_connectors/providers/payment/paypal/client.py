@@ -12,6 +12,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -51,6 +53,7 @@ class PayPalApiClient:
         token = self._get_access_token()
         return {"Authorization": f"Bearer {token}"}
 
+    @ai_method("write", "Create a PayPal checkout order (a payment the customer then approves).")
     def create_order(
         self,
         *,
@@ -86,12 +89,14 @@ class PayPalApiClient:
             json=payload,
         )
 
+    @ai_method("read", "One PayPal checkout order: status, amounts, payer and captures.")
     def get_order(self, order_id: str) -> dict:
         return self.http.call(
             "GET", f"/v2/checkout/orders/{order_id}",
             headers=self._auth_headers(),
         )
 
+    @ai_method("write", "Capture an approved checkout order (takes the money).")
     def capture_order(self, order_id: str) -> dict:
         return self.http.call(
             "POST", f"/v2/checkout/orders/{order_id}/capture",
@@ -99,6 +104,7 @@ class PayPalApiClient:
             json={},  # PayPal answers 415 to a capture without a JSON content type
         )
 
+    @ai_method("write", "Refund a capture, in full or in part.")
     def create_refund(self, capture_id: str, amount: float | None = None, currency: str = "EUR") -> dict:
         payload: dict[str, Any] = {}
         if amount is not None:
@@ -122,6 +128,7 @@ class PayPalApiClient:
 
     # ── Reporting ──
 
+    @ai_method("read", "Account transactions in a date range (ISO 8601, at most 31 days), one page per call.")
     def list_transactions(
         self,
         *,
@@ -157,6 +164,7 @@ class PayPalApiClient:
             params=params,
         )
 
+    @ai_method("read", "Account balances, optionally for one currency.")
     def get_balances(self, currency: str | None = None) -> dict:
         """Get account balances."""
         params: dict[str, Any] = {}

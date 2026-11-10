@@ -11,6 +11,7 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import AuthenticationError
 
 if TYPE_CHECKING:
@@ -187,6 +188,7 @@ class NetopiaApiClient:
 
     # ── Operations ──
 
+    @ai_method("read", "Status of one payment, by Netopia ntpID or by the merchant order id.")
     def get_status(self, ntp_id: str | None = None, order_id: str | None = None) -> dict:
         """Get payment status by NTP ID or order ID."""
         # The official SDK always sends posID alongside the ids.
@@ -197,6 +199,7 @@ class NetopiaApiClient:
             payload["orderID"] = order_id
         return self._operation("operation/status", payload)
 
+    @ai_method("write", "Capture a pre-authorized payment, in full or in part.")
     def capture(self, ntp_id: str, amount: float | None = None) -> dict:
         """Capture a pre-authorized payment (full or partial)."""
         payload: dict[str, Any] = {"ntpID": ntp_id}
@@ -204,10 +207,12 @@ class NetopiaApiClient:
             payload["amount"] = amount
         return self._operation("operation/capture", payload)
 
+    @ai_method("write", "Void (cancel) a pre-authorized payment.")
     def void(self, ntp_id: str) -> dict:
         """Void/cancel a pre-authorized payment."""
         return self._operation("operation/void", {"ntpID": ntp_id})
 
+    @ai_method("write", "Refund a payment, in full or in part.")
     def credit(self, ntp_id: str, amount: float | None = None) -> dict:
         """Refund a payment (full or partial)."""
         payload: dict[str, Any] = {"ntpID": ntp_id}
@@ -215,6 +220,7 @@ class NetopiaApiClient:
             payload["amount"] = amount
         return self._operation("operation/credit", payload)
 
+    @ai_method("write", "Expire a pending payment.")
     def expire(self, ntp_id: str) -> dict:
         """Expire a pending payment."""
         return self._operation("operation/expire", {"posID": self.pos_signature, "ntpID": ntp_id})

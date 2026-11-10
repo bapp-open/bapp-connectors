@@ -18,6 +18,8 @@ import logging
 import os
 from collections import OrderedDict
 
+from bapp_connectors.core.ai import ai_method
+
 logger = logging.getLogger(__name__)
 
 
@@ -170,6 +172,7 @@ class EuPlatescApiClient:
         form_data = self._build_request(method, extra)
         return self.http.call("POST", MANAGER_URL, data=form_data)
 
+    @ai_method("read", "Status of one card transaction, by EuPlatesc id (epid) or by the merchant invoice id.")
     def check_status(self, ep_id: str | None = None, invoice_id: str | None = None) -> dict:
         """Get transaction status by EuPlatesc ID or invoice ID."""
         extra = {}
@@ -179,6 +182,7 @@ class EuPlatescApiClient:
             extra["invoice_id"] = invoice_id
         return self._call("CHECK_STATUS", extra)
 
+    @ai_method("read", "EuPlatesc settlement invoices issued in a date range (YYYY-MM-DD).")
     def get_invoice_list(self, date_from: str, date_to: str) -> dict:
         """List settlement invoices for a date range.
 
@@ -192,6 +196,7 @@ class EuPlatescApiClient:
             "to": date_to,
         })
 
+    @ai_method("read", "The transactions settled under one EuPlatesc settlement invoice.")
     def get_invoice_transactions(self, invoice: str) -> dict:
         """Get transactions for a specific settlement invoice.
 
@@ -203,6 +208,7 @@ class EuPlatescApiClient:
             "invoice": invoice,
         })
 
+    @ai_method("read", "Total amount captured by this merchant in a date range (YYYY-MM-DD).")
     def get_captured_total(self, date_from: str, date_to: str) -> dict:
         """Get total captured amounts for a date range."""
         return self._call("CAPTURED_TOTAL", {
@@ -216,14 +222,17 @@ class EuPlatescApiClient:
         """Validate merchant ID configuration."""
         return self._call("CHECK_MID")
 
+    @ai_method("write", "Capture a pre-authorized transaction in full.")
     def capture(self, ep_id: str) -> dict:
         """Full capture of a pre-authorized transaction."""
         return self._call("CAPTURE", {"ukey": self._user_key, "epid": ep_id})
 
+    @ai_method("write", "Reverse (cancel) a transaction.")
     def reversal(self, ep_id: str) -> dict:
         """Reverse a transaction."""
         return self._call("REVERSAL", {"ukey": self._user_key, "epid": ep_id})
 
+    @ai_method("write", "Capture part of a pre-authorized transaction.")
     def partial_capture(self, ep_id: str, amount: float) -> dict:
         """Partial capture of a pre-authorized transaction."""
         return self._call("PARTIAL_CAPTURE", {
@@ -232,6 +241,7 @@ class EuPlatescApiClient:
             "amount": f"{amount:.2f}",
         })
 
+    @ai_method("write", "Refund a transaction, in full or in part.")
     def refund(self, ep_id: str, amount: float, reason: str = "") -> dict:
         """Full or partial refund."""
         extra = {
@@ -247,6 +257,7 @@ class EuPlatescApiClient:
         """Get saved cards for a client."""
         return self._call("C2P_CARDS", {"c2p_id": client_id})
 
+    @ai_method("write", "Remove a saved card of a Click2Pay client.")
     def remove_card(self, client_id: str, card_id: str) -> dict:
         """Remove a saved card."""
         return self._call("C2P_DELETE", {"c2p_id": client_id, "c2p_cid": card_id})

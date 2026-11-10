@@ -78,6 +78,9 @@ class PayPalPaymentAdapter(PaymentPort, WebhookCapability, FinancialCapability):
     def validate_credentials(self) -> bool:
         return bool(self._client_id and self._app_secret)
 
+    def get_ai_client(self):
+        return self._client
+
     def test_connection(self) -> ConnectionTestResult:
         if not self.validate_credentials():
             return ConnectionTestResult(success=False, message="Missing client_id or app_secret")
