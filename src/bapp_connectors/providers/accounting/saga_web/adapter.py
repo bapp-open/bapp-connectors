@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
 from bapp_connectors.core.dto import (
@@ -25,7 +25,7 @@ from bapp_connectors.core.dto import (
 from bapp_connectors.core.errors import ConfigurationError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import AccountingPort
-from bapp_connectors.providers.accounting.saga_web.client import SagaWebApiClient
+from bapp_connectors.providers.accounting.saga_web.client import INVALID_ARTICLE_HINT, SagaWebApiClient, _parsed
 from bapp_connectors.providers.accounting.saga_web.errors import (
     SagaWebAuthError,
     SagaWebError,
@@ -50,7 +50,6 @@ AUTH_REFUSED_MESSAGE = (
 )
 EMPTY_REPORT_MESSAGE = "Raport SAGA gol sau nerecunoscut"
 COD_FISCAL_MESSAGE = "Codul fiscal trebuie să conțină doar cifre"
-_INVALID_ARTICLE_HINT = "cod de articol"
 
 
 def base_url_error(base_url: str) -> str:
@@ -80,16 +79,6 @@ def clean_cod_fiscal(value: str) -> str:
 
 def _cod_fiscal_ok(value: str) -> bool:
     return value.isascii() and value.isdigit()
-
-
-def _parsed(parser: Callable[[str], Any], text: str, *, is_envelope: bool = False) -> Any:
-    """Run a mapper on a 2xx body; bad XML or a malformed number becomes a ``SagaWebError``."""
-    try:
-        return parser(text)
-    except ValueError as exc:
-        raise SagaWebError(
-            f"Răspuns SAGA Web invalid: {exc}", status_code=200, retryable=False, is_envelope=is_envelope
-        ) from None
 
 
 class SagaWebAdapter(AccountingPort):
@@ -125,6 +114,10 @@ class SagaWebAdapter(AccountingPort):
 
     def __repr__(self) -> str:
         return f"SagaWebAdapter(client={self.client!r})"
+
+    def get_ai_client(self) -> SagaWebApiClient | None:
+        """The client, unless the API URL may not carry the key: its AI reads skip ``_ensure_base_url``."""
+        return None if self._base_url_error else self.client
 
     # ── BasePort ──
 
@@ -235,7 +228,7 @@ class SagaWebAdapter(AccountingPort):
             xml = self._get_xml("Situatii/GetArticol", {"codArticol": article_code})
         except SagaWebValidationError as exc:
             # SAGA answers 400 "Nu ati trimis un cod de articol valid" for an unknown code
-            if _INVALID_ARTICLE_HINT in str(exc).lower():
+            if INVALID_ARTICLE_HINT in str(exc).lower():
                 return None
             raise
         return _parsed(parse_article, xml)

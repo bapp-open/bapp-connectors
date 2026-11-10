@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.providers.erp.bapp.errors import BappErpAuthError, BappErpError
 
 if TYPE_CHECKING:
@@ -110,6 +111,12 @@ class BappErpApiClient:
         data = body.get("data")
         return data if isinstance(data, dict) else {}
 
+    # The only AI read: a fixed task code. ``run_task`` (any task code) is never marked, and
+    # neither are print_file / send_sms.
+    @ai_method(
+        "read",
+        "What the BAPP company behind this connection can do: print devices with their printers, and SMS phones.",
+    )
     def get_capabilities(self) -> dict:
         return self.run_task(TASK_CAPABILITIES)
 

@@ -68,6 +68,10 @@ class BappErpAdapter(ErpPort, MessagingPort):
     def __repr__(self) -> str:
         return f"BappErpAdapter(client={self.client!r})"
 
+    def get_ai_client(self) -> BappErpApiClient | None:
+        """The client, unless the API URL may not carry the token: its AI reads skip ``_ensure_base_url``."""
+        return None if self._base_url_error else self.client
+
     # ── BasePort ──
 
     def validate_credentials(self) -> bool:

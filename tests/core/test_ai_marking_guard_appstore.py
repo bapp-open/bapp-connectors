@@ -13,7 +13,6 @@ would redact because the key contains "token").
 from __future__ import annotations
 
 import inspect
-import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -69,24 +68,6 @@ UNMARKED_ON_PURPOSE: dict[tuple[str, str], str] = {
 }
 
 NOT_MARKED: dict[str, str] = {}
-
-
-@pytest.fixture(autouse=True, scope="module")
-def _parseable_service_account():
-    """Google Play parses ``service_account_json`` in __init__ (no network): give it a JSON object.
-
-    ``ai_guard.adapter`` caches, so the adapter is built once, inside this patch."""
-    real = ai_guard._dummy_credentials
-
-    def credentials(manifest):
-        creds = real(manifest)
-        if "service_account_json" in creds:
-            creds["service_account_json"] = json.dumps({"client_email": "a@b.iam", "private_key": "dummy"})
-        return creds
-
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(ai_guard, "_dummy_credentials", credentials)
-        yield
 
 
 def test_every_appstore_provider_is_reviewed_or_not_marked():

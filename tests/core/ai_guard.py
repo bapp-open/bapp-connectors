@@ -16,6 +16,7 @@ import contextlib
 import functools
 import importlib
 import inspect
+import json
 import pkgutil
 import re
 import socket
@@ -78,6 +79,14 @@ def _dummy_credentials(manifest) -> dict:
             creds[f.name] = "https://shop.example.com"
         elif f.name.endswith("_number"):  # parsed as int in __init__ (GLS client_number)
             creds[f.name] = "1"
+        elif f.name.endswith("_json"):  # parsed as JSON in __init__ (Google Play service_account_json)
+            creds[f.name] = json.dumps(
+                {
+                    "type": "service_account",
+                    "client_email": "dummy@example.iam.gserviceaccount.com",
+                    "private_key": "dummy",
+                }
+            )
         else:
             creds[f.name] = "dummy"
     return creds

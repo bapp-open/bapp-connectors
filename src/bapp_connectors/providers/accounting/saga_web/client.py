@@ -12,10 +12,17 @@ unknown outcome.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar
+from datetime import date
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import requests
 
+from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.dto import (  # noqa: TC001 -- runtime: get_type_hints on the AI reads
+    Article,
+    StockLine,
+    TrialBalanceLine,
+)
 from bapp_connectors.core.http.retry import execute_with_retry
 from bapp_connectors.providers.accounting.saga_web.errors import (
     SagaWebAuthError,
@@ -23,10 +30,19 @@ from bapp_connectors.providers.accounting.saga_web.errors import (
     SagaWebError,
     SagaWebValidationError,
 )
-from bapp_connectors.providers.accounting.saga_web.mappers import parse_envelope, read_envelope
+from bapp_connectors.providers.accounting.saga_web.mappers import (
+    parse_article,
+    parse_envelope,
+    parse_stock_report,
+    parse_trial_balance,
+    read_envelope,
+    saga_date,
+    to_decimal,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from decimal import Decimal
 
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -37,6 +53,8 @@ CIF_HEADER = "X-Saga-Cod-Fiscal"
 IMPORT_PATH = "Import"
 # Import waits for SAGA to process the whole file; reads keep the http client's default
 IMPORT_TIMEOUT = 180
+# SAGA answers 400 "Nu ati trimis un cod de articol valid" for an unknown article code
+INVALID_ARTICLE_HINT = "cod de articol"
 
 
 class _Secret:
@@ -193,6 +211,67 @@ class SagaWebApiClient:
 
     def get_xml(self, path: str, params: dict) -> str:
         return self._read(path, params, _xml_answer)
+
+    # ── AI reads ──
+    # Fixed SAGA "Situatii" endpoints, for an AI agent: the agent never picks the path. Each is a
+    # GET that only reads a report; like every SAGA call it may rotate the key, which
+    # ``_capture_refresh`` saves through ``on_credentials_update``.
+
+    def _value(self, path: str, params: dict) -> Decimal:
+        success, message, data = self.get_json(path, params)
+        if not success:
+            raise SagaWebError(
+                message or "SAGA Web nu a returnat valoarea cerută", status_code=200, retryable=False, is_envelope=True
+            )
+        return _parsed(to_decimal, data, is_envelope=True)
+
+    @ai_method("read", "Stock of one article on a day (today when day is omitted), optionally in one warehouse.")
+    def get_article_stock(self, article_code: str, warehouse: str = "", day: date | None = None) -> dict:
+        params = {"codArticol": article_code}
+        if warehouse:
+            params["gestiune"] = warehouse
+        if day is not None:
+            params["data"] = saga_date(day)
+        stock = self._value("Situatii/GetStocArticol", params)
+        return {"article_code": article_code, "warehouse": warehouse, "day": day, "stock": stock}
+
+    @ai_method(
+        "read", "Stock situation per warehouse and article between two dates (in, out, final quantities and values)."
+    )
+    def get_stock_report(self, start: date, end: date) -> list[StockLine]:
+        xml = self.get_xml("Situatii/GetSituatieStocuri", {"dataStart": saga_date(start), "dataEnd": saga_date(end)})
+        return _parsed(parse_stock_report, xml)
+
+    @ai_method("read", "Balance of one account on a day (today when day is omitted); side D = debit, C = credit.")
+    def get_account_balance(self, account: str, side: Literal["D", "C"], day: date | None = None) -> dict:
+        day = day or date.today()
+        balance = self._value("Situatii/GetSoldCont", {"cont": account, "tip": side, "data": saga_date(day)})
+        return {"account": account, "side": side, "day": day, "balance": balance}
+
+    @ai_method("read", "Trial balance between two dates; analytic=true lists analytic accounts too.")
+    def get_trial_balance(self, start: date, end: date, analytic: bool = False) -> list[TrialBalanceLine]:
+        params = {"dataStart": saga_date(start), "dataEnd": saga_date(end), "tipBalanta": "1" if analytic else "0"}
+        return _parsed(parse_trial_balance, self.get_xml("Situatii/GetBalanta", params))
+
+    @ai_method("read", "One article of the SAGA nomenclature by its code (name, VAT, unit, prices); null when unknown.")
+    def get_article(self, article_code: str) -> Article | None:
+        try:
+            xml = self.get_xml("Situatii/GetArticol", {"codArticol": article_code})
+        except SagaWebValidationError as exc:
+            if INVALID_ARTICLE_HINT in str(exc).lower():
+                return None
+            raise
+        return _parsed(parse_article, xml)
+
+
+def _parsed(parser: Callable[[str], Any], text: str, *, is_envelope: bool = False) -> Any:
+    """Run a mapper on a 2xx body; bad XML or a malformed number becomes a ``SagaWebError``."""
+    try:
+        return parser(text)
+    except ValueError as exc:
+        raise SagaWebError(
+            f"Răspuns SAGA Web invalid: {exc}", status_code=200, retryable=False, is_envelope=is_envelope
+        ) from None
 
 
 def _retryable_status(status: int) -> bool:
