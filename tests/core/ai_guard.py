@@ -325,6 +325,61 @@ def check_allowed_keys_safe(
                 assert not key_allowed(key, patterns), f"{family}.{provider}.{name}.{arg} allows {key!r}"
 
 
+# Parameter names that would let an agent pick the host, environment, API version, raw path,
+# field list or credential of a call. Those come from the connection and the client, never
+# from the agent. Union of the per-family lists; a family with a reviewed exception passes ``allow``.
+ROUTING_PARAM_NAMES = frozenset(
+    {
+        "url",
+        "next_url",
+        "host",
+        "hostname",
+        "base_url",
+        "domain",
+        "endpoint",
+        "path",
+        "version",
+        "api_version",
+        "fields",
+        "access_token",
+        "token",
+        "sandbox",
+        "live",
+        "env",
+        "environment",
+        "staging",
+    }
+)
+
+
+# Reviewed exceptions: (family, provider, method) -> parameter names that only look like routing.
+ROUTING_PARAM_REVIEWED = {
+    # PayPal reporting's ``fields`` picks response sections from a fixed Literal; it routes nothing.
+    ("payment", "paypal", "list_transactions"): frozenset({"fields"}),
+}
+
+
+def check_no_routing_params(
+    family: str,
+    provider: str,
+    reviewed: Reviewed,
+    reviewed_extra: ReviewedExtra,
+    *,
+    allow: frozenset[str] | set[str] = frozenset(),
+) -> None:
+    """No read takes a parameter named like a host, URL, environment switch, path, version,
+    field list or token (``ROUTING_PARAM_NAMES`` minus ``allow``)."""
+    blocked = ROUTING_PARAM_NAMES - set(allow)
+    for name, fn, _info in read_methods(family, provider):
+        reviewed_ok = ROUTING_PARAM_REVIEWED.get((family, provider, name), frozenset())
+        signature = inspect.signature(fn)
+        params = set(signature.parameters) & blocked - reviewed_ok
+        assert not params, f"{family}.{provider}.{name} takes {sorted(params)}"
+        for param in reviewed_ok & set(signature.parameters):
+            ann = signature.parameters[param].annotation
+            assert "Literal" in (ann if isinstance(ann, str) else repr(ann)), f"{family}.{provider}.{name}.{param}"
+
+
 # The per-provider checks with the plain 4-argument signature, for a family file to run them all.
 GENERIC_CHECKS = (
     check_exposes_ai_client,
@@ -338,4 +393,5 @@ GENERIC_CHECKS = (
     check_annotations_resolve,
     check_dict_params_have_allowed_keys,
     check_allowed_keys_safe,
+    check_no_routing_params,
 )

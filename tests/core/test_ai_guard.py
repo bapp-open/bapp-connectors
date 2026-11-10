@@ -74,6 +74,32 @@ def test_check_no_bytes_return_fails_on_a_fake_client(monkeypatch):
     ai_guard.check_no_bytes_return("fake", "fake", {}, {})
 
 
+class _RoutingClient:
+    @ai_method("read", "Host.")
+    def by_host(self, order_id: str, base_url: str = "") -> dict:
+        return {}
+
+
+class _NoRoutingClient:
+    @ai_method("read", "Plain.")
+    def plain(self, order_id: str, page: int = 1) -> dict:
+        return {}
+
+
+@pytest.mark.parametrize("bad", ["host", "base_url", "endpoint", "env", "environment", "staging", "sandbox", "domain"])
+def test_routing_param_names_cover_hosts_and_environments(bad):
+    assert bad in ai_guard.ROUTING_PARAM_NAMES
+
+
+def test_check_no_routing_params_fails_on_a_fake_client(monkeypatch):
+    monkeypatch.setattr(ai_guard, "client_cls", lambda family, provider: _RoutingClient)
+    with pytest.raises(AssertionError, match="base_url"):
+        ai_guard.check_no_routing_params("fake", "fake", {}, {})
+    ai_guard.check_no_routing_params("fake", "fake", {}, {}, allow={"base_url"})
+    monkeypatch.setattr(ai_guard, "client_cls", lambda family, provider: _NoRoutingClient)
+    ai_guard.check_no_routing_params("fake", "fake", {}, {})
+
+
 def test_no_network_cannot_be_swallowed_by_except_exception():
     with pytest.raises(AssertionError, match="network access"), ai_guard.no_network():
         try:

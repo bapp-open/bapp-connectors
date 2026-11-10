@@ -366,6 +366,11 @@ def test_flat_extras_and_dict_params_have_allowed_keys(provider):
 
 
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
+def test_no_read_takes_a_host_env_path_or_token(provider):
+    _check(ai_guard.check_no_routing_params, provider)
+
+
+@pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_allowed_keys_never_list_routing_or_auth_keys(provider):
     blocked = TEMU_ENVELOPE_KEYS if provider == "temu" else set()
     _check(ai_guard.check_allowed_keys_safe, provider, extra_blocked=blocked)

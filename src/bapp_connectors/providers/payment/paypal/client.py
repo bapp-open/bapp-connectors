@@ -10,7 +10,7 @@ from __future__ import annotations
 import base64
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from bapp_connectors.core.ai import ai_method
 
@@ -137,7 +137,16 @@ class PayPalApiClient:
         transaction_type: str | None = None,
         page: int = 1,
         page_size: int = 100,
-        fields: str = "all",
+        fields: Literal[
+            "all",
+            "transaction_info",
+            "payer_info",
+            "shipping_info",
+            "auction_info",
+            "cart_info",
+            "incentive_info",
+            "store_info",
+        ] = "all",
     ) -> dict:
         """List transactions from PayPal reporting API.
 
@@ -147,7 +156,7 @@ class PayPalApiClient:
             transaction_type: Filter by type (e.g. "T0006" for payouts). Optional.
             page: Page number (1-based).
             page_size: Results per page (max 500).
-            fields: "all" or "transaction_info" for minimal response.
+            fields: "all", or one PayPal response section ("transaction_info" for the minimal response).
         """
         params: dict[str, Any] = {
             "start_date": start_date,
