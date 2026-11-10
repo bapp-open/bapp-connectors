@@ -163,3 +163,31 @@ def test_saga_no_ai_client_when_the_url_may_not_carry_the_key():
             FAMILY, "saga_web", credentials={"base_url": "https://evil.example.com/", "cod_fiscal": "1", "token": "x"}
         )
     assert bad.get_ai_client() is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.com\\.sagasoft.ro/api",
+        "https://evil.com\\@web.sagasoft.ro/api",
+        "https://user@web.sagasoft.ro/api",
+        "https://evil.com%2F.sagasoft.ro/api",
+        "https://web.sagasoft.ro%40evil.com/api",
+        "https://evil.com .sagasoft.ro/api",
+    ],
+)
+def test_saga_base_url_host_checked_as_requests_sends_it(url):
+    import requests
+
+    from bapp_connectors.providers.accounting.saga_web.adapter import base_url_error
+
+    assert base_url_error(url) != ""
+    if "\\" in url:  # what made the check necessary: urllib3 sends this one to evil.com
+        assert requests.Request("GET", url).prepare().url.startswith("https://evil.com/")
+
+
+@pytest.mark.parametrize("url", ["https://web.sagasoft.ro/api/", "https://web2.sagasoft.ro:443/sagac/api/v1/"])
+def test_saga_base_url_good_hosts_still_accepted(url):
+    from bapp_connectors.providers.accounting.saga_web.adapter import base_url_error
+
+    assert base_url_error(url) == ""

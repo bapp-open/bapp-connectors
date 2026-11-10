@@ -108,3 +108,29 @@ def test_bapp_no_ai_client_when_the_url_may_not_carry_the_token():
             FAMILY, "bapp", credentials={"token": "x"}, config={"base_url": "https://evil.example.com/api/"}
         )
     assert bad.get_ai_client() is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.com\\.bapp.ro/api/",
+        "https://evil.com\\@panel.bapp.ro/api/",
+        "https://user@panel.bapp.ro/api/",
+        "https://evil.com%2F.bapp.ro/api/",
+        "https://evil.com .bapp.ro/api/",
+    ],
+)
+def test_bapp_base_url_host_checked_as_requests_sends_it(url):
+    from bapp_connectors.core.registry import registry
+    from bapp_connectors.providers.erp.bapp.adapter import base_url_error
+
+    assert base_url_error(url) != ""
+    with ai_guard.no_network():
+        adapter = registry.create_adapter(FAMILY, "bapp", credentials={"token": "x"}, config={"base_url": url})
+    assert adapter.get_ai_client() is None
+
+
+def test_bapp_base_url_good_host_still_accepted():
+    from bapp_connectors.providers.erp.bapp.adapter import base_url_error
+
+    assert base_url_error("https://panel.bapp.ro/api/") == ""

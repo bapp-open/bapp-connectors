@@ -13,6 +13,9 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
+from urllib3.exceptions import LocationParseError
+from urllib3.util import parse_url
+
 from bapp_connectors.core.dto import (
     Article,
     ConnectionTestResult,
@@ -60,7 +63,12 @@ def base_url_error(base_url: str) -> str:
     try:
         parts = urlsplit(base_url or "")
         host = (parts.hostname or "").lower()
-    except ValueError:
+        # the host requests/urllib3 will really connect to: "https://evil.com\\.{ALLOWED_HOST}" is
+        # evil.com to urllib3 but ends in the allowed host to urlsplit
+        sent_to = (parse_url(base_url or "").host or "").lower()
+    except (ValueError, LocationParseError):
+        return "URL API invalid"
+    if any(ch in parts.netloc for ch in "\\@%") or any(ch.isspace() for ch in parts.netloc) or sent_to != host:
         return "URL API invalid"
     if parts.scheme != "https":
         return "URL API trebuie să fie https"
