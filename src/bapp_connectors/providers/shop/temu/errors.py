@@ -40,6 +40,13 @@ class TemuError(ProviderError):
         self.request_id = request_id
 
 
+class TemuDraftGoodsError(ValidationError):
+    """The goods exists on Temu only as an unfinished draft (``saveModeStatus`` 10, no SKU): no price, no stock to
+    set until it is completed or deleted and listed again (live 2026-11-10: goods left so by ``temu.local.goods.v3.add``)."""
+
+    code = "draft"
+
+
 def classify_temu_error(error_code: int, message: str, request_id: str = "", api_type: str = "") -> ConnectorError:
     """Return (never raise) the framework error for a Temu error response."""
     text = f"Temu {api_type or 'API'} error {error_code}: {message}".strip()

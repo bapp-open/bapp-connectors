@@ -49,7 +49,7 @@ from bapp_connectors.core.errors import (
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.ports import ShopPort
 from bapp_connectors.providers.shop.temu.client import DEFAULT_PAGE_SIZE, TemuApiClient
-from bapp_connectors.providers.shop.temu.errors import SHIPPING_HIDDEN_CODE, TemuError
+from bapp_connectors.providers.shop.temu.errors import SHIPPING_HIDDEN_CODE, TemuDraftGoodsError, TemuError
 from bapp_connectors.providers.shop.temu.manifest import manifest
 from bapp_connectors.providers.shop.temu.mappers import (
     amounts_from_invoice_detail,
@@ -257,12 +257,26 @@ class TemuShopAdapter(
             sku = sku or str(product_id)
             rows = skus_from_stock_query(self.client.sku_stock_query(out_sku_sn_list=[sku]))
             goods_id = next((g for g, _, out in rows if out == sku), rows[0][0] if rows else 0)
+        all_rows = rows
         if sku:
             rows = [r for r in rows if r[2] == sku]
         sku_ids = [sku_id for g, sku_id, _ in rows if not goods_id or g in (0, goods_id)]
+        if goods_id and not sku_ids and not all_rows and str(product_id).isdigit():
+            self._raise_if_draft(goods_id)
         if not goods_id or not sku_ids:
             raise ValidationError(f"Temu: nu am găsit SKU-ul {sku or product_id} (produs {product_id})")
         return goods_id, sku_ids
+
+    def _raise_if_draft(self, goods_id: int) -> None:
+        """A goods with no SKU at all: one detail call tells a draft (fix on Temu) from a goods that is gone."""
+        try:
+            detail = self.client.goods_detail(goods_id)
+        except ConnectorError:
+            return
+        if detail and not detail.get("skuList"):
+            raise TemuDraftGoodsError(
+                f"Temu: produsul {goods_id} e ciornă nefinalizată la Temu (fără variantă, deci fără preț și stoc); "
+                "șterge-l din Temu și retrimite-l")
 
     def _sku_ids(self, product_id: str) -> list[int]:
         return self._resolve_skus(product_id)[1]
@@ -387,7 +401,10 @@ class TemuShopAdapter(
                 result.succeeded += 1
             except (ConnectorError, ValueError) as exc:
                 result.failed += 1
-                result.errors.append({"product_id": update.product_id, "error": str(exc)})
+                error = {"product_id": update.product_id, "error": str(exc)}
+                if isinstance(exc, TemuDraftGoodsError):
+                    error["code"] = exc.code
+                result.errors.append(error)
         return result
 
     # ── WebhookCapability ──

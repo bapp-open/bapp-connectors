@@ -260,3 +260,48 @@ def test_a_variant_temu_refused_in_the_stock_edit_is_an_error(fake):
     res = adapter.bulk_update_products([ProductUpdate(product_id="500", sku="SKU-1", stock=3)])
     assert (res.succeeded, res.failed) == (0, 1)
     assert "under review" in res.errors[0]["error"]
+
+
+def _draft_router(calls):
+    # live 2026-11-10: goods created by temu.local.goods.v3.add that stayed drafts — the detail has no skuList
+    # (saveModeStatus 10), the SKU query by goodsId answers `stockList: null`
+    def route(method, path, kwargs):
+        t = kwargs["json"]["type"]
+        calls.append(t)
+        if t == "temu.local.goods.sku.stock.query":
+            return ok({"stockList": None})
+        if t == "bg.local.goods.detail.query":
+            return ok({"goodsId": kwargs["json"]["goodsId"], "outGoodsSn": "SKU-1", "skuList": None,
+                       "saveModeStatus": 10, "subStatus": 0})
+        return ok({})
+    return route
+
+
+def test_stock_on_a_goods_left_as_a_draft_is_a_draft_error(fake):
+    from bapp_connectors.providers.shop.temu.errors import TemuDraftGoodsError
+
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config=CFG)
+    calls = []
+    fake.add("POST", "openapi/router", _draft_router(calls))
+    with pytest.raises(TemuDraftGoodsError, match="ciornă"):
+        adapter.update_product_stock("608940377110828", 3)
+    assert calls == ["temu.local.goods.sku.stock.query", "bg.local.goods.detail.query"]
+
+
+def test_a_draft_goods_in_a_bulk_update_is_a_failed_row_with_the_draft_code(fake):
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config=CFG)
+    fake.add("POST", "openapi/router", _draft_router([]))
+    res = adapter.bulk_update_products([ProductUpdate(product_id="608940377110828", stock=3)])
+    assert (res.succeeded, res.failed) == (0, 1)
+    assert res.errors[0]["product_id"] == "608940377110828" and res.errors[0]["code"] == "draft"
+    assert "ciornă" in res.errors[0]["error"]
+
+
+def test_a_goods_with_skus_but_none_matching_is_still_not_found(fake):
+    # a real goods (it has SKUs) where the hinted SKU is missing is not a draft
+    adapter = TemuShopAdapter(CREDS, http_client=fake, config=CFG)
+    calls = []
+    fake.add("POST", "openapi/router", _sku_query_router(calls))
+    res = adapter.bulk_update_products([ProductUpdate(product_id="500", sku="SKU-9", stock=1)])
+    assert res.failed == 1 and "code" not in res.errors[0] and "nu am găsit" in res.errors[0]["error"]
+    assert "bg.local.goods.detail.query" not in calls
