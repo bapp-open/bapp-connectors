@@ -100,6 +100,23 @@ REQUIRED_SCOPES = frozenset({
 })
 
 
+def _estimated_cost(raw) -> Decimal | None:
+    """`estimatedAmount` ca „1,89€” → Decimal('1.89'); None când lipsește sau nu e un număr."""
+    import re
+    match = re.search(r"\d+(?:[.,]\d+)?", str(raw or ""))
+    if not match:
+        return None
+    try:
+        return Decimal(match.group(0).replace(",", "."))
+    except ArithmeticError:
+        return None
+
+
+def _logistics_type(raw) -> str:
+    """`shipLogisticsType` normalizat: „Pickup”/„Pick up” → pickup, „Dropoff”/„Drop off” → dropoff."""
+    return "".join(ch for ch in str(raw or "").lower() if ch.isalnum())
+
+
 class TemuShopAdapter(
     ShopPort,
     ProductCreationCapability,
@@ -495,12 +512,36 @@ class TemuShopAdapter(
                                  "orderSendInfoList": self._order_send_info(order_id, items)}],
         })
 
-    def _services(self, order_id: str, warehouse_id: str, items: list[str] | None = None) -> list[ShippingService]:
+    def _package_fields(self, package: dict | None) -> dict:
+        """The parcel as Temu wants it outside the US: weight in kg, sides in cm (live 2026-11-10: without it
+        `shippingservices.get` answers 7000000, with grams 55015). `package` = {weight_g, length_cm, width_cm,
+        height_cm}; what is missing comes from the connection defaults."""
+        package = package or {}
+
+        def value(key: str, default_key: str, fallback: int) -> int:
+            raw = package.get(key) or self.config.get(default_key) or fallback
+            try:
+                return max(1, int(raw))
+            except (TypeError, ValueError):
+                return fallback
+
+        weight_kg = (Decimal(value("weight_g", "default_weight_g", 100)) / 1000).normalize()
+        return {
+            "weight": f"{weight_kg:f}", "weightUnit": "kg",
+            "length": str(value("length_cm", "default_length_cm", 10)),
+            "width": str(value("width_cm", "default_width_cm", 20)),
+            "height": str(value("height_cm", "default_height_cm", 30)),
+            "dimensionUnit": "cm",
+        }
+
+    def _services(self, order_id: str, warehouse_id: str, items: list[str] | None = None,
+                  package: dict | None = None) -> list[ShippingService]:
         lines = self._order_send_info(order_id, items)
         data = self.client.shipping_services({
             "warehouseId": warehouse_id,
             "shipOrderInfoList": [{"orderSn": line["orderSn"], "parentOrderSn": order_id, "quantity": line["quantity"]}
                                   for line in lines],
+            **self._package_fields(package),
         })
         services = []
         for channel in data.get("onlineChannelDtoList") or []:
@@ -508,23 +549,27 @@ class TemuShopAdapter(
                 service_id=str(channel.get("channelId") or ""),
                 name=str(channel.get("shippingCompanyName") or channel.get("channelId") or ""),
                 carrier_id=str(channel.get("shipCompanyId") or ""),
+                cost=_estimated_cost(channel.get("estimatedAmount")),
                 currency=str(channel.get("estimatedCurrencyCode") or ""),
-                extra=channel,
+                # „Pickup” / „Pick up” = curierul vine la depozit; „Dropoff” = coletul se predă la punct
+                extra={**channel, "logistics_type": _logistics_type(channel.get("shipLogisticsType"))},
             ))
         return services
 
-    def list_shipping_services(self, order_id: str, warehouse_id: str) -> list[ShippingService]:
-        return self._services(order_id, warehouse_id)
+    def list_shipping_services(self, order_id: str, warehouse_id: str, package: dict | None = None) -> list[ShippingService]:
+        return self._services(order_id, warehouse_id, package=package)
 
     def create_shipment(self, order_id: str, shipping_service_id: str, warehouse_id: str,
-                        items: list[str] | None = None, ship_later: bool = False) -> str:
-        service = next((s for s in self._services(order_id, warehouse_id, items) if s.service_id == str(shipping_service_id)), None)
+                        items: list[str] | None = None, ship_later: bool = False, package: dict | None = None) -> str:
+        service = next((s for s in self._services(order_id, warehouse_id, items, package)
+                        if s.service_id == str(shipping_service_id)), None)
         if service is None:
             raise ValidationError(f"Temu: serviciul de transport {shipping_service_id} nu e disponibil pentru comanda {order_id}")
         request: dict = {
             "channelId": int(service.service_id),
             "warehouseId": warehouse_id,
             "orderSendInfoList": self._order_send_info(order_id, items),
+            **self._package_fields(package),
         }
         if service.carrier_id:
             request["shipCompanyId"] = int(service.carrier_id)

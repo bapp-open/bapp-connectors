@@ -57,6 +57,12 @@ manifest = ProviderManifest(
             SettingsField(name="fulfillment", label="Expediere", field_type=FieldType.SELECT, default="self",
                           choices=["self", "temu_label"],
                           help_text="self = AWB propriu confirmat la Temu; temu_label = etichetă cumpărată prin Temu."),
+            SettingsField(name="label_logistics_type", label="Etichetă Temu: predarea coletului", field_type=FieldType.SELECT,
+                          default="dropoff", choices=["dropoff", "pickup", "any"],
+                          help_text="dropoff = îl duceți la punctul curierului; pickup = curierul vine la depozit "
+                                    "(Temu cere rezervarea unui interval); any = oricare. Dintre cele potrivite se ia cel mai ieftin."),
+            SettingsField(name="label_carrier", label="Etichetă Temu: curier preferat", field_type=FieldType.STR, default="",
+                          required=False, help_text="Ex. „FAN Courier”. Gol = oricare curier oferit de Temu."),
             SettingsField(name="warehouse_id", label="Depozit Temu", field_type=FieldType.STR, default="",
                           help_text="Gol = depozitul implicit al magazinului."),
             SettingsField(name="invoice_upload", label="Încărcarea facturii", field_type=FieldType.SELECT, default="nightly",

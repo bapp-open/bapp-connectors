@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from bapp_connectors.core.capabilities import ShippingService
 from bapp_connectors.providers.shop.temu.adapter import LABEL_DOCUMENT_TYPE, TemuShopAdapter
 from tests.shop.temu.conftest import CREDS, ok
@@ -161,3 +163,58 @@ def test_get_awb_pdf_downloads_signed_url(fake):
 
 def test_shipping_service_dto_is_plain():
     assert ShippingService(service_id="7", name="x").carrier_id == ""
+
+
+# live 2026-11-10 (RO): without the package Temu answers 7000000 BUSINESS_SERVICE_ERROR; with grams it answers
+# 55015 "use metric units for package (use cm for dimension, use kg for weight)"
+PACKAGE_FIELDS = ("weight", "weightUnit", "length", "width", "height", "dimensionUnit")
+LIVE_SERVICES = {"onlineChannelDtoList": [
+    {"channelId": 522565773012992, "shipCompanyId": 325463733, "shippingCompanyName": "FAN Courier",
+     "shipLogisticsType": "Pickup", "estimatedAmount": "1,89€", "estimatedCurrencyCode": "EUR"},
+    {"channelId": 522542792421376, "shipCompanyId": 325463733, "shippingCompanyName": "FAN Courier",
+     "shipLogisticsType": "Dropoff", "estimatedAmount": "1,89€", "estimatedCurrencyCode": "EUR"},
+    {"channelId": 522804009480192, "shipCompanyId": 1, "shippingCompanyName": "GLS Romania",
+     "shipLogisticsType": "Pick up", "estimatedAmount": "2,32€", "estimatedCurrencyCode": "EUR"},
+], "unavailableChannelDtoList": []}
+
+
+def test_shipping_services_send_the_package_in_kg_and_cm(fake):
+    adapter = _adapter(fake, default_weight_g=100, default_length_cm=10, default_width_cm=20, default_height_cm=30)
+    detail = load("order_detail.json")
+    fake.add("POST", "openapi/router", _router(detail, {"bg.logistics.shippingservices.get": LIVE_SERVICES}))
+    order_sn = detail["parentOrderMap"]["parentOrderSn"]
+    adapter.list_shipping_services(order_sn, "WH-1", package={"weight_g": 1250, "length_cm": 31, "width_cm": 31, "height_cm": 2})
+    body = fake.last_call().kwargs["json"]
+    assert {k: body[k] for k in PACKAGE_FIELDS} == {"weight": "1.25", "weightUnit": "kg", "length": "31", "width": "31",
+                                                   "height": "2", "dimensionUnit": "cm"}
+    adapter.list_shipping_services(order_sn, "WH-1")            # no package: the connection defaults
+    body = fake.last_call().kwargs["json"]
+    assert {k: body[k] for k in PACKAGE_FIELDS} == {"weight": "0.1", "weightUnit": "kg", "length": "10", "width": "20",
+                                                   "height": "30", "dimensionUnit": "cm"}
+
+
+def test_shipping_services_carry_the_price_and_the_handover_type(fake):
+    adapter = _adapter(fake)
+    detail = load("order_detail.json")
+    fake.add("POST", "openapi/router", _router(detail, {"bg.logistics.shippingservices.get": LIVE_SERVICES}))
+    services = adapter.list_shipping_services(detail["parentOrderMap"]["parentOrderSn"], "WH-1")
+    assert [(s.name, s.cost, s.currency, s.extra["logistics_type"]) for s in services] == [
+        ("FAN Courier", Decimal("1.89"), "EUR", "pickup"), ("FAN Courier", Decimal("1.89"), "EUR", "dropoff"),
+        ("GLS Romania", Decimal("2.32"), "EUR", "pickup")]
+
+
+def test_create_shipment_sends_the_package_too(fake):
+    adapter = _adapter(fake)
+    detail = load("order_detail.json")
+    fake.add("POST", "openapi/router", _router(detail, {
+        "bg.logistics.shippingservices.get": LIVE_SERVICES,
+        "bg.logistics.shipment.create": {"packageSnList": ["PK-NEW"]},
+    }))
+    package = {"weight_g": 500, "length_cm": 30, "width_cm": 20, "height_cm": 10}
+    adapter.create_shipment(detail["parentOrderMap"]["parentOrderSn"], "522542792421376", "WH-1", package=package)
+    [req] = fake.last_call().kwargs["json"]["sendRequestList"]
+    assert {k: req[k] for k in PACKAGE_FIELDS} == {"weight": "0.5", "weightUnit": "kg", "length": "30", "width": "20",
+                                                  "height": "10", "dimensionUnit": "cm"}
+    assert req["channelId"] == 522542792421376 and req["shipLogisticsType"] == "Dropoff"
+    services_call = next(c for c in fake.calls if c.kwargs["json"]["type"] == "bg.logistics.shippingservices.get")
+    assert services_call.kwargs["json"]["weight"] == "0.5"
