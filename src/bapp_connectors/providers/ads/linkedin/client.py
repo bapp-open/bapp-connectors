@@ -13,15 +13,30 @@ over-encode, so query strings are built manually and appended to the path.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from datetime import date
+from typing import TYPE_CHECKING, Annotated, Literal
 from urllib.parse import quote
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.providers.ads.linkedin.errors import check_response
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 logger = logging.getLogger(__name__)
+
+
+# Fixed metric list of the AI-agent analytics read (``analytics`` itself joins any params verbatim).
+AI_ANALYTICS_FIELDS = (
+    "impressions,clicks,costInLocalCurrency,externalWebsiteConversions,landingPageClicks,"
+    "totalEngagements,videoViews,oneClickLeads,dateRange,pivotValues"
+)
+AnalyticsPivot = Literal["ACCOUNT", "CAMPAIGN_GROUP", "CAMPAIGN", "CREATIVE"]
+TimeGranularity = Literal["ALL", "DAILY", "MONTHLY"]
+
+
+def _restli_day(value: date) -> str:
+    return f"(year:{value.year},month:{value.month},day:{value.day})"
 
 
 def encode_urn(urn: str) -> str:
@@ -75,15 +90,19 @@ class LinkedInAdsClient:
 
     # ── Reads ──
 
-    def list_campaign_groups(self, page_token: str | None = None, page_size: int | None = None) -> dict:
+    @ai_method("read", "List the ad account's campaign groups. Paginate with metadata.nextPageToken.")
+    def list_campaign_groups(
+        self, page_token: Annotated[str, "free_text"] | None = None, page_size: int | None = None
+    ) -> dict:
         """GET the adCampaignGroups search finder for the account."""
         query = self._with_paging("q=search", page_token, page_size)
         return self._get(self._account_path(f"adCampaignGroups?{query}"))
 
+    @ai_method("read", "List the ad account's campaigns, optionally of one campaign group (its URN).")
     def list_campaigns(
         self,
         campaign_group_urn: str | None = None,
-        page_token: str | None = None,
+        page_token: Annotated[str, "free_text"] | None = None,
         page_size: int | None = None,
     ) -> dict:
         """GET the adCampaigns search finder, optionally filtered to one campaign group."""
@@ -93,10 +112,11 @@ class LinkedInAdsClient:
         query = self._with_paging(query, page_token, page_size)
         return self._get(self._account_path(f"adCampaigns?{query}"))
 
+    @ai_method("read", "List the ad account's creatives, optionally of one campaign (its URN).")
     def list_creatives(
         self,
         campaign_urn: str | None = None,
-        page_token: str | None = None,
+        page_token: Annotated[str, "free_text"] | None = None,
         page_size: int | None = None,
     ) -> dict:
         """GET the creatives criteria finder, optionally filtered to one campaign."""
@@ -106,12 +126,15 @@ class LinkedInAdsClient:
         query = self._with_paging(query, page_token, page_size)
         return self._get(self._account_path(f"creatives?{query}"))
 
+    @ai_method("read", "Get one campaign group by its numeric ID.")
     def get_campaign_group(self, campaign_group_id: str) -> dict:
         return self._get(self._account_path(f"adCampaignGroups/{campaign_group_id}"))
 
+    @ai_method("read", "Get one campaign by its numeric ID.")
     def get_campaign(self, campaign_id: str) -> dict:
         return self._get(self._account_path(f"adCampaigns/{campaign_id}"))
 
+    @ai_method("read", "Get one creative by its URN (urn:li:sponsoredCreative:...).")
     def get_creative(self, creative_urn: str) -> dict:
         """GET one creative — creatives are addressed by their (percent-encoded) URN."""
         return self._get(self._account_path(f"creatives/{encode_urn(creative_urn)}"))
@@ -129,12 +152,15 @@ class LinkedInAdsClient:
         check_response(response)
         return str(response.headers.get("x-restli-id", ""))
 
+    @ai_method("write", "Create a campaign group in the ad account.")
     def create_campaign_group(self, payload: dict) -> str:
         return self._create(self._account_path("adCampaignGroups"), payload)
 
+    @ai_method("write", "Create a campaign in the ad account.")
     def create_campaign(self, payload: dict) -> str:
         return self._create(self._account_path("adCampaigns"), payload)
 
+    @ai_method("write", "Create a creative in the ad account.")
     def create_creative(self, payload: dict) -> str:
         return self._create(self._account_path("creatives"), payload)
 
@@ -147,17 +173,21 @@ class LinkedInAdsClient:
             headers=self._headers({"X-RestLi-Method": "PARTIAL_UPDATE"}),
         )
 
+    @ai_method("write", "Update fields of a campaign group.")
     def update_campaign_group(self, campaign_group_id: str, fields: dict) -> None:
         self._partial_update(self._account_path(f"adCampaignGroups/{campaign_group_id}"), fields)
 
+    @ai_method("write", "Update fields of a campaign.")
     def update_campaign(self, campaign_id: str, fields: dict) -> None:
         self._partial_update(self._account_path(f"adCampaigns/{campaign_id}"), fields)
 
+    @ai_method("write", "Update fields of a creative.")
     def update_creative(self, creative_urn: str, fields: dict) -> None:
         self._partial_update(self._account_path(f"creatives/{encode_urn(creative_urn)}"), fields)
 
     # ── Account & analytics ──
 
+    @ai_method("read", "The connected LinkedIn ad account: name, status, currency, type.")
     def get_account(self) -> dict:
         return self._get(f"adAccounts/{self.account_id}")
 
@@ -182,3 +212,33 @@ class LinkedInAdsClient:
         """
         query = "&".join(f"{key}={value}" for key, value in params.items())
         return self._get(f"adAnalytics?{query}")
+
+    @ai_method(
+        "read",
+        "Ad analytics of the ad account (impressions, clicks, spend, conversions, engagement) between two "
+        "dates (YYYY-MM-DD), one row per 'pivot' entity, optionally only for one campaign group or campaign "
+        "(numeric IDs).",
+    )
+    def get_analytics_report(
+        self,
+        start_date: date,
+        end_date: date | None = None,
+        pivot: AnalyticsPivot = "CAMPAIGN",
+        time_granularity: TimeGranularity = "ALL",
+        campaign_group_id: str | None = None,
+        campaign_id: str | None = None,
+    ) -> dict:
+        end = end_date or date.today()
+        params: dict = {
+            "q": "analytics",
+            "pivot": pivot,
+            "dateRange": f"(start:{_restli_day(start_date)},end:{_restli_day(end)})",
+            "timeGranularity": time_granularity,
+            "accounts": f"List({encode_urn(self.account_urn)})",
+            "fields": AI_ANALYTICS_FIELDS,
+        }
+        if campaign_group_id:
+            params["campaignGroups"] = f"List({encode_urn(f'urn:li:sponsoredCampaignGroup:{campaign_group_id}')})"
+        if campaign_id:
+            params["campaigns"] = f"List({encode_urn(f'urn:li:sponsoredCampaign:{campaign_id}')})"
+        return self.analytics(params)

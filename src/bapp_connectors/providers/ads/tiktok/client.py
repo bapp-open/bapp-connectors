@@ -16,12 +16,30 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.providers.ads.tiktok.errors import check_response
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 logger = logging.getLogger(__name__)
+
+# Query keys an AI agent may pass to ``get_report``. ``advertiser_id`` is left out: the client sets it.
+AI_REPORT_KEYS = (
+    "report_type",
+    "data_level",
+    "dimensions",
+    "metrics",
+    "start_date",
+    "end_date",
+    "query_lifetime",
+    "filtering",
+    "order_field",
+    "order_type",
+    "page",
+    "page_size",
+    "service_type",
+)
 
 
 class TikTokAdsClient:
@@ -73,6 +91,7 @@ class TikTokAdsClient:
 
     # ── Campaigns ──
 
+    @ai_method("read", "List the advertiser's campaigns, optionally filtered by campaign IDs.")
     def get_campaigns(self, page: int = 1, page_size: int = 20, campaign_ids: list[str] | None = None) -> dict:
         """campaign/get/ — list campaigns, optionally filtered by IDs."""
         params: dict = {"page": page, "page_size": page_size}
@@ -80,14 +99,17 @@ class TikTokAdsClient:
             params["filtering"] = {"campaign_ids": campaign_ids}
         return self._get("campaign/get/", params)
 
+    @ai_method("write", "Create a campaign.")
     def create_campaign(self, payload: dict) -> dict:
         """campaign/create/ — returns {"campaign_id": ...}."""
         return self._post("campaign/create/", payload)
 
+    @ai_method("write", "Update a campaign (payload includes campaign_id).")
     def update_campaign(self, payload: dict) -> dict:
         """campaign/update/ — payload must include campaign_id."""
         return self._post("campaign/update/", payload)
 
+    @ai_method("write", "Enable, disable or delete campaigns.")
     def update_campaign_status(self, campaign_ids: list[str], operation_status: str) -> dict:
         """campaign/status/update/ — operation_status is ENABLE, DISABLE, or DELETE."""
         return self._post(
@@ -97,6 +119,7 @@ class TikTokAdsClient:
 
     # ── Ad groups ──
 
+    @ai_method("read", "List the advertiser's ad groups, optionally of one campaign or by ad group IDs.")
     def get_adgroups(
         self,
         page: int = 1,
@@ -115,14 +138,17 @@ class TikTokAdsClient:
             params["filtering"] = filtering
         return self._get("adgroup/get/", params)
 
+    @ai_method("write", "Create an ad group.")
     def create_adgroup(self, payload: dict) -> dict:
         """adgroup/create/ — returns {"adgroup_id": ...}."""
         return self._post("adgroup/create/", payload)
 
+    @ai_method("write", "Update an ad group (payload includes adgroup_id).")
     def update_adgroup(self, payload: dict) -> dict:
         """adgroup/update/ — payload must include adgroup_id."""
         return self._post("adgroup/update/", payload)
 
+    @ai_method("write", "Enable, disable or delete ad groups.")
     def update_adgroup_status(self, adgroup_ids: list[str], operation_status: str) -> dict:
         """adgroup/status/update/ — operation_status is ENABLE, DISABLE, or DELETE."""
         return self._post(
@@ -132,6 +158,7 @@ class TikTokAdsClient:
 
     # ── Ads ──
 
+    @ai_method("read", "List the advertiser's ads, optionally of one ad group or by ad IDs.")
     def get_ads(
         self,
         page: int = 1,
@@ -150,14 +177,17 @@ class TikTokAdsClient:
             params["filtering"] = filtering
         return self._get("ad/get/", params)
 
+    @ai_method("write", "Create ads.")
     def create_ad(self, payload: dict) -> dict:
         """ad/create/ — returns {"ad_ids": [...], "creatives": [...]}."""
         return self._post("ad/create/", payload)
 
+    @ai_method("write", "Update ads (creatives carry ad_id).")
     def update_ad(self, payload: dict) -> dict:
         """ad/update/ — payload carries creatives with ad_id."""
         return self._post("ad/update/", payload)
 
+    @ai_method("write", "Enable, disable or delete ads.")
     def update_ad_status(self, ad_ids: list[str], operation_status: str) -> dict:
         """ad/status/update/ — operation_status is ENABLE, DISABLE, or DELETE."""
         return self._post(
@@ -177,6 +207,14 @@ class TikTokAdsClient:
 
     # ── Reporting ──
 
+    @ai_method(
+        "read",
+        "Synchronous integrated report. params: report_type (BASIC), data_level (AUCTION_ADVERTISER, "
+        "AUCTION_CAMPAIGN, AUCTION_ADGROUP, AUCTION_AD), dimensions (list, e.g. campaign_id, stat_time_day), "
+        "metrics (list, e.g. spend, impressions, clicks, ctr, cpc, cpm, conversion), start_date, end_date "
+        "(YYYY-MM-DD), optional filtering, page, page_size.",
+        allowed_keys={"params": AI_REPORT_KEYS},
+    )
     def get_report(self, params: dict) -> dict:
         """report/integrated/get/ — synchronous integrated report."""
         return self._get("report/integrated/get/", params)

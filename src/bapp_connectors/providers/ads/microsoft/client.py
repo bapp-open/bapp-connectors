@@ -25,6 +25,7 @@ import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING
 from xml.sax.saxutils import escape
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import ProviderError
 from bapp_connectors.providers.ads.microsoft.errors import classify_soap_fault
 
@@ -212,6 +213,7 @@ class MicrosoftAdsClient:
 
     # ── Campaigns ──
 
+    @ai_method("read", "List all campaigns of the connected Microsoft Advertising account.")
     def get_campaigns(self) -> list[dict]:
         """GetCampaignsByAccountId — all campaigns in the account."""
         body_xml = (
@@ -234,6 +236,7 @@ class MicrosoftAdsClient:
             for el in find_all(body, "Campaign")
         ]
 
+    @ai_method("write", "Create campaigns in the account.")
     def add_campaigns(self, campaigns: list[dict]) -> list[str]:
         """AddCampaigns — returns the new campaign IDs."""
         items = "".join(f"<Campaign>{_fields_xml(c, CAMPAIGN_FIELD_ORDER)}</Campaign>" for c in campaigns)
@@ -246,6 +249,7 @@ class MicrosoftAdsClient:
         body = self._call("AddCampaigns", body_xml)
         return self._parse_ids(body, "CampaignIds")
 
+    @ai_method("write", "Update campaigns (each with its Id).")
     def update_campaigns(self, campaigns: list[dict]) -> None:
         """UpdateCampaigns — each dict must include ``Id``."""
         items = "".join(f"<Campaign>{_fields_xml(c, CAMPAIGN_FIELD_ORDER)}</Campaign>" for c in campaigns)
@@ -259,6 +263,7 @@ class MicrosoftAdsClient:
 
     # ── Ad groups ──
 
+    @ai_method("read", "List the ad groups of one campaign.")
     def get_ad_groups(self, campaign_id: str) -> list[dict]:
         """GetAdGroupsByCampaignId — all ad groups in one campaign."""
         body_xml = (
@@ -282,6 +287,7 @@ class MicrosoftAdsClient:
             )
         return groups
 
+    @ai_method("write", "Create ad groups in a campaign.")
     def add_ad_groups(self, campaign_id: str, ad_groups: list[dict]) -> list[str]:
         """AddAdGroups — returns the new ad group IDs."""
         items = "".join(f"<AdGroup>{_fields_xml(g, AD_GROUP_FIELD_ORDER)}</AdGroup>" for g in ad_groups)
@@ -294,6 +300,7 @@ class MicrosoftAdsClient:
         body = self._call("AddAdGroups", body_xml)
         return self._parse_ids(body, "AdGroupIds")
 
+    @ai_method("write", "Update ad groups of a campaign (each with its Id).")
     def update_ad_groups(self, campaign_id: str, ad_groups: list[dict]) -> None:
         """UpdateAdGroups — each dict must include ``Id``."""
         items = "".join(f"<AdGroup>{_fields_xml(g, AD_GROUP_FIELD_ORDER)}</AdGroup>" for g in ad_groups)
@@ -307,6 +314,7 @@ class MicrosoftAdsClient:
 
     # ── Ads ──
 
+    @ai_method("read", "List the ads (responsive search, expanded text, text) of one ad group.")
     def get_ads(self, ad_group_id: str) -> list[dict]:
         """GetAdsByAdGroupId — responsive search, expanded text, and text ads in one ad group."""
         ad_types = "".join(f"<AdType>{t}</AdType>" for t in AD_TYPES)
@@ -352,6 +360,7 @@ class MicrosoftAdsClient:
             "Text": text_of(el, "Text") if legacy else "",
         }
 
+    @ai_method("write", "Create responsive search ads in an ad group.")
     def add_ads(self, ad_group_id: str, ads: list[dict]) -> list[str]:
         """AddAds — always sends responsive search ads. Returns the new ad IDs."""
         items = "".join(
@@ -363,6 +372,7 @@ class MicrosoftAdsClient:
         body = self._call("AddAds", body_xml)
         return self._parse_ids(body, "AdIds")
 
+    @ai_method("write", "Update responsive search ads of an ad group (each with its Id).")
     def update_ads(self, ad_group_id: str, ads: list[dict]) -> None:
         """UpdateAds — each dict must include ``Id``."""
         items = "".join(
