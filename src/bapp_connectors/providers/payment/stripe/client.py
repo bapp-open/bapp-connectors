@@ -7,6 +7,7 @@ Stripe accepts form-encoded POST bodies by default.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from bapp_connectors.core.ai import ai_method
@@ -14,17 +15,44 @@ from bapp_connectors.core.ai import ai_method
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
-# Fields an AI agent never receives. A PaymentIntent's (or Checkout Session's) client_secret, together
-# with the account's publishable key (public by design), confirms or reads that object from a browser.
+# What an AI agent never receives from Stripe. A PaymentIntent's / SetupIntent's / legacy Source's
+# client_secret, together with the account's publishable key (public by design), confirms or reads
+# that object from a browser. It travels as a ``client_secret`` field and also inside strings:
+# ``next_action.redirect_to_url.url`` (``payment_intent_client_secret=...``),
+# ``next_action.use_stripe_sdk.stripe_js`` (``client_secret=...``), a Source's ``redirect.url``.
+# BAPP's MCP layer already masks keys named like ``secret``; this is for the strings, for the
+# expand-free signatures, and for consumers of the marks other than BAPP.
 AI_REDACTED_FIELDS = frozenset({"client_secret"})
+# Of ``next_action`` (3-D Secure / redirect instructions, all of them carrying the secret) only the
+# kind is kept.
+AI_NEXT_ACTION_KEPT = frozenset({"type"})
+# Secret values wherever they appear in a string: intent/source client secrets, secret and
+# restricted API keys, webhook signing secrets. Publishable keys (pk_) are public and stay.
+AI_SECRET_PATTERN = re.compile(
+    r"src_client_secret_[A-Za-z0-9]+"
+    r"|[A-Za-z0-9]+_[A-Za-z0-9]+_secret_[A-Za-z0-9]+"
+    r"|\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]+"
+    r"|\bwhsec_[A-Za-z0-9]+"
+)
+AI_REDACTED_VALUE = "[redacted]"
 
 
 def _redacted(obj: Any) -> Any:
-    """``obj`` with every ``AI_REDACTED_FIELDS`` key removed, at any depth."""
+    """``obj`` without ``AI_REDACTED_FIELDS`` keys, with ``next_action`` cut to its type and every
+    secret-looking substring of a string replaced, at any depth."""
     if isinstance(obj, dict):
-        return {k: _redacted(v) for k, v in obj.items() if k not in AI_REDACTED_FIELDS}
+        out = {}
+        for k, v in obj.items():
+            if k in AI_REDACTED_FIELDS:
+                continue
+            if k == "next_action" and isinstance(v, dict):
+                v = {nk: nv for nk, nv in v.items() if nk in AI_NEXT_ACTION_KEPT}
+            out[k] = _redacted(v)
+        return out
     if isinstance(obj, list):
         return [_redacted(v) for v in obj]
+    if isinstance(obj, str):
+        return AI_SECRET_PATTERN.sub(AI_REDACTED_VALUE, obj)
     return obj
 
 
@@ -214,7 +242,6 @@ class StripeApiClient:
                 data[f"metadata[{key}]"] = value
         return self._call("POST", "customers", data=data)
 
-    @ai_method("read", "One customer: name, email, address, metadata.")
     def get_customer(self, customer_id: str) -> dict:
         """Retrieve a Stripe customer by ID."""
         return self._call("GET", f"customers/{customer_id}")
@@ -359,7 +386,12 @@ class StripeApiClient:
 
     # ── Agent reads ──
     # The raw getters above keep their full responses for the adapter. An agent gets these instead:
-    # no client_secret, and no ``expand`` (expanding nested objects would bring a client_secret back).
+    # client secrets scrubbed (see ``_redacted``), and no ``expand`` (expanding nested objects would
+    # bring a client_secret back).
+
+    @ai_method("read", "One customer: name, email, address, metadata (no client secrets).")
+    def get_customer_redacted(self, customer_id: str) -> dict:
+        return _redacted(self.get_customer(customer_id))
 
     @ai_method("read", "One payment intent: status, amount, currency, customer, latest charge (no client secret).")
     def get_payment_intent_redacted(self, payment_intent_id: str) -> dict:

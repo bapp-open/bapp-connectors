@@ -39,7 +39,7 @@ REVIEWED_READ_METHODS: dict[str, set[str]] = {
     },
     "stripe": {
         "get_charge_redacted",
-        "get_customer",
+        "get_customer_redacted",
         "get_payout",
         "get_payment_intent_redacted",
         "get_subscription",
@@ -68,6 +68,7 @@ UNMARKED_ON_PURPOSE: dict[tuple[str, str], str] = {
     ("stripe", "get_payment_intent"): "response carries client_secret; agent uses get_payment_intent_redacted",
     ("stripe", "list_payment_intents"): "responses carry client_secret; agent uses list_payment_intents_redacted",
     ("stripe", "list_balance_transactions"): "expand[] can pull a client_secret in; agent uses the _redacted one",
+    ("stripe", "get_customer"): "legacy sources carry client_secret / redirect URLs; agent uses get_customer_redacted",
     ("stripe", "get_charge"): "expand[] can pull a client_secret in; agent uses get_charge_redacted",
     ("stripe", "update_subscription"): "**data posted as-is",
     ("stripe", "update_customer"): "**data posted as-is",
@@ -153,3 +154,89 @@ def test_stripe_redacted_reads_send_no_expand():
     for call in http.call.call_args_list:
         params = call.kwargs.get("params") or {}
         assert not any(k.startswith("expand") for k in params), call
+
+
+_PI_SECRET = "pi_3Abc123_secret_XyZ789"
+_REQUIRES_ACTION_PI = {
+    "id": "pi_3Abc123",
+    "object": "payment_intent",
+    "status": "requires_action",
+    "client_secret": _PI_SECRET,
+    "next_action": {
+        "type": "redirect_to_url",
+        "redirect_to_url": {
+            "return_url": "https://shop.example.com/return",
+            "url": "https://hooks.stripe.com/3d_secure_2/hosted?merchant=acct_1&payment_intent=pi_3Abc123"
+            f"&payment_intent_client_secret={_PI_SECRET}&publishable_key=pk_test_abc&source=payatt_1",
+        },
+    },
+}
+_SDK_PI = {
+    "id": "pi_3Abc123",
+    "status": "requires_action",
+    "next_action": {
+        "type": "use_stripe_sdk",
+        "use_stripe_sdk": {
+            "type": "three_d_secure_redirect",
+            "stripe_js": f"https://hooks.stripe.com/redirect/authenticate/src_1?client_secret={_PI_SECRET}"
+            "&source_redirect_slug=test_x",
+        },
+    },
+}
+
+
+@pytest.mark.parametrize("pi", [_REQUIRES_ACTION_PI, _SDK_PI], ids=["redirect_to_url", "use_stripe_sdk"])
+def test_stripe_redacted_payment_intent_drops_next_action_secrets(pi):
+    client, _http = _stripe_client(pi)
+    out = client.get_payment_intent_redacted("pi_3Abc123")
+    assert "_secret_" not in repr(out)
+    assert out["next_action"] == {"type": pi["next_action"]["type"]}
+    assert out["status"] == "requires_action"
+
+    client, _http = _stripe_client({"data": [pi], "has_more": False})
+    assert "_secret_" not in repr(client.list_payment_intents_redacted())
+
+
+def test_stripe_redaction_scrubs_secret_strings_anywhere():
+    from bapp_connectors.providers.payment.stripe.client import _redacted
+
+    data = {
+        "description": f"retry {_PI_SECRET} please",
+        "notes": ["seti_1Ab_secret_Cd2", "src_client_secret_Q9w8e7", "sk_live_51Hxyz", "rk_test_51Habc", "whsec_9f8e"],
+        "publishable": "pk_live_51Hpub",
+        "plain": "pi_3Abc123",
+    }
+    out = _redacted(data)
+    assert out["description"] == "retry [redacted] please"
+    assert out["notes"] == ["[redacted]"] * 5
+    assert out["publishable"] == "pk_live_51Hpub"
+    assert out["plain"] == "pi_3Abc123"
+
+
+def test_stripe_customer_redacted_scrubs_legacy_sources():
+    customer = {
+        "id": "cus_1",
+        "email": "a@example.com",
+        "sources": {
+            "data": [
+                {
+                    "id": "src_1",
+                    "object": "source",
+                    "client_secret": "src_client_secret_Abc123",
+                    "redirect": {
+                        "url": "https://hooks.stripe.com/redirect/authenticate/src_1"
+                        "?client_secret=src_client_secret_Abc123",
+                        "status": "pending",
+                    },
+                }
+            ]
+        },
+    }
+    client, http = _stripe_client(customer)
+    out = client.get_customer_redacted("cus_1")
+    assert "client_secret_" not in repr(out)
+    assert "client_secret" not in out["sources"]["data"][0]
+    assert out["email"] == "a@example.com"
+    # the raw method is unchanged for existing callers
+    assert client.get_customer("cus_1") == customer
+    assert http.call.call_args.args == ("GET", "customers/cus_1")
