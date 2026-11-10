@@ -83,12 +83,22 @@ def _dummy_credentials(manifest) -> dict:
     return creds
 
 
+class NetworkAttempt(BaseException):  # BaseException so `except Exception` cannot swallow it
+    """Raised on any connection attempt inside ``no_network()``."""
+
+
 @contextlib.contextmanager
-def no_network() -> Iterator[None]:
-    """Fail loudly if anything opens a connection (an adapter must not call out in __init__)."""
+def no_network() -> Iterator[list]:
+    """Fail if anything tries to open a connection (an adapter must not call out in __init__).
+
+    Every attempt is recorded and raises ``NetworkAttempt`` (a BaseException); the block also
+    fails on exit if an attempt happened, so even a bare ``except:`` around the call cannot hide it.
+    """
+    attempts: list = []
 
     def refuse(*args, **kwargs):
-        raise AssertionError(f"network access while building an adapter: {args!r}")
+        attempts.append(args)
+        raise NetworkAttempt(f"network access while building an adapter: {args!r}")
 
     saved = (socket.socket.connect, socket.socket.connect_ex, socket.create_connection, socket.getaddrinfo)
     socket.socket.connect = refuse
@@ -96,9 +106,12 @@ def no_network() -> Iterator[None]:
     socket.create_connection = refuse
     socket.getaddrinfo = refuse
     try:
-        yield
+        yield attempts
+    except NetworkAttempt:
+        pass  # recorded; reported as an AssertionError below
     finally:
         socket.socket.connect, socket.socket.connect_ex, socket.create_connection, socket.getaddrinfo = saved
+    assert not attempts, f"network access while building an adapter: {attempts!r}"
 
 
 @functools.cache
@@ -119,6 +132,34 @@ def read_methods(family: str, provider: str) -> Iterator[tuple[str, typing.Calla
     for name, info in ai_methods(cls).items():
         if info.kind == "read":
             yield name, getattr(cls, name), info
+
+
+_BINARY_TYPES = (bytes, bytearray, memoryview)
+
+
+def returns_binary(fn) -> bool:
+    """Whether ``fn``'s return annotation mentions bytes or a raw response anywhere, as a string
+    (``from __future__ import annotations``) or as evaluated types, generics included
+    (``tuple[bytes, str]``, ``Optional[bytes]``, ``list[bytes]``)."""
+    returns = inspect.signature(fn).return_annotation
+    if returns is inspect.Signature.empty:
+        return False
+    text = returns if isinstance(returns, str) else str(returns)
+    if BYTES_RETURN.search(text):
+        return True
+    try:
+        resolved = typing.get_type_hints(fn).get("return")
+    except Exception:
+        return False
+
+    def walk(tp) -> bool:
+        if isinstance(tp, type) and (issubclass(tp, _BINARY_TYPES) or tp.__name__ == "Response"):
+            return True
+        if BYTES_RETURN.search(str(tp)):
+            return True
+        return any(walk(arg) for arg in typing.get_args(tp))
+
+    return walk(resolved)
 
 
 def _dict_typed(annotation) -> bool:
@@ -187,9 +228,9 @@ def check_no_bytes_return(family: str, provider: str, reviewed: Reviewed, review
     """No marked method (read or write) returns bytes or a raw response."""
     cls = client_cls(family, provider)
     for name, info in ai_methods(cls).items():
-        returns = inspect.signature(getattr(cls, name)).return_annotation
-        text = returns if isinstance(returns, str) else getattr(returns, "__name__", str(returns))
-        assert not BYTES_RETURN.search(text), f"{family}.{provider}.{name} ({info.kind}) returns {text}"
+        fn = getattr(cls, name)
+        returns = inspect.signature(fn).return_annotation
+        assert not returns_binary(fn), f"{family}.{provider}.{name} ({info.kind}) returns {returns}"
 
 
 def check_materialised_data(family: str, provider: str, reviewed: Reviewed, reviewed_extra: ReviewedExtra) -> None:

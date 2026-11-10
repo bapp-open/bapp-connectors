@@ -129,3 +129,39 @@ def test_sameday_awb_list_params_cannot_override_paging_or_transport():
 
     allowed = ai_methods(SamedayApiClient)["get_awb_list"].allowed_keys["params"]
     assert set(allowed) == {"startTimestamp", "endTimestamp", "isPrinted"}
+
+
+# ── colete_online: the environment (staging / production) belongs to the connection ──
+
+
+def test_colete_marked_methods_take_no_staging_argument():
+    import inspect
+
+    from bapp_connectors.providers.courier.colete_online.client import ColeteOnlineApiClient
+
+    for name in ai_methods(ColeteOnlineApiClient):
+        params = inspect.signature(getattr(ColeteOnlineApiClient, name)).parameters
+        assert "staging" not in params, f"colete_online.{name} lets the caller pick the environment"
+
+
+@pytest.mark.parametrize(("staging", "prefix"), [(True, "staging/"), (False, "")])
+def test_colete_uses_the_connection_environment(staging, prefix):
+    from bapp_connectors.providers.courier.colete_online.adapter import ColeteOnlineCourierAdapter
+
+    class Http:
+        def __init__(self):
+            self.paths = []
+
+        def call(self, method, path, **kwargs):
+            if path.startswith("https://auth."):
+                return {"access_token": "t", "expires_in": 3600}
+            self.paths.append((method, path))
+            return {}
+
+    http = Http()
+    adapter = ColeteOnlineCourierAdapter(
+        credentials={"client_id": "i", "client_secret": "s"}, http_client=http, config={"staging": staging}
+    )
+    adapter.client.get_order_status("ABC")
+    adapter.client.create_order({"sender": {}})
+    assert http.paths == [("GET", f"{prefix}order/status/ABC"), ("POST", f"{prefix}order")]

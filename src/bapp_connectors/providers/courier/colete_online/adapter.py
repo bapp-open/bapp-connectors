@@ -58,6 +58,7 @@ class ColeteOnlineCourierAdapter(CourierPort):
             http_client=http_client,
             client_id=credentials.get("client_id", ""),
             client_secret=credentials.get("client_secret", ""),
+            staging=self._staging,
         )
 
     # ── BasePort ──
@@ -80,14 +81,14 @@ class ColeteOnlineCourierAdapter(CourierPort):
 
     def generate_awb(self, shipment: Shipment) -> AWBLabel:
         payload = build_order_payload(shipment)
-        response = self.client.create_order(payload, staging=self._staging)
+        response = self.client.create_order(payload)
         label = awb_label_from_co(response)
 
         # Attempt to download the PDF label
         unique_id = label.extra.get("unique_id", "")
         if unique_id:
             try:
-                pdf_bytes = self.client.download_awb(unique_id, staging=self._staging)
+                pdf_bytes = self.client.download_awb(unique_id)
                 if pdf_bytes:
                     label = label.model_copy(update={"label_pdf": pdf_bytes})
             except Exception:
@@ -96,7 +97,7 @@ class ColeteOnlineCourierAdapter(CourierPort):
         return label
 
     def get_tracking(self, tracking_number: str) -> list[TrackingEvent]:
-        response = self.client.get_order_status(tracking_number, staging=self._staging)
+        response = self.client.get_order_status(tracking_number)
         return tracking_events_from_co(response)
 
     def cancel_shipment(self, tracking_number: str) -> bool:

@@ -42,8 +42,11 @@ class ColeteOnlineApiClient:
         http_client: ResilientHttpClient,
         client_id: str,
         client_secret: str,
+        staging: bool = True,
     ):
         self.http = http_client
+        # The connection's environment: never chosen per call, so an agent cannot switch it.
+        self.staging = bool(staging)
         self._client_id = client_id
         self._client_secret = client_secret
 
@@ -108,20 +111,20 @@ class ColeteOnlineApiClient:
     # ── Orders ──
 
     @ai_method("write", "Create a shipping order (books a courier).")
-    def create_order(self, payload: dict[str, Any], staging: bool = True) -> dict:
-        """POST /staging/order or /order — create a shipping order."""
-        path = "staging/order" if staging else "order"
+    def create_order(self, payload: dict[str, Any]) -> dict:
+        """POST /staging/order or /order (per the connection) — create a shipping order."""
+        path = "staging/order" if self.staging else "order"
         return self._call("POST", path, json=payload)
 
-    @ai_method("read", "Status of an order by its unique id; staging=false for a production account.")
-    def get_order_status(self, unique_id: str, staging: bool = True) -> dict:
-        """GET /staging/order/status/{uniqueId} — get order status."""
-        path = f"staging/order/status/{unique_id}" if staging else f"order/status/{unique_id}"
+    @ai_method("read", "Status of an order by its unique id.")
+    def get_order_status(self, unique_id: str) -> dict:
+        """GET /staging/order/status/{uniqueId} or /order/status/{uniqueId} (per the connection)."""
+        path = f"staging/order/status/{unique_id}" if self.staging else f"order/status/{unique_id}"
         return self._call("GET", path)
 
-    def download_awb(self, unique_id: str, format_type: str = "A4", staging: bool = True) -> bytes:
-        """GET /staging/order/awb/{uniqueId}?formatType=A4 — download AWB label as PDF."""
-        path = f"staging/order/awb/{unique_id}" if staging else f"order/awb/{unique_id}"
+    def download_awb(self, unique_id: str, format_type: str = "A4") -> bytes:
+        """GET /staging/order/awb/{uniqueId}?formatType=A4 (per the connection) — download AWB label as PDF."""
+        path = f"staging/order/awb/{unique_id}" if self.staging else f"order/awb/{unique_id}"
         response = self.http.call(
             "GET",
             path,
