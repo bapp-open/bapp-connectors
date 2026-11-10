@@ -13,11 +13,13 @@ over-encode, so query strings are built manually and appended to the path.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from typing import TYPE_CHECKING, Annotated, Literal
 from urllib.parse import quote
 
 from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ValidationError
 from bapp_connectors.providers.ads.linkedin.errors import check_response
 
 if TYPE_CHECKING:
@@ -33,6 +35,19 @@ AI_ANALYTICS_FIELDS = (
 )
 AnalyticsPivot = Literal["ACCOUNT", "CAMPAIGN_GROUP", "CAMPAIGN", "CREATIVE"]
 TimeGranularity = Literal["ALL", "DAILY", "MONTHLY"]
+
+
+def _check_id(value: str, pattern: str, what: str) -> str:
+    """Refuse an id/URN that is not in LinkedIn's format before it reaches a path or a Restli query."""
+    if not isinstance(value, str) or not re.fullmatch(pattern, value):
+        raise ValidationError(f"{what} is not a valid LinkedIn id: {value!r}.")
+    return value
+
+
+_NUMERIC = r"[0-9]+"
+_GROUP_URN = r"urn:li:sponsoredCampaignGroup:[0-9]+"
+_CAMPAIGN_URN = r"urn:li:sponsoredCampaign:[0-9]+"
+_CREATIVE_URN = r"urn:li:sponsoredCreative:[0-9]+"
 
 
 def _restli_day(value: date) -> str:
@@ -108,6 +123,7 @@ class LinkedInAdsClient:
         """GET the adCampaigns search finder, optionally filtered to one campaign group."""
         query = "q=search"
         if campaign_group_urn:
+            _check_id(campaign_group_urn, _GROUP_URN, "campaign_group_urn")
             query += f"&search=(campaignGroup:(values:List({encode_urn(campaign_group_urn)})))"
         query = self._with_paging(query, page_token, page_size)
         return self._get(self._account_path(f"adCampaigns?{query}"))
@@ -122,21 +138,25 @@ class LinkedInAdsClient:
         """GET the creatives criteria finder, optionally filtered to one campaign."""
         query = "q=criteria"
         if campaign_urn:
+            _check_id(campaign_urn, _CAMPAIGN_URN, "campaign_urn")
             query += f"&campaigns=List({encode_urn(campaign_urn)})"
         query = self._with_paging(query, page_token, page_size)
         return self._get(self._account_path(f"creatives?{query}"))
 
     @ai_method("read", "Get one campaign group by its numeric ID.")
     def get_campaign_group(self, campaign_group_id: str) -> dict:
+        _check_id(campaign_group_id, _NUMERIC, "campaign_group_id")
         return self._get(self._account_path(f"adCampaignGroups/{campaign_group_id}"))
 
     @ai_method("read", "Get one campaign by its numeric ID.")
     def get_campaign(self, campaign_id: str) -> dict:
+        _check_id(campaign_id, _NUMERIC, "campaign_id")
         return self._get(self._account_path(f"adCampaigns/{campaign_id}"))
 
     @ai_method("read", "Get one creative by its URN (urn:li:sponsoredCreative:...).")
     def get_creative(self, creative_urn: str) -> dict:
         """GET one creative — creatives are addressed by their (percent-encoded) URN."""
+        _check_id(creative_urn, _CREATIVE_URN, "creative_urn")
         return self._get(self._account_path(f"creatives/{encode_urn(creative_urn)}"))
 
     # ── Writes ──
@@ -238,7 +258,9 @@ class LinkedInAdsClient:
             "fields": AI_ANALYTICS_FIELDS,
         }
         if campaign_group_id:
+            _check_id(campaign_group_id, _NUMERIC, "campaign_group_id")
             params["campaignGroups"] = f"List({encode_urn(f'urn:li:sponsoredCampaignGroup:{campaign_group_id}')})"
         if campaign_id:
+            _check_id(campaign_id, _NUMERIC, "campaign_id")
             params["campaigns"] = f"List({encode_urn(f'urn:li:sponsoredCampaign:{campaign_id}')})"
         return self.analytics(params)

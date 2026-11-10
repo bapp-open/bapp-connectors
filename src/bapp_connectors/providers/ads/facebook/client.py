@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import date  # noqa: TC003 -- runtime: get_type_hints on the AI reads
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ValidationError
 from bapp_connectors.providers.ads.facebook.errors import check_payload
 
 if TYPE_CHECKING:
@@ -63,6 +65,23 @@ DatePreset = Literal[
     "maximum",
 ]
 TimeIncrement = Literal["daily", "monthly", "all_days"]
+_NUMERIC_ID = re.compile(r"[0-9]+")
+
+
+def _ai_numeric_id(value: str, what: str) -> str:
+    """A Graph object id from an agent: digits only (no ``act_``, ``me``, Page or app aliases)."""
+    if not isinstance(value, str) or not _NUMERIC_ID.fullmatch(value):
+        raise ValidationError(f"{what} must be a numeric Meta id.")
+    return value
+
+
+def _ai_strip_paging(response: Any) -> Any:
+    """Drop Graph's ``paging.next``/``paging.previous`` URLs (they carry ``access_token=``); keep the cursors."""
+    if isinstance(response, dict) and isinstance(response.get("paging"), dict):
+        response["paging"] = {k: v for k, v in response["paging"].items() if k not in ("next", "previous")}
+    return response
+
+
 _TIME_INCREMENT = {"daily": "1", "monthly": "monthly", "all_days": "all_days"}
 
 
@@ -119,7 +138,15 @@ class MetaAdsClient:
     # ── AI-agent reads (fixed edges and fields) ──
 
     def _account_edge(self, edge: str, fields: str, limit: int | None, after: str | None, filtering=None) -> dict:
-        return self.list_edge(self.account_path(edge), fields=fields, limit=limit, after=after, filtering=filtering)
+        response = self.list_edge(self.account_path(edge), fields=fields, limit=limit, after=after, filtering=filtering)
+        return _ai_strip_paging(response)
+
+    def _own_object(self, object_id: str, fields: str, what: str) -> dict:
+        """GET one campaign/ad set/ad of the connected ad account; refuse an object of another account."""
+        obj = self.get_object(_ai_numeric_id(object_id, what), fields=f"{fields},account_id")
+        if str((obj or {}).get("account_id", "")) != str(self.ad_account_id):
+            raise ValidationError(f"{what} {object_id} does not belong to the connected ad account.")
+        return obj
 
     @ai_method("read", "The connected Meta ad account: name, status, currency, timezone, amount spent, spend cap.")
     def get_ad_account_info(self) -> dict:
@@ -135,14 +162,20 @@ class MetaAdsClient:
     def list_account_ad_sets(
         self, campaign_id: str | None = None, limit: int | None = None, after: Annotated[str, "free_text"] | None = None
     ) -> dict:
-        filtering = [{"field": "campaign.id", "operator": "EQUAL", "value": campaign_id}] if campaign_id else None
+        filtering = None
+        if campaign_id:
+            filtering = [
+                {"field": "campaign.id", "operator": "EQUAL", "value": _ai_numeric_id(campaign_id, "campaign_id")}
+            ]
         return self._account_edge("adsets", AI_ADSET_FIELDS, limit, after, filtering)
 
     @ai_method("read", "List the ad account's ads, optionally only those of one ad set.")
     def list_account_ads(
         self, ad_set_id: str | None = None, limit: int | None = None, after: Annotated[str, "free_text"] | None = None
     ) -> dict:
-        filtering = [{"field": "adset.id", "operator": "EQUAL", "value": ad_set_id}] if ad_set_id else None
+        filtering = None
+        if ad_set_id:
+            filtering = [{"field": "adset.id", "operator": "EQUAL", "value": _ai_numeric_id(ad_set_id, "ad_set_id")}]
         return self._account_edge("ads", AI_AD_FIELDS, limit, after, filtering)
 
     @ai_method("read", "List the ad account's ad creatives (name, title, body, image).")
@@ -157,27 +190,29 @@ class MetaAdsClient:
     ) -> dict:
         return self._account_edge("customaudiences", AI_AUDIENCE_FIELDS, limit, after)
 
-    @ai_method("read", "Get one campaign by its ID.")
+    @ai_method("read", "Get one campaign of the connected ad account by its numeric ID.")
     def get_campaign_info(self, campaign_id: str) -> dict:
-        return self.get_object(campaign_id, fields=AI_CAMPAIGN_FIELDS)
+        return self._own_object(campaign_id, AI_CAMPAIGN_FIELDS, "campaign_id")
 
-    @ai_method("read", "Get one ad set by its ID.")
+    @ai_method("read", "Get one ad set of the connected ad account by its numeric ID.")
     def get_ad_set_info(self, ad_set_id: str) -> dict:
-        return self.get_object(ad_set_id, fields=AI_ADSET_FIELDS)
+        return self._own_object(ad_set_id, AI_ADSET_FIELDS, "ad_set_id")
 
-    @ai_method("read", "Get one ad by its ID.")
+    @ai_method("read", "Get one ad of the connected ad account by its numeric ID.")
     def get_ad_info(self, ad_id: str) -> dict:
-        return self.get_object(ad_id, fields=AI_AD_FIELDS)
+        return self._own_object(ad_id, AI_AD_FIELDS, "ad_id")
 
     @ai_method(
         "read",
-        "Performance report (impressions, clicks, spend, CTR, CPC, CPM, reach, actions) of the ad account, "
-        "or of one campaign/ad set/ad when object_id is given, broken down by 'level'. Pick a date_preset or "
+        "Performance report (impressions, clicks, spend, CTR, CPC, CPM, reach, actions) of the connected ad "
+        "account, optionally only for one campaign, ad set or ad (numeric ids), broken down by 'level'. Pick a date_preset or "
         "since/until (YYYY-MM-DD); time_increment splits rows per day or month.",
     )
     def get_insights_report(
         self,
-        object_id: str | None = None,
+        campaign_id: str | None = None,
+        ad_set_id: str | None = None,
+        ad_id: str | None = None,
         level: InsightsLevel = "account",
         date_preset: DatePreset | None = None,
         since: date | None = None,
@@ -202,7 +237,19 @@ class MetaAdsClient:
             params["limit"] = limit
         if after:
             params["after"] = after
-        return self.get_insights(object_id or f"act_{self.ad_account_id}", params)
+        # Always the connected account's insights edge, narrowed by filtering (never another object's edge).
+        filtering = [
+            {"field": field, "operator": "EQUAL", "value": _ai_numeric_id(value, name)}
+            for field, value, name in (
+                ("campaign.id", campaign_id, "campaign_id"),
+                ("adset.id", ad_set_id, "ad_set_id"),
+                ("ad.id", ad_id, "ad_id"),
+            )
+            if value is not None
+        ]
+        if filtering:
+            params["filtering"] = json.dumps(filtering)
+        return _ai_strip_paging(self.get_insights(f"act_{self.ad_account_id}", params))
 
     # ── Writes ──
 

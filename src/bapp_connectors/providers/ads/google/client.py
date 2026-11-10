@@ -53,7 +53,10 @@ AI_GAQL_RESOURCES = frozenset(
     }
 )
 _GAQL_SELECT = re.compile(r"^\s*SELECT\s", re.IGNORECASE)
-_GAQL_FROM = re.compile(r"\bFROM\s+([A-Za-z_]+)", re.IGNORECASE)
+_GAQL_FROM_WORD = re.compile(r"\bFROM\b", re.IGNORECASE)
+# FROM, one resource name as a whole token, then only whitespace up to the next clause or the end
+# (no ``FROM campaign, other`` list, no ``FROM campaign2`` prefix match).
+_GAQL_FROM = re.compile(r"\bFROM\s+([A-Za-z_]+)\s*(?:$|(?<=\s)(?:WHERE|ORDER|LIMIT|PARAMETERS)\b)", re.IGNORECASE)
 # Field names that reach a secret through an attributed resource (lead-form webhook delivery).
 _GAQL_FORBIDDEN = re.compile(r"google_secret|webhook|lead_form", re.IGNORECASE)
 
@@ -65,7 +68,7 @@ def check_ai_gaql(query: str) -> str:
     if _GAQL_FORBIDDEN.search(query):
         raise ValidationError("The query may not select lead-form or webhook fields.")
     resources = _GAQL_FROM.findall(query)
-    if len(resources) != 1:
+    if len(_GAQL_FROM_WORD.findall(query)) != 1 or len(resources) != 1:
         raise ValidationError("The query must have exactly one FROM clause.")
     resource = resources[0].lower()
     if resource not in AI_GAQL_RESOURCES:

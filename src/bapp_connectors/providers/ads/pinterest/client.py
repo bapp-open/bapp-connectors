@@ -15,9 +15,11 @@ classification is handled by the HTTP layer.
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Annotated, Any
 
 from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ValidationError
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
@@ -44,6 +46,15 @@ _ANALYTICS_HELP = (
     " params: start_date, end_date (YYYY-MM-DD), columns (list, e.g. SPEND_IN_DOLLAR, IMPRESSION_1, "
     "CLICKTHROUGH_1, CTR, TOTAL_CONVERSIONS), granularity (TOTAL, DAY, HOUR, WEEK, MONTH)"
 )
+
+
+def _plain_id(value: str, what: str) -> str:
+    """An id about to go into a path: letters, digits, ``_`` and ``-`` only (real Pinterest ads ids
+    are numeric; the adapter's callers and fixtures also use short opaque ids, so digits-only would
+    change adapter behaviour). Refuses ``&``, ``%``, ``:``, ``(``, ``,`` and the like."""
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+        raise ValidationError(f"{what} is not a valid Pinterest id: {value!r}.")
+    return value
 
 
 class PinterestAdsClient:
@@ -97,7 +108,7 @@ class PinterestAdsClient:
     @ai_method("read", "Get one campaign by its ID.")
     def get_campaign(self, campaign_id: str) -> dict:
         """GET ad_accounts/{id}/campaigns/{campaign_id} — a single campaign."""
-        return self._get(self.account_path(f"campaigns/{campaign_id}"))
+        return self._get(self.account_path(f"campaigns/{_plain_id(campaign_id, 'campaign_id')}"))
 
     @ai_method("write", "Create campaigns in the ad account.")
     def create_campaigns(self, payloads: list[dict]) -> dict:
@@ -133,7 +144,7 @@ class PinterestAdsClient:
     @ai_method("read", "Get one ad group by its ID.")
     def get_ad_group(self, ad_group_id: str) -> dict:
         """GET ad_accounts/{id}/ad_groups/{ad_group_id} — a single ad group."""
-        return self._get(self.account_path(f"ad_groups/{ad_group_id}"))
+        return self._get(self.account_path(f"ad_groups/{_plain_id(ad_group_id, 'ad_group_id')}"))
 
     @ai_method("write", "Create ad groups in the ad account.")
     def create_ad_groups(self, payloads: list[dict]) -> dict:
@@ -164,7 +175,7 @@ class PinterestAdsClient:
     @ai_method("read", "Get one ad by its ID.")
     def get_ad(self, ad_id: str) -> dict:
         """GET ad_accounts/{id}/ads/{ad_id} — a single ad."""
-        return self._get(self.account_path(f"ads/{ad_id}"))
+        return self._get(self.account_path(f"ads/{_plain_id(ad_id, 'ad_id')}"))
 
     @ai_method("write", "Create ads in the ad account.")
     def create_ads(self, payloads: list[dict]) -> dict:

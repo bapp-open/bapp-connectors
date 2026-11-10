@@ -14,9 +14,9 @@ analytics with a fixed metric list). No read takes a host or API version.
 from __future__ import annotations
 
 import inspect
+import json
 from datetime import date
 from unittest.mock import MagicMock
-from urllib.parse import unquote
 
 import pytest
 
@@ -169,19 +169,19 @@ def test_dict_params_refuse_account_and_auth_keys(provider):
                 assert not key_allowed(key, patterns), (name, key)
 
 
-# ── Facebook: fixed edges and fields ──
+# ── Facebook: fixed edges and fields, pinned to the connected ad account ──
 
 
-def _meta_client():
+def _meta_client(response=None):
     from bapp_connectors.providers.ads.facebook.client import MetaAdsClient
 
     http = MagicMock()
-    http.call.return_value = {"data": []}
+    http.call.return_value = response if response is not None else {"data": []}
     return MetaAdsClient(http, ad_account_id="123"), http
 
 
 def test_facebook_reads_never_request_access_token():
-    client, http = _meta_client()
+    client, http = _meta_client({"data": [], "account_id": "123"})
     client.get_ad_account_info()
     client.list_account_campaigns(limit=5, after="abc")
     client.list_account_ad_sets(campaign_id="9")
@@ -200,26 +200,98 @@ def test_facebook_reads_never_request_access_token():
         assert "access_token" not in params.get("fields", ""), call
         assert "page" not in params.get("fields", "").split(","), call
         paths.append(path)
-    assert paths[:6] == [
+    assert paths == [
         "act_123",
         "act_123/campaigns",
         "act_123/adsets",
         "act_123/ads",
         "act_123/adcreatives",
         "act_123/customaudiences",
+        "1",
+        "2",
+        "3",
+        "act_123/insights",
     ]
-    assert paths[-1] == "act_123/insights"
 
 
-def test_facebook_insights_report_params():
+def test_facebook_insights_report_stays_on_the_account_edge():
     client, http = _meta_client()
-    client.get_insights_report(object_id="77", level="ad", date_preset="last_7d", time_increment="daily")
+    client.get_insights_report(campaign_id="77", ad_id="78", level="ad", date_preset="last_7d", time_increment="daily")
     call = http.call.call_args
-    assert call.args[1] == "77/insights"
+    assert call.args[1] == "act_123/insights"
     params = call.kwargs["params"]
     assert params["level"] == "ad"
     assert params["date_preset"] == "last_7d"
     assert params["time_increment"] == "1"
+    assert json.loads(params["filtering"]) == [
+        {"field": "campaign.id", "operator": "EQUAL", "value": "77"},
+        {"field": "ad.id", "operator": "EQUAL", "value": "78"},
+    ]
+
+
+def test_facebook_insights_report_takes_no_object_id():
+    from bapp_connectors.providers.ads.facebook.client import MetaAdsClient
+
+    assert "object_id" not in inspect.signature(MetaAdsClient.get_insights_report).parameters
+
+
+@pytest.mark.parametrize("bad", ["act_999", "me", "123abc", "1 2", "", "١٢٣"])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda c, v: c.get_campaign_info(v),
+        lambda c, v: c.get_ad_set_info(v),
+        lambda c, v: c.get_ad_info(v),
+        lambda c, v: c.get_insights_report(campaign_id=v),
+        lambda c, v: c.get_insights_report(ad_set_id=v),
+        lambda c, v: c.get_insights_report(ad_id=v),
+        lambda c, v: c.list_account_ad_sets(campaign_id=v or "x"),
+        lambda c, v: c.list_account_ads(ad_set_id=v or "x"),
+    ],
+)
+def test_facebook_refuses_non_numeric_ids(call, bad):
+    client, http = _meta_client({"account_id": "123"})
+    with pytest.raises(ValidationError):
+        call(client, bad)
+    http.call.assert_not_called()
+
+
+@pytest.mark.parametrize("method", ["get_campaign_info", "get_ad_set_info", "get_ad_info"])
+def test_facebook_object_reads_refuse_objects_of_another_account(method):
+    client, http = _meta_client({"id": "5", "name": "x", "account_id": "999"})
+    with pytest.raises(ValidationError):
+        getattr(client, method)("5")
+    assert "account_id" in http.call.call_args.kwargs["params"]["fields"].split(",")
+
+    client, _http = _meta_client({"id": "5", "name": "x"})  # no account_id at all: refused too
+    with pytest.raises(ValidationError):
+        getattr(client, method)("5")
+
+    client, _http = _meta_client({"id": "5", "name": "x", "account_id": "123"})
+    assert getattr(client, method)("5")["id"] == "5"
+
+
+def test_facebook_wrappers_drop_paging_urls_keep_cursors():
+    envelope = {
+        "data": [{"id": "1"}],
+        "paging": {
+            "cursors": {"before": "b", "after": "a"},
+            "next": "https://graph.facebook.com/v19.0/act_123/campaigns?access_token=EAAB&after=a",
+            "previous": "https://graph.facebook.com/v19.0/act_123/campaigns?access_token=EAAB&before=b",
+        },
+    }
+    for call in (
+        lambda c: c.list_account_campaigns(),
+        lambda c: c.list_account_ad_sets(),
+        lambda c: c.list_account_ads(),
+        lambda c: c.list_account_creatives(),
+        lambda c: c.list_account_custom_audiences(),
+        lambda c: c.get_insights_report(),
+    ):
+        client, _http = _meta_client(json.loads(json.dumps(envelope)))
+        out = call(client)
+        assert out["paging"] == {"cursors": {"before": "b", "after": "a"}}
+        assert "access_token" not in repr(out)
 
 
 # ── Google: GAQL allow-list ──
@@ -233,9 +305,19 @@ def _google_client():
     return GoogleAdsClient(http, developer_token="d", access_token="t", customer_id="123-456-7890"), http
 
 
-def test_google_run_report_allows_a_select_on_campaign():
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT campaign.id, metrics.clicks FROM campaign WHERE segments.date DURING LAST_7_DAYS",
+        "SELECT campaign.id FROM campaign",
+        "select ad_group.id from ad_group order by ad_group.id limit 5",
+        "SELECT campaign.id FROM campaign\nWHERE campaign.status = 'ENABLED'",
+        "SELECT customer.id FROM customer PARAMETERS include_drafts=true",
+    ],
+)
+def test_google_run_report_allows_a_select_on_one_allowed_resource(query):
     client, http = _google_client()
-    client.run_report("SELECT campaign.id, metrics.clicks FROM campaign WHERE segments.date DURING LAST_7_DAYS")
+    client.run_report(query)
     call = http.call.call_args
     assert call.args[:2] == ("POST", "customers/1234567890/googleAds:search")
 
@@ -248,6 +330,11 @@ def test_google_run_report_allows_a_select_on_campaign():
         "SELECT asset.lead_form_asset.delivery_methods FROM asset",
         "SELECT ad_group_ad_asset_view.asset FROM ad_group_ad_asset_view WHERE asset.lead_form_asset.x = 1",
         "SELECT campaign.id FROM campaign WHERE campaign.name = 'x FROM customer_user_access'",
+        "SELECT campaign.id FROM campaign, customer_user_access",
+        "SELECT campaign.id FROM campaign ,customer_user_access",
+        "SELECT campaign.id FROM campaign2",
+        "SELECT campaign.id FROM campaign_x",
+        "SELECT campaign.id FROM campaignWHERE campaign.id = 1",
         "campaign.id FROM campaign",
         "",
     ],
@@ -262,16 +349,87 @@ def test_google_run_report_refuses(query):
 # ── LinkedIn: analytics pinned to the account, fixed fields ──
 
 
-def test_linkedin_analytics_report_is_account_scoped():
+def _linkedin_client():
     from bapp_connectors.providers.ads.linkedin.client import LinkedInAdsClient
 
     http = MagicMock()
     http.call.return_value = {"elements": []}
-    client = LinkedInAdsClient(http, access_token="t", account_id="555", version="202401")
-    client.get_analytics_report(date(2026, 1, 1), date(2026, 1, 31), pivot="CAMPAIGN", campaign_id="7&x=1")
+    return LinkedInAdsClient(http, access_token="t", account_id="555", version="202401"), http
+
+
+def test_linkedin_analytics_report_is_account_scoped():
+    client, http = _linkedin_client()
+    client.get_analytics_report(date(2026, 1, 1), date(2026, 1, 31), pivot="CAMPAIGN", campaign_id="7")
     path = http.call.call_args.args[1]
     assert path.startswith("adAnalytics?q=analytics&pivot=CAMPAIGN&")
     assert "accounts=List(urn%3Ali%3AsponsoredAccount%3A555)" in path
-    assert "&x=1" not in path  # the id is percent-encoded into the URN
-    assert unquote(path).count("&x=1") == 1
+    assert "campaigns=List(urn%3Ali%3AsponsoredCampaign%3A7)" in path
     assert "dateRange=(start:(year:2026,month:1,day:1),end:(year:2026,month:1,day:31))" in path
+
+
+def test_linkedin_accepts_ids_in_its_format():
+    client, http = _linkedin_client()
+    client.get_campaign_group("11")
+    client.get_campaign("12")
+    client.get_creative("urn:li:sponsoredCreative:13")
+    client.list_campaigns(campaign_group_urn="urn:li:sponsoredCampaignGroup:11")
+    client.list_creatives(campaign_urn="urn:li:sponsoredCampaign:12")
+    client.get_analytics_report(date(2026, 1, 1), campaign_group_id="11")
+    assert http.call.call_count == 6
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda c: c.get_campaign_group("7&x=1"),
+        lambda c: c.get_campaign_group("urn:li:sponsoredCampaignGroup:7"),
+        lambda c: c.get_campaign("7,8"),
+        lambda c: c.get_campaign("(7)"),
+        lambda c: c.get_campaign("١٢"),
+        lambda c: c.get_campaign("%2Fme"),
+        lambda c: c.get_creative("13"),
+        lambda c: c.get_creative("urn:li:sponsoredCreative:13&x=1"),
+        lambda c: c.get_creative("urn:li:person:1"),
+        lambda c: c.list_campaigns(campaign_group_urn="urn:li:sponsoredCampaign:1"),
+        lambda c: c.list_creatives(campaign_urn="urn:li:sponsoredCampaign:1)"),
+        lambda c: c.get_analytics_report(date(2026, 1, 1), campaign_id="7&x=1"),
+        lambda c: c.get_analytics_report(date(2026, 1, 1), campaign_group_id="x"),
+    ],
+)
+def test_linkedin_refuses_ids_outside_its_format(call):
+    client, http = _linkedin_client()
+    with pytest.raises(ValidationError):
+        call(client)
+    http.call.assert_not_called()
+
+
+# ── Pinterest: ids in the path ──
+
+
+def _pinterest_client():
+    from bapp_connectors.providers.ads.pinterest.client import PinterestAdsClient
+
+    http = MagicMock()
+    http.call.return_value = {}
+    return PinterestAdsClient(http, ad_account_id="42"), http
+
+
+def test_pinterest_accepts_plain_ids():
+    client, http = _pinterest_client()
+    client.get_campaign("626736533506")
+    client.get_ad_group("2680059592705")
+    client.get_ad("687195134316")
+    assert [c.args[1] for c in http.call.call_args_list] == [
+        "ad_accounts/42/campaigns/626736533506",
+        "ad_accounts/42/ad_groups/2680059592705",
+        "ad_accounts/42/ads/687195134316",
+    ]
+
+
+@pytest.mark.parametrize("bad", ["1&x=2", "%2F..%2Fuser_account", "1:2", "(1)", "1,2", "", "1 2"])
+@pytest.mark.parametrize("method", ["get_campaign", "get_ad_group", "get_ad"])
+def test_pinterest_refuses_ids_with_path_or_query_characters(method, bad):
+    client, http = _pinterest_client()
+    with pytest.raises(ValidationError):
+        getattr(client, method)(bad)
+    http.call.assert_not_called()
