@@ -29,8 +29,8 @@ AI_NEXT_ACTION_KEPT = frozenset({"type"})
 # Secret values wherever they appear in a string: intent/source client secrets, secret and
 # restricted API keys, webhook signing secrets. Publishable keys (pk_) are public and stay.
 AI_SECRET_PATTERN = re.compile(
-    r"src_client_secret_[A-Za-z0-9]+"
-    r"|[A-Za-z0-9]+_[A-Za-z0-9]+_secret_[A-Za-z0-9]+"
+    r"(?<![A-Za-z0-9])src_client_secret_[A-Za-z0-9]+"
+    r"|(?<![A-Za-z0-9])[A-Za-z0-9]+_[A-Za-z0-9]+_secret_[A-Za-z0-9]+"
     r"|\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]+"
     r"|\bwhsec_[A-Za-z0-9]+"
 )
