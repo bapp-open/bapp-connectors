@@ -8,12 +8,21 @@ Auth is via bot token embedded in the URL path:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
+
+from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ProviderError, ValidationError
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 logger = logging.getLogger(__name__)
+
+# A chat for getChat: a numeric id (negative for groups/channels) or a public @username.
+_CHAT_ID = re.compile(r"-?[0-9]{1,20}|@[A-Za-z][A-Za-z0-9_]{3,31}")
+_BOT_TOKEN_IN_URL = re.compile(r"/bot([^/]+)/?$")
 
 
 class TelegramApiClient:
@@ -53,11 +62,46 @@ class TelegramApiClient:
             return response["result"]
         return response
 
+    def _bot_token(self) -> str:
+        match = _BOT_TOKEN_IN_URL.search(str(getattr(self.http, "base_url", "") or ""))
+        return match.group(1) if match else ""
+
+    def _ai_call(self, method: str, **params) -> Any:
+        """``_call`` for an agent's read: an error never carries the bot token.
+
+        The token is part of the request URL, and a connection error (``requests``) quotes that URL.
+        """
+        try:
+            return self._call(method, **params)
+        except Exception as exc:
+            token = self._bot_token()
+            message = str(exc)
+            if token:
+                for form in {token, quote(token, safe=""), quote(token)}:
+                    message = message.replace(form, "***")
+            raise ProviderError(f"Telegram {method} failed: {message}") from None
+
     # ── Auth / Connection Test ──
 
     def get_me(self) -> dict:
         """getMe — verify bot token and get bot info."""
         return self._call("getMe")
+
+    @ai_method("read", "The Telegram bot behind the connection: id, name, username, what it may do in groups.")
+    def get_bot_info(self) -> dict:
+        """getMe, with errors scrubbed of the bot token."""
+        return self._ai_call("getMe")
+
+    @ai_method(
+        "read",
+        "One Telegram chat the bot is in (or a public @channel): title, type, description, member/admin info. "
+        "chat_id is the numeric chat id (negative for groups/channels) or '@username'.",
+    )
+    def get_chat(self, chat_id: str) -> dict:
+        """getChat — no side effect; the update queue (getUpdates) is never touched."""
+        if not isinstance(chat_id, str) or not _CHAT_ID.fullmatch(chat_id):
+            raise ValidationError("chat_id must be a numeric Telegram chat id or '@username'.")
+        return self._ai_call("getChat", chat_id=chat_id)
 
     def test_auth(self) -> bool:
         """Verify credentials by calling getMe."""

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -46,6 +48,7 @@ class RoboSMSApiClient:
 
     # ── SMS ──
 
+    @ai_method("write", "Send one SMS through the RoboSMS device.")
     def send_sms(self, to: str, content: str, device_id: str | None = None) -> dict | list | str:
         """Send a single SMS message."""
         payload: dict[str, Any] = {

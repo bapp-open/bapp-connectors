@@ -6,10 +6,24 @@ Uses Discord REST API v10. Bot token is passed via "Bot {token}" Authorization h
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
+
+from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ValidationError
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
+
+# Discord ids are snowflakes: unsigned 64-bit integers written in decimal.
+_SNOWFLAKE = re.compile(r"[0-9]{1,20}")
+
+
+def _ai_snowflake(value: Any, what: str) -> str:
+    """A Discord id from an agent: ASCII digits only, so it stays one path segment."""
+    if not isinstance(value, str) or not _SNOWFLAKE.fullmatch(value):
+        raise ValidationError(f"{what} must be a numeric Discord id (snowflake).")
+    return value
 
 
 class DiscordApiClient:
@@ -20,6 +34,7 @@ class DiscordApiClient:
 
     # ── Auth / Connection Test ──
 
+    @ai_method("read", "The bot's own Discord user: id, username, avatar, flags.")
     def get_current_user(self) -> dict:
         """GET /users/@me — get the bot's own user info."""
         return self.http.call("GET", "users/@me")
@@ -89,19 +104,47 @@ class DiscordApiClient:
 
     # ── Channels ──
 
+    @ai_method("read", "One Discord channel the bot can see: name, type, topic, guild.")
     def get_channel(self, channel_id: str) -> dict:
         """GET /channels/{channel_id}"""
-        return self.http.call("GET", f"channels/{channel_id}")
+        return self.http.call("GET", f"channels/{_ai_snowflake(channel_id, 'channel_id')}")
+
+    @ai_method(
+        "read",
+        "Message history of a Discord channel the bot can read, newest first (max 100). "
+        "Page with 'before' (older than that message id) or 'after'. Reading does not acknowledge anything.",
+    )
+    def get_channel_messages(
+        self,
+        channel_id: str,
+        limit: int = 50,
+        before: str | None = None,
+        after: str | None = None,
+    ) -> list:
+        """GET /channels/{channel_id}/messages"""
+        params: dict[str, Any] = {"limit": max(1, min(int(limit), 100))}
+        if before:
+            params["before"] = _ai_snowflake(before, "before")
+        if after:
+            params["after"] = _ai_snowflake(after, "after")
+        return self.http.call("GET", f"channels/{_ai_snowflake(channel_id, 'channel_id')}/messages", params=params)
 
     # ── Guilds ──
 
+    @ai_method("read", "The Discord servers (guilds) the bot is a member of: id, name, icon, permissions.")
+    def list_guilds(self) -> list:
+        """GET /users/@me/guilds"""
+        return self.http.call("GET", "users/@me/guilds")
+
+    @ai_method("read", "One Discord server (guild) the bot is in: name, owner, roles, features.")
     def get_guild(self, guild_id: str) -> dict:
         """GET /guilds/{guild_id}"""
-        return self.http.call("GET", f"guilds/{guild_id}")
+        return self.http.call("GET", f"guilds/{_ai_snowflake(guild_id, 'guild_id')}")
 
+    @ai_method("read", "The channels of a Discord server (guild) the bot is in.")
     def get_guild_channels(self, guild_id: str) -> list:
         """GET /guilds/{guild_id}/channels"""
-        return self.http.call("GET", f"guilds/{guild_id}/channels")
+        return self.http.call("GET", f"guilds/{_ai_snowflake(guild_id, 'guild_id')}/channels")
 
     # ── Interactions (webhook responses) ──
 

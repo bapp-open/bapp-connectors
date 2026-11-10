@@ -10,10 +10,19 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 logger = logging.getLogger(__name__)
+
+# Fixed field lists for the agent's reads: none reaches a token.
+AI_PHONE_NUMBER_FIELDS = (
+    "id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status,"
+    "platform_type,throughput,messaging_limit_tier"
+)
+AI_BUSINESS_PROFILE_FIELDS = "about,address,description,email,profile_picture_url,websites,vertical"
 
 
 class WhatsAppApiClient:
@@ -44,8 +53,23 @@ class WhatsAppApiClient:
         except Exception:
             return False
 
+    # ── Read-only views for an AI agent (fixed fields, connected number only) ──
+
+    @ai_method("read", "The connected WhatsApp Business phone number: display number, verified name, quality, limits.")
+    def get_phone_number_info(self) -> dict:
+        """GET /{phone_number_id} with fixed fields."""
+        return self.http.call("GET", self.phone_number_id, params={"fields": AI_PHONE_NUMBER_FIELDS})
+
+    @ai_method("read", "The WhatsApp business profile of the connected number: about, address, email, websites.")
+    def get_business_profile(self) -> dict:
+        """GET /{phone_number_id}/whatsapp_business_profile with fixed fields."""
+        return self.http.call(
+            "GET", f"{self.phone_number_id}/whatsapp_business_profile", params={"fields": AI_BUSINESS_PROFILE_FIELDS}
+        )
+
     # ── Text Messages ──
 
+    @ai_method("write", "Send a WhatsApp text message (only inside the 24h customer service window).")
     def send_text(self, to: str, body: str, preview_url: bool = True) -> dict:
         """Send a text message."""
         payload = {
@@ -57,6 +81,7 @@ class WhatsAppApiClient:
         }
         return self.http.call("POST", self._messages_path, json=payload)
 
+    @ai_method("write", "Reply with text to a specific WhatsApp message.")
     def reply_text(self, to: str, body: str, message_id: str, preview_url: bool = True) -> dict:
         """Reply to a specific message with text."""
         payload = {

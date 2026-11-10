@@ -7,11 +7,26 @@ Sending uses idempotent PUT with transaction IDs.
 
 from __future__ import annotations
 
+import re
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
+from urllib.parse import quote
+
+from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ValidationError
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
+
+# A room id: '!' + opaque id, with ':server[:port]' (room versions 1-11) or without (v12+).
+_ROOM_ID = re.compile(r"![A-Za-z0-9._~+=\-]{1,255}(?::[A-Za-z0-9.\-]{1,253}(?::[0-9]{1,5})?)?")
+
+
+def _ai_room_id(value: Any) -> str:
+    """A room id from an agent, checked and percent-encoded into one path segment."""
+    if not isinstance(value, str) or not _ROOM_ID.fullmatch(value) or ".." in value:
+        raise ValidationError("room_id must be a Matrix room id such as '!abc:example.org'.")
+    return quote(value, safe="")
 
 
 class MatrixApiClient:
@@ -25,6 +40,7 @@ class MatrixApiClient:
 
     # ── Auth / Connection Test ──
 
+    @ai_method("read", "The Matrix account behind the connection: user id and device id.")
     def whoami(self) -> dict:
         """GET /account/whoami — verify access token and get user ID."""
         return self.http.call("GET", "account/whoami")
@@ -43,6 +59,7 @@ class MatrixApiClient:
         txn = txn_id or self._txn_id()
         return self.http.call("PUT", f"rooms/{room_id}/send/{event_type}/{txn}", json=content)
 
+    @ai_method("write", "Send a text message to a Matrix room.")
     def send_message(self, room_id: str, body: str, msgtype: str = "m.text", formatted_body: str = "") -> dict:
         """Send a text or notice message."""
         content: dict[str, Any] = {"msgtype": msgtype, "body": body}
@@ -107,6 +124,29 @@ class MatrixApiClient:
         """POST /join/{roomIdOrAlias}"""
         return self.http.call("POST", f"join/{room_id_or_alias}", json={})
 
+    @ai_method("read", "The ids of the Matrix rooms the account has joined.")
     def get_joined_rooms(self) -> dict:
         """GET /joined_rooms"""
         return self.http.call("GET", "joined_rooms")
+
+    @ai_method(
+        "read",
+        "Message history of a Matrix room the account has joined (GET /rooms/{id}/messages, no sync, "
+        "no read receipt). dir 'b' = newest first. Page with the 'end' token of the previous answer as from_token.",
+    )
+    def get_room_messages(
+        self,
+        room_id: str,
+        limit: int = 50,
+        direction: Literal["b", "f"] = "b",
+        from_token: Annotated[str, "free_text"] | None = None,
+    ) -> dict:
+        """GET /rooms/{roomId}/messages — paginate a joined room's timeline without touching sync state."""
+        encoded = _ai_room_id(room_id)
+        joined = (self.get_joined_rooms() or {}).get("joined_rooms") or []
+        if room_id not in joined:
+            raise ValidationError("room_id is not a room the connected Matrix account has joined.")
+        params: dict[str, Any] = {"dir": direction, "limit": max(1, min(int(limit), 100))}
+        if from_token:
+            params["from"] = from_token
+        return self.http.call("GET", f"rooms/{encoded}/messages", params=params)

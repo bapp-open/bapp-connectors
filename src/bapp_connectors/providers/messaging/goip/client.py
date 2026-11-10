@@ -15,6 +15,8 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -90,6 +92,7 @@ class GoIPApiClient:
 
     # ── Status ──
 
+    @ai_method("read", "The GoIP device's outgoing SMS queue status per line (send_status.xml), as raw XML text.")
     def get_send_status(self) -> str:
         """GET /send_status.xml — get the send queue status."""
         return self._get_text("send_status.xml")

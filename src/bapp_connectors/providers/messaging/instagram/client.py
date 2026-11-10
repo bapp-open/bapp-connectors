@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -30,12 +32,14 @@ class InstagramApiClient:
         except Exception:
             return False
 
+    @ai_method("read", "The connected Instagram professional account: id, name, username.")
     def get_account_info(self) -> dict:
         """GET /{ig_user_id} — get Instagram account details."""
         return self.http.call("GET", self.ig_user_id, params={"fields": "id,name,username"})
 
     # ── Text Messages ──
 
+    @ai_method("write", "Send an Instagram direct message (text) to a user who messaged the account.")
     def send_text(self, recipient_id: str, text: str) -> dict:
         """Send a text DM."""
         payload = {
