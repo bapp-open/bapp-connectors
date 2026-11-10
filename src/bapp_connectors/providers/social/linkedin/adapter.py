@@ -94,6 +94,7 @@ class LinkedInSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapability
             http_client=http_client,
             access_token=credentials.get("access_token", ""),
             version=str(self.config.get("linkedin_version", "202405")),
+            organization_id=self.org_id,
         )
 
     @property

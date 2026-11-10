@@ -69,6 +69,10 @@ class MetaAdapter(BasePort, OAuthCapability, SocialDestinationsCapability):
 
     # ── BasePort ──
 
+    def get_ai_client(self) -> None:
+        """None: the Meta connection holds a *user* token and exists to hand out Page tokens
+        (``me/accounts``); its Graph client is never offered to an AI agent."""
+
     def validate_credentials(self) -> bool:
         if self._app_id and self._app_secret:
             # App credentials alone are enough to run the OAuth flow.

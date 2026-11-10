@@ -8,8 +8,9 @@ bearer token (required for `mine=true` channel access).
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import ProviderError
 
 if TYPE_CHECKING:
@@ -20,6 +21,18 @@ logger = logging.getLogger(__name__)
 # Resumable upload endpoint (videos.insert) — outside the Data API base URL,
 # passed as an absolute URL (the shared http client accepts those).
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
+
+
+def with_cursor(page: dict) -> dict:
+    """A Data API list page with ``nextPageToken``/``prevPageToken`` renamed ``next_cursor``/``prev_cursor``.
+
+    BAPP redacts every key containing "token" in what an AI read returns, so the agent would
+    never see the page token it has to send back.
+    """
+    out = {k: v for k, v in page.items() if k not in ("nextPageToken", "prevPageToken")}
+    out["next_cursor"] = page.get("nextPageToken")
+    out["prev_cursor"] = page.get("prevPageToken")
+    return out
 
 
 class YouTubeApiClient:
@@ -50,6 +63,10 @@ class YouTubeApiClient:
 
     # ── Channels ──
 
+    @ai_method(
+        "read",
+        "A YouTube channel (snippet, statistics, uploads playlist ID) by its ID, or the connected channel when omitted.",
+    )
     def get_channel(self, channel_id: str | None = None) -> dict:
         """channels.list — fetch a channel by ID, or the authorized user's channel when omitted."""
         params: dict = {"part": "snippet,statistics,contentDetails"}
@@ -73,6 +90,7 @@ class YouTubeApiClient:
 
     # ── Videos ──
 
+    @ai_method("read", "Up to 50 videos by their IDs: title, description, statistics, duration, privacy status.")
     def list_videos(self, video_ids: list[str]) -> dict:
         """videos.list — hydrate videos by ID with snippet, statistics, contentDetails, and status."""
         return self._get(
@@ -80,6 +98,37 @@ class YouTubeApiClient:
             part="snippet,statistics,contentDetails,status",
             id=",".join(video_ids),
         )
+
+    @ai_method(
+        "read",
+        "Page through a playlist's videos (e.g. the channel's uploads playlist from get_channel). "
+        "Pass back next_cursor to get the next page.",
+    )
+    def list_playlist_videos(
+        self, playlist_id: str, max_results: int = 25, cursor: Annotated[str, "free_text"] | None = None
+    ) -> dict:
+        return with_cursor(self.list_playlist_items(playlist_id, max_results=max_results, page_token=cursor))
+
+    # ── Comments ──
+
+    @ai_method(
+        "read",
+        "List the top-level comment threads of a video, newest first, with their first replies. "
+        "Pass back next_cursor to get the next page.",
+    )
+    def list_video_comments(
+        self, video_id: str, max_results: int = 20, cursor: Annotated[str, "free_text"] | None = None
+    ) -> dict:
+        page = self._get(
+            "commentThreads",
+            part="snippet,replies",
+            videoId=video_id,
+            maxResults=max_results,
+            order="time",
+            textFormat="plainText",
+            pageToken=cursor,
+        )
+        return with_cursor(page)
 
     # ── Upload (videos.insert, resumable) ──
 

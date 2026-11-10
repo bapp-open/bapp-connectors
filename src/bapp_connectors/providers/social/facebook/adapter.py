@@ -141,7 +141,7 @@ class FacebookSocialAdapter(SocialPort, SocialPublishCapability, OAuthCapability
                 provider_name="facebook",
             )
 
-        self.client = FacebookGraphClient(http_client=http_client)
+        self.client = FacebookGraphClient(http_client=http_client, page_id=self.page_id)
 
     # ── BasePort ──
 

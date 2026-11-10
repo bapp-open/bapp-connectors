@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.providers.social.tiktok.errors import check_response
 
 if TYPE_CHECKING:
@@ -60,11 +61,17 @@ class TikTokApiClient:
     def __init__(self, http_client: ResilientHttpClient):
         self.http = http_client
 
+    @ai_method("read", "The connected TikTok profile: display name, bio, follower/following/like/video counts.")
     def get_user_info(self) -> dict:
         """GET user/info/ — returns the ``data`` object containing ``user``."""
         response = self.http.call("GET", "user/info/", params={"fields": USER_FIELDS})
         return check_response(response)
 
+    @ai_method(
+        "read",
+        "List the profile's public videos, newest first, with view/like/comment/share counts. "
+        "Paginate with the returned cursor while has_more is true (max_count up to 20).",
+    )
     def list_videos(self, cursor: int | None = None, max_count: int = 20) -> dict:
         """POST video/list/ — returns ``data`` with ``videos``, ``cursor``, ``has_more``."""
         body: dict = {"max_count": max_count}
@@ -73,18 +80,21 @@ class TikTokApiClient:
         response = self.http.call("POST", "video/list/", params={"fields": VIDEO_FIELDS}, json=body)
         return check_response(response)
 
+    @ai_method("read", "Get up to 20 of the profile's videos by their IDs.")
     def query_videos(self, video_ids: list[str]) -> dict:
         """POST video/query/ — returns ``data`` with ``videos`` for the given IDs."""
         body = {"filters": {"video_ids": video_ids}}
         response = self.http.call("POST", "video/query/", params={"fields": VIDEO_FIELDS}, json=body)
         return check_response(response)
 
+    @ai_method("write", "Start publishing a video to the profile (TikTok pulls it from source_info).")
     def publish_video_init(self, post_info: dict, source_info: dict) -> dict:
         """POST post/publish/video/init/ — returns ``data`` containing ``publish_id``."""
         body = {"post_info": post_info, "source_info": source_info}
         response = self.http.call("POST", "post/publish/video/init/", json=body)
         return check_response(response)
 
+    @ai_method("read", "Status of a video publish (PROCESSING_UPLOAD, PUBLISH_COMPLETE, FAILED, ...), by publish_id.")
     def publish_status_fetch(self, publish_id: str) -> dict:
         """POST post/publish/status/fetch/ — returns ``data`` with ``status``,
         ``publicaly_available_post_id`` (sic) and ``fail_reason``."""

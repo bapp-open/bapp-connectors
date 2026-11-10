@@ -175,7 +175,7 @@ class InstagramSocialAdapter(
                 classify=classify_graph_error,
             )
 
-        self.client = InstagramGraphClient(http_client=http_client)
+        self.client = InstagramGraphClient(http_client=http_client, ig_user_id=self.ig_user_id)
 
     # ── BasePort ──
 

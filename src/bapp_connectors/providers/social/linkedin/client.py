@@ -14,7 +14,8 @@ import logging
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
-from bapp_connectors.core.errors import ProviderError
+from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ProviderError, ValidationError
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
@@ -32,10 +33,11 @@ class LinkedInApiClient:
     ``{"message", "serviceErrorCode", "status"}``.
     """
 
-    def __init__(self, http_client: ResilientHttpClient, access_token: str, version: str):
+    def __init__(self, http_client: ResilientHttpClient, access_token: str, version: str, organization_id: str = ""):
         self.http = http_client
         self.access_token = access_token
         self.version = version
+        self.organization_id = organization_id
 
     def _headers(self) -> dict:
         """Rest.li protocol headers sent on every call."""
@@ -80,6 +82,7 @@ class LinkedInApiClient:
             headers=self._headers(),
         )
 
+    @ai_method("read", "Get one LinkedIn post by its URN (urn:li:share:... or urn:li:ugcPost:...).")
     def get_post(self, post_urn: str) -> dict:
         """GET posts/{post_urn} — fetch a single post by its URN."""
         return self.http.call("GET", f"posts/{quote(post_urn, safe='')}", headers=self._headers())
@@ -99,6 +102,7 @@ class LinkedInApiClient:
             path += f"&shares[{index}]={quote(share_urn, safe='')}"
         return self.http.call("GET", path, headers=self._headers())
 
+    @ai_method("write", "Publish a post on the organization page from a LinkedIn posts payload.")
     def create_post(self, payload: dict) -> str:
         """POST posts — create a post; returns the new post URN from the x-restli-id header."""
         response = self.http.call(
@@ -118,3 +122,33 @@ class LinkedInApiClient:
         if not post_urn:
             raise ProviderError("LinkedIn post creation response is missing the x-restli-id header")
         return post_urn
+
+    # ── AI-agent reads: pinned to the connected organization ──
+
+    def _org_id(self) -> str:
+        if not self.organization_id:
+            raise ValidationError("The LinkedIn connection has no organization_id")
+        return self.organization_id
+
+    def _org_urn(self) -> str:
+        return f"urn:li:organization:{self._org_id()}"
+
+    @ai_method("read", "The connected LinkedIn organization page: name, vanity name, description, website, logo.")
+    def get_organization_profile(self) -> dict:
+        return self.get_organization(quote(self._org_id(), safe=""))
+
+    @ai_method("read", "Follower count of the connected organization page.")
+    def get_organization_followers(self) -> dict:
+        return self.get_follower_count(self._org_id())
+
+    @ai_method("read", "List the organization's posts, newest first; page with count/start (offset).")
+    def list_organization_posts(self, count: int = 25, start: int = 0) -> dict:
+        return self.list_posts(self._org_urn(), count=int(count), start=int(start))
+
+    @ai_method(
+        "read",
+        "Lifetime share statistics (impressions, clicks, likes, comments, shares, engagement) of the "
+        "organization, or of the given post URNs.",
+    )
+    def get_organization_share_statistics(self, share_urns: list[str] | None = None) -> dict:
+        return self.get_share_statistics(self._org_urn(), share_urns)
