@@ -21,6 +21,7 @@ CREDS = {"host": "smtp.example.com", "port": "587", "username": "office@example.
 
 def _sent_message(client: SMTPClient) -> tuple[str, str]:
     conn = MagicMock()
+    conn.sendmail.return_value = {}
     with patch.object(client, "_connect", return_value=conn):
         client.send_email(to=["dest@example.com"], subject="Salut", body="text")
     sender, _recipients, raw = conn.sendmail.call_args.args

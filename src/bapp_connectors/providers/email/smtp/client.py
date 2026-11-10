@@ -13,11 +13,10 @@ import imaplib
 import logging
 import re
 import smtplib
+from email import policy
 from email.header import decode_header
-from email.mime.base import MIMEBase
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.utils import formataddr, formatdate
+from email.message import EmailMessage
+from email.utils import formataddr, formatdate, make_msgid
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -25,6 +24,41 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_header(value: str, name: str) -> str:
+    """Reject controls before formatting, parsing or serializing header values."""
+    if not isinstance(value, str) or any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise ValueError(f"Invalid {name}: expected a string without control characters")
+    return value
+
+
+def resolve_message_id(value: str = "") -> str:
+    """Generate an RFC Message-ID, or validate an explicitly supplied one."""
+    _validate_header(value, "Message-ID")
+    if not value:
+        return make_msgid()
+    value = value.strip()
+    parsed = policy.SMTP.header_factory("Message-ID", value)
+    if not value.isascii() or not value.startswith("<") or not value.endswith(">") or parsed.defects:
+        raise ValueError("Invalid Message-ID: expected one bracketed RFC message identifier")
+    return value
+
+
+def _reference_ids(value: list[str] | str | None) -> list[str]:
+    """Accept the inbox DTO's list format and a space-separated References value."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = _validate_header(value, "References").split()
+    if not isinstance(value, list):
+        raise ValueError("Invalid References: expected a list of IDs or a space-separated string")
+    ids = []
+    for item in value:
+        if not _validate_header(item, "References").strip():
+            raise ValueError("Invalid References: empty message identifier")
+        ids.append(resolve_message_id(item))
+    return ids
 
 
 class SMTPClient:
@@ -95,6 +129,11 @@ class SMTPClient:
         bcc: list[str] | None = None,
         attachments: list[dict] | None = None,
         from_name: str = "",
+        *,
+        message_id: str = "",
+        in_reply_to: str = "",
+        references: list[str] | str | None = None,
+        reply_to: str = "",
     ) -> bool:
         """
         Send a single email.
@@ -110,44 +149,79 @@ class SMTPClient:
             cc: CC recipients.
             bcc: BCC recipients.
             attachments: List of dicts with keys: filename, content (bytes), content_type.
+            message_id: RFC Message-ID, generated if empty (not an application correlation ID).
+            in_reply_to: RFC ID of the parent message, not a reply address.
+            references: Parent's References chain; in_reply_to is appended if needed.
+            reply_to: Reply-To email address, separate from in_reply_to.
 
         Returns:
-            True if email was sent successfully.
+            True if SMTP accepted all recipients, without confirming delivery.
+            SMTP errors (including partial recipient refusals) are raised.
         """
         sender = from_email or self.from_email
+        sender_name = from_name or self.from_name
+        for name, value in [("From", sender), ("From name", sender_name), ("Subject", subject), ("Reply-To", reply_to)]:
+            _validate_header(value, name)
+        for name, addresses in [("To", to), ("Cc", cc), ("Bcc", bcc)]:
+            if addresses is not None:
+                if not isinstance(addresses, list):
+                    raise ValueError(f"Invalid {name}: expected a list of addresses")
+                for address in addresses:
+                    _validate_header(address, name)
 
-        msg = MIMEMultipart("alternative")
+        rfc_message_id = resolve_message_id(message_id)
+        parent_id = resolve_message_id(in_reply_to) if _validate_header(in_reply_to, "In-Reply-To") else ""
+        reference_ids = _reference_ids(references)
+        if parent_id and (not reference_ids or reference_ids[-1] != parent_id):
+            reference_ids.append(parent_id)
+
+        msg = EmailMessage(policy=policy.SMTP)
+        if body:
+            msg.set_content(body, charset="utf-8", cte="base64")
+            if html_body:
+                msg.add_alternative(html_body, subtype="html", charset="utf-8", cte="base64")
+        elif html_body:
+            msg.set_content(html_body, subtype="html", charset="utf-8", cte="base64")
+        elif not attachments:
+            msg.set_content("", charset="utf-8", cte="base64")
+
+        if "MIME-Version" not in msg:
+            msg["MIME-Version"] = "1.0"
         msg["Subject"] = subject
-        msg["From"] = formataddr((from_name or self.from_name, sender))
+        msg["From"] = formataddr((sender_name, sender))
         msg["To"] = ", ".join(to)
         msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = rfc_message_id
+        if parent_id:
+            msg["In-Reply-To"] = parent_id
+        if reference_ids:
+            msg["References"] = " ".join(reference_ids)
+        if reply_to:
+            msg["Reply-To"] = reply_to
 
         if cc:
             msg["Cc"] = ", ".join(cc)
 
-        # Add body parts
-        if body:
-            msg.attach(MIMEText(body, "plain", "utf-8"))
-        if html_body:
-            msg.attach(MIMEText(html_body, "html", "utf-8"))
-        elif not body:
-            # At least one body part is needed
-            msg.attach(MIMEText("", "plain", "utf-8"))
-
-        # Add attachments
         if attachments:
             for attachment in attachments:
-                part = MIMEBase("application", "octet-stream")
-                part.set_payload(attachment.get("content", b""))
-                from email.encoders import encode_base64
-
-                encode_base64(part)
-                part.add_header(
-                    "Content-Disposition",
-                    "attachment",
-                    filename=attachment.get("filename", "attachment"),
+                filename = _validate_header(attachment.get("filename", "attachment"), "attachment filename")
+                content_type = _validate_header(
+                    attachment.get("content_type", "application/octet-stream"), "attachment Content-Type"
                 )
-                msg.attach(part)
+                parsed_type = policy.SMTP.header_factory("Content-Type", content_type)
+                if parsed_type.defects:
+                    raise ValueError("Invalid attachment Content-Type")
+                content = attachment.get("content", b"")
+                if isinstance(content, str):
+                    content = content.encode("utf-8")
+                msg.add_attachment(
+                    content,
+                    maintype=parsed_type.maintype,
+                    subtype=parsed_type.subtype,
+                    params=dict(parsed_type.params),
+                    filename=filename,
+                    cte="base64",
+                )
 
         # Build recipient list
         all_recipients = list(to)
@@ -156,9 +230,13 @@ class SMTPClient:
         if bcc:
             all_recipients.extend(bcc)
 
+        # Serialize before connecting so invalid headers never reach the transport.
+        raw = msg.as_string()
         connection = self._connect()
         try:
-            connection.sendmail(sender, all_recipients, msg.as_string())
+            refused = connection.sendmail(sender, all_recipients, raw)
+            if refused:
+                raise smtplib.SMTPRecipientsRefused(refused)
             return True
         finally:
             with contextlib.suppress(Exception):

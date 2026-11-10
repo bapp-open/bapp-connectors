@@ -39,7 +39,14 @@ class MessageAttachment(BaseDTO):
 
 
 class OutboundMessage(BaseDTO):
-    """Normalized outbound message."""
+    """Normalized outbound message.
+
+    message_id is a caller-supplied correlation identifier, not necessarily an
+    RFC email Message-ID. Provider-specific wire identifiers belong in extra.
+    For SMTP, extra.rfc_message_id optionally supplies the RFC Message-ID;
+    reply_to is the parent's RFC Message-ID and extra.references carries its
+    References chain. extra.reply_to is a separate Reply-To email address.
+    """
 
     message_id: str = ""
     channel: MessageChannel
@@ -89,7 +96,12 @@ class InboundMessage(BaseDTO):
 
 
 class DeliveryReport(BaseDTO):
-    """Delivery status report for a sent message."""
+    """Delivery status report for a sent message.
+
+    SMTP preserves a supplied correlation message_id, otherwise returns the
+    generated RFC ID. extra.rfc_message_id contains the assigned wire ID, also
+    on submission failure. SENT denotes SMTP acceptance, not confirmed delivery.
+    """
 
     message_id: str
     status: DeliveryStatus

@@ -7,6 +7,7 @@ Uses Python's smtplib for sending and imaplib for inbox reading.
 
 from __future__ import annotations
 
+import smtplib
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -21,7 +22,7 @@ from bapp_connectors.core.dto import (
     OutboundMessage,
 )
 from bapp_connectors.core.ports import EmailPort
-from bapp_connectors.providers.email.smtp.client import IMAPClient, SMTPClient
+from bapp_connectors.providers.email.smtp.client import IMAPClient, SMTPClient, resolve_message_id
 from bapp_connectors.providers.email.smtp.errors import classify_imap_error
 from bapp_connectors.providers.email.smtp.manifest import manifest
 from bapp_connectors.providers.email.smtp.mappers import (
@@ -48,7 +49,9 @@ class SMTPEmailAdapter(EmailPort, InboxCapability):
 
     manifest = manifest
 
-    def __init__(self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs):
+    def __init__(
+        self, credentials: dict, http_client: ResilientHttpClient | None = None, config: dict | None = None, **kwargs
+    ):
         self.credentials = credentials
 
         host = credentials.get("host", "")
@@ -112,13 +115,19 @@ class SMTPEmailAdapter(EmailPort, InboxCapability):
     # ── MessagingPort ──
 
     def send(self, message: OutboundMessage) -> DeliveryReport:
-        """Send a single email message."""
+        """Submit to SMTP. SENT means server acceptance, not recipient delivery."""
+        report_id = message.message_id
+        report_extra = {}
         try:
+            # message_id is the caller's correlation ID, not necessarily an RFC ID.
+            rfc_message_id = resolve_message_id(message.extra.get("rfc_message_id", ""))
+            report_extra["rfc_message_id"] = rfc_message_id
+            report_id = report_id or rfc_message_id
             to_list = [message.to]
             cc = message.extra.get("cc", [])
             bcc = message.extra.get("bcc", [])
 
-            # Parse attachments from extra
+            # Preserve attachment metadata from the outbound DTO.
             attachments = []
             for att in message.attachments:
                 attachments.append(
@@ -139,17 +148,34 @@ class SMTPEmailAdapter(EmailPort, InboxCapability):
                 cc=cc,
                 bcc=bcc,
                 attachments=attachments or None,
+                message_id=rfc_message_id,
+                in_reply_to=message.reply_to,
+                references=message.extra.get("references"),
+                reply_to=message.extra.get("reply_to", ""),
             )
 
             return DeliveryReport(
-                message_id=message.message_id,
+                message_id=report_id,
                 status=DeliveryStatus.SENT if success else DeliveryStatus.FAILED,
+                error="" if success else "SMTP submission failed",
+                extra=report_extra,
             )
         except Exception as e:
+            if isinstance(e, smtplib.SMTPRecipientsRefused):
+                report_extra["refused_recipients"] = {
+                    address: {
+                        "code": code,
+                        "message": detail.decode("utf-8", errors="replace")
+                        if isinstance(detail, bytes)
+                        else str(detail),
+                    }
+                    for address, (code, detail) in e.recipients.items()
+                }
             return DeliveryReport(
-                message_id=message.message_id,
+                message_id=report_id,
                 status=DeliveryStatus.FAILED,
                 error=str(e),
+                extra=report_extra,
             )
 
     def send_bulk(self, messages: list[OutboundMessage]) -> list[DeliveryReport]:
