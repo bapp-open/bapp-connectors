@@ -11,6 +11,7 @@ import contextlib
 import email as email_lib
 import imaplib
 import logging
+import re
 import smtplib
 from email.header import decode_header
 from email.mime.base import MIMEBase
@@ -20,6 +21,7 @@ from email.utils import formataddr, formatdate
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -280,9 +282,9 @@ class IMAPClient:
 
             criteria: list[str] = []
             if since:
-                criteria.append(f'SINCE {since.strftime("%d-%b-%Y")}')
+                criteria.append(f"SINCE {since.strftime('%d-%b-%Y')}")
             if until:
-                criteria.append(f'BEFORE {until.strftime("%d-%b-%Y")}')
+                criteria.append(f"BEFORE {until.strftime('%d-%b-%Y')}")
             search_str = " ".join(criteria) if criteria else "ALL"
 
             status, data = conn.uid("search", None, search_str)
@@ -307,6 +309,8 @@ class IMAPClient:
         Fetch headers + flags for a list of UIDs.
 
         Returns list of (uid, email.message.Message, flags_set, has_attachments).
+        Malformed/incomplete responses are logged and skipped; each valid UID
+        is returned at most once.
         """
         if not uids:
             return []
@@ -315,38 +319,32 @@ class IMAPClient:
         try:
             conn.select(_quote_mailbox(folder), readonly=True)
             uid_str = ",".join(uids)
-            status, data = conn.uid(
-                "fetch", uid_str, "(FLAGS BODY[HEADER] BODYSTRUCTURE)"
-            )
-            if status != "OK":
+            status, data = conn.uid("fetch", uid_str, "(FLAGS BODY[HEADER] BODYSTRUCTURE)")
+            if status != "OK" or not data:
                 return []
 
             results: list[tuple[str, email_lib.message.Message, set[str], bool]] = []
-            i = 0
-            while i < len(data):
-                item = data[i]
-                if isinstance(item, tuple) and len(item) == 2:
-                    meta_line = item[0].decode(errors="replace")
-                    raw_headers = item[1]
-
-                    # BODYSTRUCTURE may be in the next data item (bytes)
-                    bodystructure_raw = meta_line
-                    if i + 1 < len(data) and isinstance(data[i + 1], bytes):
-                        bodystructure_raw += data[i + 1].decode(errors="replace")
-                        i += 1  # skip the BODYSTRUCTURE item
-
-                    # Extract UID from meta
-                    uid = _extract_uid(meta_line)
-                    # Extract flags
-                    flags = _extract_flags(meta_line)
-                    # Detect attachments from BODYSTRUCTURE
-                    has_attachments = _has_attachments_in_bodystructure(
-                        bodystructure_raw
-                    )
-
-                    msg = email_lib.message_from_bytes(raw_headers)
-                    results.append((uid, msg, flags, has_attachments))
-                i += 1
+            seen_uids: set[str] = set()
+            for attributes in _iter_fetch_attributes(data):
+                uid = attributes.get("UID")
+                raw_headers = attributes.get("BODY[HEADER]")
+                flags = attributes.get("FLAGS", [])
+                if (
+                    not isinstance(uid, str)
+                    or not re.fullmatch(r"[1-9][0-9]{0,9}", uid)
+                    or int(uid) > 2**32 - 1
+                    or not isinstance(raw_headers, bytes)
+                    or not isinstance(flags, list)
+                    or not all(isinstance(flag, str) for flag in flags)
+                ):
+                    logger.warning("Skipping IMAP FETCH response without valid UID, headers or flags")
+                    continue
+                if uid in seen_uids:
+                    continue
+                seen_uids.add(uid)
+                msg = email_lib.message_from_bytes(raw_headers)
+                has_attachments = _has_attachments_in_bodystructure(attributes.get("BODYSTRUCTURE", []))
+                results.append((uid, msg, set(flags), has_attachments))
 
             return results
         finally:
@@ -438,28 +436,119 @@ class IMAPMessageNotFoundError(Exception):
     """Raised when a message UID is not found."""
 
 
-def _extract_uid(meta_line: str) -> str:
-    """Extract UID value from an IMAP FETCH response line."""
-    import re
-
-    match = re.search(r"UID (\d+)", meta_line)
-    return match.group(1) if match else ""
+_IMAPValue = str | bytes | list["_IMAPValue"]
+_FETCH_START = re.compile(rb"[1-9][0-9]* \(")
+_FETCH_TOKEN = re.compile(rb'\s+|[()]|"(?:[^"\\\r\n]|\\[^\r\n])*"|[^\s()"]+')
 
 
-def _extract_flags(meta_line: str) -> set[str]:
-    """Extract FLAGS from an IMAP FETCH response line."""
-    import re
+def _iter_fetch_attributes(data: list) -> Iterator[dict[str, _IMAPValue]]:
+    """Group imaplib fragments by FETCH sequence number, not by literal.
 
-    match = re.search(r"FLAGS \(([^)]*)\)", meta_line)
-    if match:
-        return set(match.group(1).split())
-    return set()
-
-
-def _has_attachments_in_bodystructure(raw_response: str) -> bool:
-    """Detect attachments from the raw IMAP BODYSTRUCTURE response.
-
-    BODYSTRUCTURE includes disposition info like ("attachment" ...) for
-    parts that are attachments. We check case-insensitively.
+    imaplib emits (metadata, literal) for *every* literal, followed by a bytes
+    trailer. Only the first fragment starts with ``sequence-number (``. UID and
+    FLAGS can occur in any fragment; literal contents must never become syntax.
+    A new response also provides a recovery boundary after a truncated one.
     """
-    return '"attachment"' in raw_response.lower()
+    parts: list = []
+    for item in data:
+        metadata = item[0] if isinstance(item, tuple) and item else item
+        if isinstance(metadata, bytes) and _FETCH_START.match(metadata):
+            if parts:
+                attributes = _parse_fetch_attributes(parts)
+                if attributes is not None:
+                    yield attributes
+            parts = []
+        elif not parts:
+            continue  # An orphan continuation is not a message.
+        parts.append(item)
+        if isinstance(item, bytes):
+            # imaplib appends the final non-literal trailer as a bytes item.
+            attributes = _parse_fetch_attributes(parts)
+            if attributes is not None:
+                yield attributes
+            parts = []
+    if parts:
+        attributes = _parse_fetch_attributes(parts)
+        if attributes is not None:
+            yield attributes
+
+
+def _parse_fetch_attributes(parts: list) -> dict[str, _IMAPValue] | None:
+    """Parse one complete FETCH into top-level attributes.
+
+    Lists preserve nesting; atoms are str, quoted strings and literals are bytes.
+    This keeps a UID-like string in BODYSTRUCTURE from becoming a message UID,
+    and associates BODY[HEADER] with its own literal even when it is not first.
+    """
+    root: list[_IMAPValue] = []
+    stack = [root]
+    for part in parts:
+        literal = None
+        if isinstance(part, tuple):
+            if len(part) != 2 or not all(isinstance(value, bytes) for value in part):
+                break
+            metadata, literal = part
+            marker = re.search(rb"\{([0-9]+)\}$", metadata)
+            if marker is None or (marker[1].lstrip(b"0") or b"0") != str(len(literal)).encode():
+                break
+            metadata = metadata[: marker.start()]
+        elif isinstance(part, bytes):
+            metadata = part
+        else:
+            break
+
+        offset = 0
+        while offset < len(metadata):
+            match = _FETCH_TOKEN.match(metadata, offset)
+            if match is None:
+                break
+            token = match[0]
+            offset = match.end()
+            if token.isspace():
+                continue
+            if token == b"(":
+                nested: list[_IMAPValue] = []
+                stack[-1].append(nested)
+                stack.append(nested)
+            elif token == b")":
+                if len(stack) == 1:
+                    break
+                stack.pop()
+            elif token.startswith(b'"'):
+                stack[-1].append(re.sub(rb"\\(.)", rb"\1", token[1:-1]))
+            else:
+                stack[-1].append(token.decode("ascii", errors="replace"))
+        else:
+            if literal is not None:
+                if len(stack) < 2:
+                    break
+                stack[-1].append(literal)
+            continue
+        break
+    else:
+        if len(stack) == 1 and len(root) == 2 and isinstance(root[1], list):
+            values = root[1]
+            attributes: dict[str, _IMAPValue] = {}
+            if len(values) % 2 == 0:
+                for index in range(0, len(values), 2):
+                    key = values[index]
+                    if not isinstance(key, str) or key.upper() in attributes:
+                        break
+                    attributes[key.upper()] = values[index + 1]
+                else:
+                    return attributes
+    # Do not include headers, literal contents or other server data in logs.
+    logger.warning("Skipping malformed or incomplete IMAP FETCH response")
+    return None
+
+
+def _has_attachments_in_bodystructure(bodystructure: _IMAPValue) -> bool:
+    """Keep attachment detection case-insensitive, including literal strings."""
+    pending = [bodystructure]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, list):
+            pending.extend(value)
+        elif isinstance(value, bytes) and value.lower() == b"attachment":
+            return True
+    return False
