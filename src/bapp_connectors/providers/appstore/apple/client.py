@@ -8,8 +8,10 @@ Doua host-uri:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
+from urllib.parse import parse_qs, urlsplit
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.providers.appstore.apple.errors import raise_for_report_response
 
 if TYPE_CHECKING:
@@ -22,6 +24,17 @@ SERVER_API_SANDBOX_BASE_URL = "https://api.storekit-sandbox.itunes.apple.com/inA
 #: Versiunile raportului de vanzari acceptate de API (daca Apple le schimba, 400-ul cu
 #: textul „version ... is not valid" ajunge in PermanentProviderError si se corecteaza aici).
 SALES_REPORT_VERSION = "1_1"
+
+
+AI_VERSION_FIELDS = "platform,versionString,appStoreState,appVersionState,releaseType,earliestReleaseDate,createdDate"
+
+
+def next_cursor(page: dict) -> str | None:
+    """The ``cursor`` query parameter of a page's ``links.next`` (None on the last page)."""
+    link = (page.get("links") or {}).get("next") if isinstance(page, dict) else None
+    if not link:
+        return None
+    return (parse_qs(urlsplit(link).query).get("cursor") or [None])[0]
 
 
 class AppleApiClient:
@@ -91,6 +104,7 @@ class AppleApiClient:
 
     # ── aplicatii ──
 
+    @ai_method("read", "Every app of the App Store Connect account: name, bundle ID, SKU.")
     def list_apps(self) -> list[dict]:
         items: list[dict] = []
         path: str | None = "apps"
@@ -113,6 +127,35 @@ class AppleApiClient:
             params={"sort": "-createdDate", "include": "response", "limit": str(limit)},
         )
 
+    @ai_method(
+        "read",
+        "Customer reviews of an app, newest first, with the developer response when there is one. "
+        "Pass back next_cursor to get the next page.",
+    )
+    def list_app_reviews(
+        self, app_id: str, cursor: Annotated[str, "free_text"] | None = None, limit: int = 100
+    ) -> dict:
+        params = {"sort": "-createdDate", "include": "response", "limit": str(max(1, min(int(limit), 200)))}
+        if cursor:
+            params["cursor"] = cursor
+        page = self.http.call("GET", f"apps/{app_id}/customerReviews", params=params)
+        return {"data": page.get("data", []), "included": page.get("included", []), "next_cursor": next_cursor(page)}
+
+    @ai_method(
+        "read",
+        "App Store versions of an app (platform, version, state, release type, dates), newest first. "
+        "Pass back next_cursor to get the next page.",
+    )
+    def list_app_versions(
+        self, app_id: str, cursor: Annotated[str, "free_text"] | None = None, limit: int = 50
+    ) -> dict:
+        params = {"fields[appStoreVersions]": AI_VERSION_FIELDS, "limit": str(max(1, min(int(limit), 200)))}
+        if cursor:
+            params["cursor"] = cursor
+        page = self.http.call("GET", f"apps/{app_id}/appStoreVersions", params=params)
+        return {"data": page.get("data", []), "next_cursor": next_cursor(page)}
+
+    @ai_method("write", "Reply to a customer review (one developer response per review).")
     def create_review_response(self, review_id: str, text: str) -> dict:
         body = {
             "data": {

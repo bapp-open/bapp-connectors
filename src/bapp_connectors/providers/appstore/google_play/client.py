@@ -7,9 +7,12 @@ Clientul Google Play — doar HTTP.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Annotated
 from urllib.parse import quote
 
+from bapp_connectors.core.ai import ai_method
+from bapp_connectors.core.errors import ValidationError
 from bapp_connectors.providers.appstore.google_play.errors import raise_for_response
 
 if TYPE_CHECKING:
@@ -17,6 +20,10 @@ if TYPE_CHECKING:
 
 STORAGE_BASE_URL = "https://storage.googleapis.com/storage/v1/"
 PUBLISHER_BASE_URL = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/"
+
+
+#: An Android application ID (it goes into the Android Publisher URL path).
+PACKAGE_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+")
 
 
 class GooglePlayApiClient:
@@ -60,6 +67,24 @@ class GooglePlayApiClient:
             params["token"] = token
         return self.http.call("GET", f"{PUBLISHER_BASE_URL}{package_name}/reviews", params=params)
 
+    @ai_method(
+        "read",
+        "Reviews of an app (package name, e.g. com.example.app) from the last week, with the developer "
+        "reply when there is one. Pass back next_cursor to get the next page.",
+    )
+    def list_app_reviews(
+        self, package_name: str, cursor: Annotated[str, "free_text"] | None = None, max_results: int = 100
+    ) -> dict:
+        if not PACKAGE_NAME_RE.fullmatch(package_name):
+            raise ValidationError("Not an Android package name")
+        page = self.list_reviews(package_name, token=cursor, max_results=max(1, min(int(max_results), 100)))
+        # BAPP redacts every key containing "token" (tokenPagination.nextPageToken): hand the cursor out renamed.
+        return {
+            "reviews": page.get("reviews", []),
+            "next_cursor": (page.get("tokenPagination") or {}).get("nextPageToken"),
+        }
+
+    @ai_method("write", "Reply to (or replace the reply to) a review of an app.")
     def reply_review(self, package_name: str, review_id: str, text: str) -> dict:
         return self.http.call("POST", f"{PUBLISHER_BASE_URL}{package_name}/reviews/{review_id}:reply", json={"replyText": text}, retry=False)
 
