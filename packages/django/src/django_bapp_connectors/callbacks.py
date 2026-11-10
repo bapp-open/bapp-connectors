@@ -91,6 +91,10 @@ def _response_body(ctx: ResponseContext):
         return None
 
 
+# AbstractExecutionLog.action is varchar(100); signed download URLs (labels, invoices) are longer
+ACTION_MAX_LENGTH = 100
+
+
 def make_execution_log_callback(execution_log_model, connection):
     """
     Create on_response and on_error callbacks that persist to ExecutionLog.
@@ -115,7 +119,7 @@ def make_execution_log_callback(execution_log_model, connection):
 
             execution_log_model.objects.create(
                 connection=connection,
-                action=_redact_text(f"{ctx.request.method} {ctx.request.url}"),
+                action=_redact_text(f"{ctx.request.method} {ctx.request.url}")[:ACTION_MAX_LENGTH],
                 method=ctx.request.method,
                 url=_redact_text(ctx.request.url)[:500],
                 response_status=ctx.status_code,
@@ -130,7 +134,7 @@ def make_execution_log_callback(execution_log_model, connection):
         try:
             execution_log_model.objects.create(
                 connection=connection,
-                action=_redact_text(f"{ctx.method} {ctx.url}"),
+                action=_redact_text(f"{ctx.method} {ctx.url}")[:ACTION_MAX_LENGTH],
                 method=ctx.method,
                 url=_redact_text(ctx.url)[:500],
                 error=_redact_text(str(error))[:2000],

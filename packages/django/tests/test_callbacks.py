@@ -171,3 +171,26 @@ class TestSteamKeyRedaction:
         on_error(req, RuntimeError("bad monkey=1"))
         log = ExecutionLog.objects.latest("pk")
         assert log.error == "bad monkey=1"
+
+
+# ── long URLs (signed label downloads) ──
+
+
+class TestLongUrl:
+    """`action` is varchar(100): a signed download URL must not make the log insert fail."""
+
+    LONG_URL = "https://openapi-b-eu.temu.com/label/download?" + "sign=" + "a" * 300
+
+    def test_on_response_trims_action_to_the_column(self, callbacks):
+        on_response, _ = callbacks
+        req = RequestContext(method="GET", url=self.LONG_URL, provider="temu")
+        on_response(ResponseContext(request=req, status_code=200, duration_ms=5))
+        log = ExecutionLog.objects.get()
+        assert len(log.action) <= ExecutionLog._meta.get_field("action").max_length
+        assert log.action.startswith("GET https://openapi-b-eu.temu.com/label/download")
+
+    def test_on_error_trims_action_to_the_column(self, callbacks):
+        _, on_error = callbacks
+        on_error(RequestContext(method="GET", url=self.LONG_URL, provider="temu"), RuntimeError("boom"))
+        log = ExecutionLog.objects.get()
+        assert len(log.action) <= ExecutionLog._meta.get_field("action").max_length
