@@ -19,6 +19,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# Documented GET products.json filters an agent may send.
+AI_PRODUCT_FILTERS = (
+    "ids", "title", "vendor", "product_type", "collection_id", "handle", "status", "created_at_min", "created_at_max",
+    "updated_at_min", "updated_at_max", "published_status", "fields", "page_info",
+)
+# Documented GET orders.json filters an agent may send.
+AI_ORDER_FILTERS = (
+    "ids", "name", "financial_status", "fulfillment_status", "created_at_min", "created_at_max", "updated_at_min",
+    "updated_at_max", "processed_at_min", "processed_at_max", "fields", "page_info",
+)
+
+
 class ShopifyApiClient:
     """Low-level Shopify Admin API client."""
 
@@ -42,9 +54,8 @@ class ShopifyApiClient:
     @ai_method(
         "read",
         "Products, one page per call (limit up to 250, continue with since_id); params adds Shopify filters.",
-        extra={
-            "params": "flat",
-        },
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_PRODUCT_FILTERS},
     )
     def get_products(self, limit: int = 250, since_id: int | None = None, **kwargs) -> list[dict]:
         params: dict[str, Any] = {"limit": limit}
@@ -111,9 +122,8 @@ class ShopifyApiClient:
     @ai_method(
         "read",
         "Orders, one page per call (limit up to 250, continue with since_id), by status; params adds Shopify filters.",
-        extra={
-            "params": "flat",
-        },
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_ORDER_FILTERS},
     )
     def get_orders(self, limit: int = 250, status: str = "any", since_id: int | None = None, **kwargs) -> list[dict]:
         params: dict[str, Any] = {"limit": limit, "status": status}

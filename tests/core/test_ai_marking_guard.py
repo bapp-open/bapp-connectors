@@ -17,7 +17,18 @@ import typing
 import pytest
 
 import bapp_connectors.providers.shop as shop_pkg
-from bapp_connectors.core.ai import AI_ATTR, FORBIDDEN_EXTRA_KEYS, ai_method, ai_methods, drop_method_override
+from bapp_connectors.core.ai import (
+    AI_ATTR,
+    FORBIDDEN_EXTRA_KEYS,
+    PRESTASHOP_BLOCKED_QUERY,
+    WOOCOMMERCE_BLOCKED_PREFIXES,
+    WOOCOMMERCE_BLOCKED_QUERY,
+    ai_method,
+    ai_methods,
+    drop_method_override,
+    drop_query_overrides,
+    key_allowed,
+)
 from bapp_connectors.core.registry import registry
 
 for _mod in pkgutil.iter_modules(shop_pkg.__path__):
@@ -110,8 +121,6 @@ REVIEWED_READ_METHODS: dict[str, set[str]] = {
         "get_products",
     },
     "bapp_store": {
-        "export_order",
-        "export_orders",
         "find_products",
         "list_categories",
     },
@@ -315,7 +324,7 @@ REVIEWED_FREE_TEXT = {
     ("emag", "get_invoices", "number"),
     ("emag", "get_customer_invoices", "number"),
     ("bapp_store", "find_products", "code"),
-    ("bapp_store", "export_order", "number"),
+    ("trendyol", "get_products", "next_page_token"),
 }
 
 
@@ -327,7 +336,6 @@ def test_free_text_params_are_reviewed(provider):
         for param in inspect.signature(getattr(cls, name)).parameters.values():
             ann = param.annotation
             if "free_text" in (ann if isinstance(ann, str) else repr(ann)):
-                assert info.kind == "read" or (provider, name, param.name) in REVIEWED_FREE_TEXT
                 found.add((provider, name, param.name))
     assert found == {t for t in REVIEWED_FREE_TEXT if t[0] == provider}
 
@@ -418,3 +426,185 @@ def test_marked_method_annotations_resolve_at_runtime(provider):
     cls = _client_cls(provider)
     for name in ai_methods(cls):
         typing.get_type_hints(getattr(cls, name), include_extras=True)
+
+
+# ── allowed_keys: every free-form dict an agent can fill is an allow-list ──
+
+ROUTING_OR_AUTH_KEYS = {
+    "_method",
+    "rest_route",
+    "_jsonp",
+    "_envelope",
+    "consumer_key",
+    "consumer_secret",
+    "oauth_consumer_key",
+    "oauth_signature",
+    "ps_method",
+    "url",
+    "ws_key",
+    "output_format",
+    "io_format",
+    "schema",
+}
+# Temu's signed envelope and call() options; `type` is a legitimate filter elsewhere (WooCommerce).
+TEMU_ENVELOPE_KEYS = {"type", "app_key", "access_token", "timestamp", "sign", "sign_method", "retry", "log_body"}
+
+
+def _dict_typed(annotation) -> bool:
+    text = annotation if isinstance(annotation, str) else repr(annotation)
+    return bool(re.search(r"\b(dict|Dict|Mapping)\b", text))
+
+
+@pytest.mark.parametrize("provider", SHOP_PROVIDERS)
+def test_flat_extras_and_dict_params_have_allowed_keys(provider):
+    for name, fn, info in _read_methods(provider):
+        for key, shape in info.extra.items():
+            if shape == "flat":
+                assert info.allowed_keys.get(key), f"{provider}.{name}: flat extra {key!r} has no allowed_keys"
+        for param in list(inspect.signature(fn).parameters.values())[1:]:
+            if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+                continue
+            if _dict_typed(param.annotation):
+                assert info.allowed_keys.get(param.name), f"{provider}.{name}: dict param {param.name!r} unlisted"
+
+
+@pytest.mark.parametrize("provider", SHOP_PROVIDERS)
+def test_allowed_keys_never_list_routing_or_auth_keys(provider):
+    for name, _fn, info in _read_methods(provider):
+        for arg, patterns in info.allowed_keys.items():
+            blocked = ROUTING_OR_AUTH_KEYS | (TEMU_ENVELOPE_KEYS if provider == "temu" else set())
+            for key in blocked:
+                assert not key_allowed(key, patterns), f"{provider}.{name}.{arg} allows {key!r}"
+
+
+def test_ai_method_requires_allowed_keys_for_flat_extra():
+    with pytest.raises(ValueError):
+        ai_method("read", "List.", extra={"params": "flat"})
+    with pytest.raises(ValueError):
+        ai_method("read", "List.", extra={"params": "flat"}, allowed_keys={"params": ()})
+    with pytest.raises(ValueError):
+        ai_method("read", "List.", extra={"params": "flat"}, allowed_keys={"params": "status"})
+    info = ai_method("read", "List.", extra={"params": "flat"}, allowed_keys={"params": ["status", "filter["]})(
+        lambda **kw: kw
+    ).__bapp_ai__
+    assert info.allowed_keys["params"] == ("status", "filter[")
+    with pytest.raises(TypeError):
+        info.allowed_keys["params"] = ("url",)
+
+
+def test_key_allowed_exact_and_bracket_prefix():
+    assert key_allowed("filter[id]", ("display", "filter["))
+    assert key_allowed("display", ("display", "filter["))
+    assert not key_allowed("filterx", ("filter[",))
+    assert not key_allowed("displays", ("display",))
+    assert not key_allowed("url", ("display", "filter["))
+
+
+# ── Critical 1: PrestaShop `options` cannot switch the webservice resource ──
+
+
+def _prestashop_sent(options, use_query_auth=False):
+    from bapp_connectors.providers.shop.prestashop.client import PrestaShopApiClient
+
+    class Http:
+        def call(self, method, path, **kwargs):
+            self.sent = (method, path, kwargs)
+            return {"orders": []}
+
+    http = Http()
+    client = PrestaShopApiClient(
+        http, token="key", api_url="https://shop.example.com/api/", use_query_auth=use_query_auth
+    )
+    client.get_orders(options)
+    return http.sent
+
+
+@pytest.mark.parametrize("use_query_auth", [False, True])
+def test_prestashop_options_url_is_dropped_and_not_allowed(use_query_auth):
+    from bapp_connectors.providers.shop.prestashop.client import PrestaShopApiClient
+
+    method, path, kwargs = _prestashop_sent(
+        {
+            "url": "customers",
+            "url[]": "employees",
+            "ws_key": "other",
+            "io_format": "XML",
+            "display": "full",
+            "filter[id]": "[1|2]",
+        },
+        use_query_auth,
+    )
+    params = kwargs["params"]
+    assert path.endswith("/api/orders")
+    assert "url" not in params and "url[]" not in params
+    assert params["display"] == "full" and params["filter[id]"] == "[1|2]"
+    if use_query_auth:
+        assert params["ws_key"] == "key"  # ours, set after the caller's keys are dropped
+    else:
+        assert "ws_key" not in params and "io_format" not in params
+    allowed = ai_methods(PrestaShopApiClient)["get_orders"].allowed_keys["options"]
+    for key in PRESTASHOP_BLOCKED_QUERY:
+        assert not key_allowed(key, allowed)
+
+
+# ── Critical 2: WooCommerce `params` cannot re-route the REST request ──
+
+
+@pytest.mark.parametrize("use_query_auth", [False, True])
+def test_woocommerce_rest_route_is_dropped_and_not_allowed(use_query_auth):
+    from bapp_connectors.providers.shop.woocommerce.client import WooCommerceApiClient
+
+    class Http:
+        def call(self, method, path, **kwargs):
+            self.sent = (method, path, kwargs)
+            return []
+
+    http = Http()
+    client = WooCommerceApiClient(
+        http, consumer_key="ck_ours", consumer_secret="cs_ours", use_query_auth=use_query_auth
+    )
+    client.get_products(
+        params={
+            "rest_route": "/wc/v3/webhooks",
+            "rest.route": "/wp/v2/users",
+            "_jsonp": "cb",
+            "_envelope": "1",
+            "consumer_key": "ck_other",
+            "oauth_token": "x",
+            "search": "mug",
+        }
+    )
+    params = http.sent[2]["params"]
+    for key in ("rest_route", "rest.route", "_jsonp", "_envelope", "oauth_token"):
+        assert key not in params
+    assert params["search"] == "mug"
+    if use_query_auth:
+        assert params["consumer_key"] == "ck_ours"
+    else:
+        assert "consumer_key" not in params
+    for method in ("get_orders", "get_products"):
+        allowed = ai_methods(WooCommerceApiClient)[method].allowed_keys["params"]
+        for key in WOOCOMMERCE_BLOCKED_QUERY:
+            assert not key_allowed(key, allowed)
+        assert not any(p.startswith(WOOCOMMERCE_BLOCKED_PREFIXES) for p in allowed)
+
+
+def test_drop_query_overrides_php_forms():
+    params = {"rest_route": 1, " rest_route": 2, "rest.route[]": 3, "Rest_Route": 4, "oauth_nonce": 5, "x": 6}
+    assert drop_query_overrides(params, WOOCOMMERCE_BLOCKED_QUERY, WOOCOMMERCE_BLOCKED_PREFIXES) == {"x": 6}
+
+
+def test_temu_shipping_services_payload_cannot_set_call_options():
+    from bapp_connectors.providers.shop.temu.client import TemuApiClient
+
+    class Http:
+        def call(self, method, path, **kwargs):
+            self.kwargs = kwargs
+            return {"success": True, "result": {}}
+
+    http = Http()
+    TemuApiClient("key", "secret", "token", http_client=http).shipping_services(
+        {"warehouseId": "w", "log_body": True, "retry": False}
+    )
+    assert "log_body" not in http.kwargs and http.kwargs.get("retry", True) is True
+    assert "log_body" not in http.kwargs["json"] and "retry" not in http.kwargs["json"]

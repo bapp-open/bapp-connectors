@@ -14,7 +14,9 @@ def test_decorator_keeps_behaviour_and_sets_info():
     def get_order(order_id: int) -> dict:
         return {"id": order_id}
 
-    decorated = ai_method("read", "Fetch one order by id.", extra={"params": "flat"})(get_order)
+    decorated = ai_method(
+        "read", "Fetch one order by id.", extra={"params": "flat"}, allowed_keys={"params": ("status",)}
+    )(get_order)
 
     assert decorated is get_order
     assert decorated(7) == {"id": 7}

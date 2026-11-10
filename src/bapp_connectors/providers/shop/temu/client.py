@@ -26,6 +26,12 @@ ROUTERS = {
 DEFAULT_PAGE_SIZE = 50
 
 
+# bg.logistics.shippingservices.get request fields an agent may send in `payload`.
+AI_SHIPPING_SERVICES_KEYS = (
+    "warehouseId", "shipOrderInfoList", "weight", "weightUnit", "length", "width", "height", "dimensionUnit",
+)
+
+
 class TemuApiClient:
     #: pauses (s) before retrying an answer Temu rate-limited: the request was not executed, so writes retry too
     RATE_LIMIT_BACKOFF = (1, 2, 4)
@@ -236,9 +242,15 @@ class TemuApiClient:
     def confirm_shipment_v2(self, payload: dict) -> dict:
         return self.call("bg.logistics.shipment.v2.confirm", retry=False, log_body=True, **payload) or {}
 
-    @ai_method("read", "The Temu shipping services offered for a package, without buying one.")
+    @ai_method(
+        "read",
+        "The Temu shipping services offered for a package, without buying one.",
+        allowed_keys={"payload": AI_SHIPPING_SERVICES_KEYS},
+    )
     def shipping_services(self, payload: dict) -> dict:
-        return self.call("bg.logistics.shippingservices.get", **payload) or {}
+        # `retry`/`log_body` are call() options, never request fields
+        fields = {k: v for k, v in payload.items() if k not in ("retry", "log_body")}
+        return self.call("bg.logistics.shippingservices.get", **fields) or {}
 
     @ai_method("write", "Buy a Temu shipping label for a package.")
     def create_shipment(self, payload: dict) -> dict:

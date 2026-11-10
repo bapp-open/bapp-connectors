@@ -20,6 +20,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# Keys of one entry of `filters` (a searchCriteria filter).
+AI_SEARCH_FILTER_KEYS = ("field", "value", "condition", "group")
+
+
 class MagentoApiClient:
     """
     Low-level Magento 2 API client.
@@ -73,6 +77,7 @@ class MagentoApiClient:
     @ai_method(
         "read",
         "Products, recently updated first, one page per call (page, page_size), with optional searchCriteria filters.",
+        allowed_keys={"filters": AI_SEARCH_FILTER_KEYS},
     )
     def get_products(self, page: int = 1, page_size: int = 100, filters: list[dict] | None = None) -> dict:
         """GET /products — list products with searchCriteria."""
@@ -117,6 +122,7 @@ class MagentoApiClient:
     @ai_method(
         "read",
         "Orders, newest first, one page per call (page, page_size), with optional searchCriteria filters.",
+        allowed_keys={"filters": AI_SEARCH_FILTER_KEYS},
     )
     def get_orders(self, page: int = 1, page_size: int = 100, filters: list[dict] | None = None) -> dict:
         """GET /orders — list orders with searchCriteria."""

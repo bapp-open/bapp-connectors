@@ -24,6 +24,20 @@ def _json_encode(data: Any) -> bytes:
     return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 
+# product_offer/read filter fields an agent may send (merged into the POST body).
+AI_PRODUCT_OFFER_FILTERS = (
+    "id",
+    "part_number",
+    "part_number_key",
+    "ean",
+    "status",
+    "offer_validation_status",
+    "validation_status",
+    "general_stock",
+    "estimated_stock",
+)
+
+
 class EmagApiClient:
     """
     Low-level eMAG API client.
@@ -154,9 +168,8 @@ class EmagApiClient:
     @ai_method(
         "read",
         "Product offers from product_offer/read, one page per call (page, per_page); params adds eMAG filter fields to the request.",
-        extra={
-            "params": "flat",
-        },
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_PRODUCT_OFFER_FILTERS},
     )
     def get_products(
         self,

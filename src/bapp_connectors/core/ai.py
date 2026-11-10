@@ -10,11 +10,18 @@ server): the decorated function carries ``__bapp_ai__``, an object with
 ``kind`` ('read' | 'write'), ``description`` (str) and ``extra`` (a mapping of
 accepted ``**kwargs`` key -> 'scalar' | 'flat'). 'scalar' is one str/int/float/bool
 value; 'flat' is a flat dict whose values are str/int/float/bool.
+
+``allowed_keys`` (a mapping of argument name -> tuple of key patterns) lists the keys a
+'flat' extra or a dict-typed named parameter may carry. A key passes when it equals a
+pattern, or when a pattern ends with ``[`` and the key starts with it (``'filter['``
+allows ``'filter[id]'``). Every 'flat' extra must have a non-empty entry; any key that
+matches no pattern is refused by the consumer. Routing or authentication keys are never
+listed.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal, TypeVar
@@ -54,9 +61,16 @@ class AiMethodInfo:
     kind: AiKind
     description: str
     extra: Mapping[str, AiExtraShape] = field(default_factory=lambda: MappingProxyType({}))
+    allowed_keys: Mapping[str, tuple[str, ...]] = field(default_factory=lambda: MappingProxyType({}))
 
 
-def ai_method(kind: AiKind, description: str, *, extra: Mapping[str, AiExtraShape] | None = None) -> Callable[[F], F]:
+def ai_method(
+    kind: AiKind,
+    description: str,
+    *,
+    extra: Mapping[str, AiExtraShape] | None = None,
+    allowed_keys: Mapping[str, Iterable[str]] | None = None,
+) -> Callable[[F], F]:
     """Mark a client method as callable by an AI agent. Behaviour is unchanged."""
     if kind not in VALID_KINDS:
         raise ValueError(f"ai_method kind must be 'read' or 'write', got {kind!r}")
@@ -70,7 +84,25 @@ def ai_method(kind: AiKind, description: str, *, extra: Mapping[str, AiExtraShap
             raise ValueError(f"ai_method extra key {key!r} is forbidden")
         if shape not in VALID_EXTRA_SHAPES:
             raise ValueError(f"ai_method extra {key!r} shape must be 'scalar' or 'flat', got {shape!r}")
-    info = AiMethodInfo(kind=kind, description=description, extra=MappingProxyType(extra_items))
+    allowed: dict[str, tuple[str, ...]] = {}
+    for arg, patterns in (allowed_keys or {}).items():
+        if not isinstance(arg, str) or not arg:
+            raise ValueError(f"ai_method allowed_keys argument must be a non-empty string, got {arg!r}")
+        if isinstance(patterns, str):
+            raise ValueError(f"ai_method allowed_keys[{arg!r}] must be a sequence of keys, not a string")
+        items = tuple(patterns)
+        if not items or not all(isinstance(k, str) and k for k in items):
+            raise ValueError(f"ai_method allowed_keys[{arg!r}] must be non-empty strings")
+        allowed[arg] = items
+    for key, shape in extra_items.items():
+        if shape == "flat" and key not in allowed:
+            raise ValueError(f"ai_method 'flat' extra {key!r} needs an allowed_keys entry")
+    info = AiMethodInfo(
+        kind=kind,
+        description=description,
+        extra=MappingProxyType(extra_items),
+        allowed_keys=MappingProxyType(allowed),
+    )
 
     def decorator(fn: F) -> F:
         setattr(fn, AI_ATTR, info)
@@ -114,16 +146,42 @@ def _php_query_name(key: str) -> str:
     return name.replace(" ", "_").replace(".", "_").replace("[", "_")
 
 
-def drop_method_override(params: Any, override_name: str) -> Any:
-    """Remove a PHP method-override query key (WordPress ``_method``, PrestaShop ``ps_method``)
-    from a GET's params.
+def key_allowed(key: str, patterns: Iterable[str]) -> bool:
+    """Whether a dict key passes an ``allowed_keys`` entry (exact, or prefix ending in ``[``)."""
+    return any(key == p or (p.endswith("[") and key.startswith(p)) for p in patterns)
 
-    Both backends honour that key on a GET, so ``GET products/5?_method=DELETE`` deletes. A read
-    method that accepts free query filters (``params`` declared ``'flat'``) must never let one
-    through. Keys are compared as PHP sees them (``_method``, ``.method``, `` method``,
-    ``_method[]`` are the same key). Anything that is not a dict is returned unchanged.
+
+def drop_query_overrides(params: Any, names: Iterable[str], prefixes: Iterable[str] = ()) -> Any:
+    """Remove routing, method-override and auth keys from a GET's query params.
+
+    PHP backends read some query keys before routing: WordPress ``_method`` and ``rest_route``,
+    PrestaShop ``ps_method`` and ``url`` (the dispatcher's resource). Sent on a read, they move the
+    credentialed request to another verb or resource. Keys are compared as PHP files them in
+    ``$_GET`` (``_method``, ``.method``, `` _method``, ``_method[]`` are the same key), case-folded.
+    Anything that is not a dict is returned unchanged.
     """
     if not isinstance(params, dict):
         return params
-    target = override_name.lower()
-    return {k: v for k, v in params.items() if not (isinstance(k, str) and _php_query_name(k).lower() == target)}
+    drop = {n.lower() for n in names}
+    starts = tuple(p.lower() for p in prefixes)
+
+    def blocked(key: Any) -> bool:
+        if not isinstance(key, str):
+            return False
+        name = _php_query_name(key).lower()
+        return name in drop or (bool(starts) and name.startswith(starts))
+
+    return {k: v for k, v in params.items() if not blocked(k)}
+
+
+def drop_method_override(params: Any, override_name: str) -> Any:
+    """Remove one PHP method-override query key (WordPress ``_method``, PrestaShop ``ps_method``)."""
+    return drop_query_overrides(params, (override_name,))
+
+
+# Query keys a WooCommerce GET never sends on a caller's behalf: method override, REST
+# re-routing, response wrappers, and the query-string credentials the client adds itself.
+WOOCOMMERCE_BLOCKED_QUERY = ("_method", "rest_route", "_jsonp", "_envelope")
+WOOCOMMERCE_BLOCKED_PREFIXES = ("consumer_", "oauth_")
+# PrestaShop: method override, the dispatcher's resource (`url`), the key and output switches.
+PRESTASHOP_BLOCKED_QUERY = ("ps_method", "url", "ws_key", "output_format", "io_format", "schema")

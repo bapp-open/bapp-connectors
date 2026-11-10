@@ -73,7 +73,6 @@ class BappStoreClient:
             params["code"] = code
         return self._call("GET", PRODUCT_PATH, params=params)
 
-    @ai_method("read", "Orders changed since a date, one batch per call; pass the returned cursor to continue.")
     def export_orders(self, since: str | None, cursor: str | None, limit: int = 50) -> dict:
         params: dict[str, Any] = {"limit": limit}
         if since:
@@ -82,8 +81,7 @@ class BappStoreClient:
             params["cursor"] = cursor
         return self._call("GET", ORDERS_EXPORT_PATH, params=params)
 
-    @ai_method("read", "One order by its store number.")
-    def export_order(self, number: Annotated[str, "free_text"]) -> dict:
+    def export_order(self, number: str) -> dict:
         return self._call("GET", ORDER_EXPORT_PATH, params={"number": number})
 
     def set_webhook(self, url: str, secret_token: str) -> dict:

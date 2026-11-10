@@ -8,10 +8,28 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from bapp_connectors.core.ai import ai_method, drop_method_override
+from bapp_connectors.core.ai import (
+    WOOCOMMERCE_BLOCKED_PREFIXES,
+    WOOCOMMERCE_BLOCKED_QUERY,
+    ai_method,
+    drop_query_overrides,
+)
 
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
+
+
+# Documented list filters of GET orders an agent may send; never routing or auth keys.
+AI_ORDER_FILTERS = (
+    "search", "after", "before", "modified_after", "modified_before", "dates_are_gmt", "exclude", "include", "offset",
+    "order", "orderby", "parent", "parent_exclude", "status", "customer", "product", "dp", "created_via",
+)
+# Documented list filters of GET products an agent may send; never routing or auth keys.
+AI_PRODUCT_FILTERS = (
+    "search", "after", "before", "modified_after", "modified_before", "dates_are_gmt", "exclude", "include", "offset",
+    "order", "orderby", "parent", "parent_exclude", "slug", "status", "type", "sku", "featured", "category", "tag",
+    "shipping_class", "attribute", "attribute_term", "tax_class", "on_sale", "min_price", "max_price", "stock_status",
+)
 
 
 class WooCommerceApiClient:
@@ -31,10 +49,13 @@ class WooCommerceApiClient:
     def _call(self, method: str, path: str, **kwargs):
         """Make an API call, adding query-string auth if enabled.
 
-        WordPress honours `?_method=DELETE` on a GET, so a read never carries it.
+        A GET never carries what WordPress reads before routing: `?_method=DELETE` changes the verb,
+        `?rest_route=/wc/v3/webhooks` the route; the query credentials are only ever ours.
         """
         if method == "GET" and "params" in kwargs:
-            kwargs["params"] = drop_method_override(kwargs["params"], "_method")
+            kwargs["params"] = drop_query_overrides(
+                kwargs["params"], WOOCOMMERCE_BLOCKED_QUERY, WOOCOMMERCE_BLOCKED_PREFIXES
+            )
         if self._use_query_auth and self._consumer_key:
             params = kwargs.pop("params", {})
             if not isinstance(params, dict):
@@ -58,9 +79,8 @@ class WooCommerceApiClient:
     @ai_method(
         "read",
         "Orders, newest first, one page per call (page, per_page up to 100); params adds WooCommerce list filters.",
-        extra={
-            "params": "flat",
-        },
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_ORDER_FILTERS},
     )
     def get_orders(
         self,
@@ -121,9 +141,8 @@ class WooCommerceApiClient:
     @ai_method(
         "read",
         "Products, newest first, one page per call (page, per_page up to 100); params adds WooCommerce list filters.",
-        extra={
-            "params": "flat",
-        },
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_PRODUCT_FILTERS},
     )
     def get_products(self, page: int = 1, per_page: int = 100, **kwargs) -> list[dict]:
         params: dict[str, Any] = {

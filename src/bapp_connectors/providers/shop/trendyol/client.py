@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from bapp_connectors.core.ai import ai_method
 
@@ -18,6 +18,13 @@ if TYPE_CHECKING:
 
 def _json_encode(data: Any) -> bytes:
     return json.dumps(data, ensure_ascii=False).encode("utf-8")
+
+
+# Product v2 approved-products filters an agent may send.
+AI_PRODUCT_FILTERS = (
+    "barcode", "stockCode", "productMainId", "contentId", "onSale", "archived", "startDate", "endDate",
+    "dateQueryType",
+)
 
 
 class TrendyolApiClient:
@@ -116,16 +123,15 @@ class TrendyolApiClient:
     @ai_method(
         "read",
         "Approved products from Product v2, grouped by content, one page per call (page or next_page_token, up to 100); params adds Trendyol filters.",
-        extra={
-            "params": "flat",
-        },
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_PRODUCT_FILTERS},
     )
     def get_products(
         self,
         page: int = 0,
         per_page: int = PRODUCTS_PAGE_SIZE,
         approved: bool | None = None,
-        next_page_token: str | None = None,
+        next_page_token: Annotated[str, "free_text"] | None = None,
         **kwargs,
     ) -> dict:
         """Approved products, from Product v2 (`products/approved`).

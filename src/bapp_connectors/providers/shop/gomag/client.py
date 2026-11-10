@@ -15,6 +15,12 @@ if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 
+# product/read filters an agent may send.
+AI_PRODUCT_FILTERS = ("id", "sku", "category", "brand", "updated", "enabled", "visible")
+# order/read filters an agent may send.
+AI_ORDER_FILTERS = ("id", "number", "status", "startDate", "endDate", "updated", "email", "phone")
+
+
 class GomagApiClient:
     """
     Low-level Gomag API client.
@@ -47,9 +53,8 @@ class GomagApiClient:
     @ai_method(
         "read",
         "Products, one page per call (page, limit); params adds Gomag filters.",
-        extra={
-            "params": "flat",
-        },
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_PRODUCT_FILTERS},
     )
     def get_products(self, page: int = 1, limit: int = 100, **kwargs) -> dict:
         params: dict[str, Any] = {
@@ -85,7 +90,12 @@ class GomagApiClient:
 
     # ── Orders ──
 
-    @ai_method("read", "Orders, one page per call (page, limit); params adds Gomag filters.", extra={"params": "flat"})
+    @ai_method(
+        "read",
+        "Orders, one page per call (page, limit); params adds Gomag filters.",
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_ORDER_FILTERS},
+    )
     def get_orders(self, page: int = 1, limit: int = 100, **kwargs) -> dict:
         params: dict[str, Any] = {
             "page": page,

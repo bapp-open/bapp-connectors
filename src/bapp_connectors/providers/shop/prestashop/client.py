@@ -14,7 +14,7 @@ from urllib.parse import urljoin
 
 from requests.auth import HTTPBasicAuth
 
-from bapp_connectors.core.ai import ai_method, drop_method_override
+from bapp_connectors.core.ai import PRESTASHOP_BLOCKED_QUERY, ai_method, drop_query_overrides
 from bapp_connectors.core.errors import ConfigurationError
 
 if TYPE_CHECKING:
@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 # atributul cu care PrestaShop marcheaza fiecare resursa din lista de la radacina
 XLINK_HREF = "{http://www.w3.org/1999/xlink}href"
+
+
+# Webservice list parameters an agent may send in `options`; never `url`, `ws_key`, `ps_method`.
+AI_LIST_OPTIONS = ("display", "filter[", "sort", "limit", "date", "language")
 
 
 class PrestaShopApiClient:
@@ -68,9 +72,10 @@ class PrestaShopApiClient:
         """
         headers = kwargs.pop("headers", {})
         headers.setdefault("Output-Format", "JSON")
-        # the webservice honours `?ps_method=DELETE` on a GET: a read never carries it
+        # a GET never carries `ps_method` (verb override), `url` (the dispatcher's resource: the
+        # rewrite appends the query, PHP keeps the last `url`) nor the key/output switches
         if method == "GET" and "params" in kwargs:
-            kwargs["params"] = drop_method_override(kwargs["params"], "ps_method")
+            kwargs["params"] = drop_query_overrides(kwargs["params"], PRESTASHOP_BLOCKED_QUERY)
 
         # Convert JSON payload to XML for write operations
         if method in ("POST", "PUT", "PATCH") and "json" in kwargs:
@@ -184,6 +189,7 @@ class PrestaShopApiClient:
     @ai_method(
         "read",
         "Orders, one page per call; options holds PrestaShop list parameters (display, filter[...], sort, limit 'offset,count').",
+        allowed_keys={"options": AI_LIST_OPTIONS},
     )
     def get_orders(self, options: dict[str, Any] | None = None, **kwargs) -> list[dict]:
         """Fetch orders with optional filter/display options."""
@@ -233,6 +239,7 @@ class PrestaShopApiClient:
     @ai_method(
         "read",
         "Products, one page per call; options holds PrestaShop list parameters (display, filter[...], sort, limit 'offset,count').",
+        allowed_keys={"options": AI_LIST_OPTIONS},
     )
     def get_products(self, options: dict[str, Any] | None = None, **kwargs) -> list[dict]:
         """Fetch products with optional filter/display options."""
@@ -253,6 +260,7 @@ class PrestaShopApiClient:
     @ai_method(
         "read",
         "Categories, one page per call; options holds PrestaShop list parameters (display, filter[...], sort, limit 'offset,count').",
+        allowed_keys={"options": AI_LIST_OPTIONS},
     )
     def get_categories(self, options: dict[str, Any] | None = None, **kwargs) -> list[dict]:
         """Fetch categories with optional filter/display options."""

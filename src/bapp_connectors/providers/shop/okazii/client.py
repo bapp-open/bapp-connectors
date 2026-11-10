@@ -15,6 +15,10 @@ if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 
+# export_orders collection filters an agent may send.
+AI_ORDER_FILTERS = ("page", "itemsPerPage", "date_from", "date_to", "status")
+
+
 class OkaziiApiClient:
     """
     Low-level Okazii API client.
@@ -56,9 +60,8 @@ class OkaziiApiClient:
     @ai_method(
         "read",
         "Orders (first page unless params carries page), created from created_after until today when given; params adds Okazii filters.",
-        extra={
-            "params": "flat",
-        },
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_ORDER_FILTERS},
     )
     def get_orders(
         self,

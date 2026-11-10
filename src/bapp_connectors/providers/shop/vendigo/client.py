@@ -15,6 +15,10 @@ if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
 
+# orders/list filters an agent may send.
+AI_ORDER_FILTERS = ("date_from", "date_to", "status", "page")
+
+
 class VendigoApiClient:
     """
     Low-level Vendigo API client.
@@ -59,9 +63,8 @@ class VendigoApiClient:
     @ai_method(
         "read",
         "Orders (one page as Vendigo answers it), created from created_after when given; params adds Vendigo filters.",
-        extra={
-            "params": "flat",
-        },
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_ORDER_FILTERS},
     )
     def get_orders(
         self,
