@@ -34,3 +34,10 @@ class BasePort(ABC):
     def supports(self, capability: type) -> bool:
         """Check if this adapter implements a given capability interface."""
         return isinstance(self, capability)
+
+    def get_ai_client(self):
+        """The client whose ``@ai_method``-marked methods an AI agent may call.
+
+        Defaults to ``self.client``; adapters keeping their client elsewhere override this.
+        """
+        return getattr(self, "client", None)
