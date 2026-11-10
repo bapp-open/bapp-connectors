@@ -178,6 +178,18 @@ LIVE_SERVICES = {"onlineChannelDtoList": [
 ], "unavailableChannelDtoList": []}
 
 
+def test_the_weight_is_sent_with_at_most_two_decimals_rounded_up(fake):
+    # live 2026-11-10: "0.265" -> 120015507 Wrong package weight information, "0.27" passes
+    adapter = _adapter(fake)
+    detail = load("order_detail.json")
+    fake.add("POST", "openapi/router", _router(detail, {"bg.logistics.shippingservices.get": LIVE_SERVICES}))
+    order_sn = detail["parentOrderMap"]["parentOrderSn"]
+    adapter.list_shipping_services(order_sn, "WH-1", package={"weight_g": 265})
+    assert fake.last_call().kwargs["json"]["weight"] == "0.27"
+    adapter.list_shipping_services(order_sn, "WH-1", package={"weight_g": 1001})
+    assert fake.last_call().kwargs["json"]["weight"] == "1.01"
+
+
 def test_shipping_services_send_the_package_in_kg_and_cm(fake):
     adapter = _adapter(fake, default_weight_g=100, default_length_cm=10, default_width_cm=20, default_height_cm=30)
     detail = load("order_detail.json")

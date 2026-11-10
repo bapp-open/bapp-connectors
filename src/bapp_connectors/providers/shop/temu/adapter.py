@@ -7,7 +7,7 @@ import logging
 import time
 import urllib.parse
 import uuid
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from typing import TYPE_CHECKING
 
 from bapp_connectors.core.capabilities import (
@@ -525,7 +525,9 @@ class TemuShopAdapter(
             except (TypeError, ValueError):
                 return fallback
 
-        weight_kg = (Decimal(value("weight_g", "default_weight_g", 100)) / 1000).normalize()
+        # Temu takes at most 2 decimals (live 2026-11-10: "0.265" -> 120015507, "0.27" passes): round up
+        weight_kg = (Decimal(value("weight_g", "default_weight_g", 100)) / 1000).quantize(
+            Decimal("0.01"), rounding=ROUND_CEILING).normalize()
         return {
             "weight": f"{weight_kg:f}", "weightUnit": "kg",
             "length": str(value("length_cm", "default_length_cm", 10)),
