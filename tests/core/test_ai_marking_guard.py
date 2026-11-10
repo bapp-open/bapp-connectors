@@ -8,18 +8,10 @@ is updated, which is the point: the change needs the same review.
 
 from __future__ import annotations
 
-import importlib
-import inspect
-import pkgutil
-import re
-import typing
-
 import pytest
 
-import bapp_connectors.providers.shop as shop_pkg
 from bapp_connectors.core.ai import (
     AI_ATTR,
-    FORBIDDEN_EXTRA_KEYS,
     PRESTASHOP_BLOCKED_QUERY,
     WOOCOMMERCE_BLOCKED_PREFIXES,
     WOOCOMMERCE_BLOCKED_QUERY,
@@ -29,11 +21,10 @@ from bapp_connectors.core.ai import (
     drop_query_overrides,
     key_allowed,
 )
-from bapp_connectors.core.registry import registry
+from tests.core import ai_guard
 
-for _mod in pkgutil.iter_modules(shop_pkg.__path__):
-    if _mod.ispkg:
-        importlib.import_module(f"{shop_pkg.__name__}.{_mod.name}")
+FAMILY = "shop"
+SHOP_PROVIDERS = ai_guard.family_providers(FAMILY)
 
 REVIEWED_READ_METHODS: dict[str, set[str]] = {
     "emag": {
@@ -223,99 +214,48 @@ REVIEWED_READ_EXTRA: dict[tuple[str, str], dict[str, str]] = {
     ("temu", "list_goods"): {"crtFrom": "scalar", "statusFilterType": "scalar", "goodsSearchType": "scalar"},
 }
 
-SHOP_PROVIDERS = sorted(m.name for m in registry.list_providers(family="shop"))
+# Shop has no providers left unmarked.
+NOT_MARKED: dict[str, str] = {}
 
 
-def _dummy_credentials(manifest) -> dict:
-    creds = {}
-    for f in manifest.auth.required_fields:
-        if f.choices:
-            creds[f.name] = f.choices[0]
-        elif f.default:
-            creds[f.name] = f.default
-        elif f.role == "endpoint" or any(part in f.name for part in ("url", "domain", "site")):
-            creds[f.name] = "https://shop.example.com"
-        else:
-            creds[f.name] = "dummy"
-    return creds
+def test_every_shop_provider_is_reviewed_or_not_marked():
+    ai_guard.check_family_coverage(FAMILY, REVIEWED_READ_METHODS, NOT_MARKED)
 
 
-def _adapter(provider: str):
-    manifest = registry.get_manifest("shop", provider)
-    return registry.create_adapter("shop", provider, credentials=_dummy_credentials(manifest))
-
-
-def _client_cls(provider: str) -> type:
-    return type(_adapter(provider).get_ai_client())
-
-
-def _read_methods(provider: str):
-    cls = _client_cls(provider)
-    for name, info in ai_methods(cls).items():
-        if info.kind == "read":
-            yield name, getattr(cls, name), info
+def _check(check, provider, **kwargs):
+    check(FAMILY, provider, REVIEWED_READ_METHODS, REVIEWED_READ_EXTRA, **kwargs)
 
 
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_every_shop_adapter_exposes_ai_client(provider):
     """Built with fake credentials (no network), the adapter hands out a client with marks."""
-    client = _adapter(provider).get_ai_client()
-    assert client is not None
-    assert ai_methods(client), f"{provider}: client has no @ai_method marks"
-    assert provider in REVIEWED_READ_METHODS, f"{provider}: shop provider missing from the reviewed list"
+    _check(ai_guard.check_exposes_ai_client, provider)
 
 
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_every_read_method_is_reviewed(provider):
-    marked = {name for name, _fn, _info in _read_methods(provider)}
-    assert marked == REVIEWED_READ_METHODS[provider]
+    _check(ai_guard.check_read_methods_reviewed, provider)
 
 
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_read_methods_have_annotated_params(provider):
-    for name, fn, _info in _read_methods(provider):
-        for param in list(inspect.signature(fn).parameters.values())[1:]:
-            if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
-                continue
-            assert param.annotation is not param.empty, f"{provider}.{name}: {param.name} has no annotation"
+    _check(ai_guard.check_annotated_params, provider)
 
 
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_read_methods_with_var_kwargs_declare_extra(provider):
-    for name, fn, info in _read_methods(provider):
-        params = inspect.signature(fn).parameters.values()
-        has_var_kwargs = any(p.kind is p.VAR_KEYWORD for p in params)
-        expected = REVIEWED_READ_EXTRA.get((provider, name), {})
-        if not has_var_kwargs:
-            assert not expected, f"{provider}.{name}: extra declared but the method takes no **kwargs"
-        assert dict(info.extra) == expected, f"{provider}.{name}: extra differs from the reviewed one"
-        assert not set(info.extra) & FORBIDDEN_EXTRA_KEYS
+    _check(ai_guard.check_var_kwargs_extra, provider)
 
 
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_no_marked_method_returns_bytes(provider):
-    cls = _client_cls(provider)
-    for name, info in ai_methods(cls).items():
-        returns = inspect.signature(getattr(cls, name)).return_annotation
-        text = returns if isinstance(returns, str) else getattr(returns, "__name__", str(returns))
-        assert not re.search(r"\b(bytes|bytearray|Response)\b", text), f"{provider}.{name} ({info.kind}) returns {text}"
-
-
-LAZY_RETURN = re.compile(
-    r"\b(Iterator|Iterable|Generator|AsyncIterator|AsyncIterable|AsyncGenerator|Awaitable|Coroutine)\b"
-)
+    _check(ai_guard.check_no_bytes_return, provider)
 
 
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_read_methods_return_materialised_data(provider):
     """BAPP refuses lazy results (generators, iterators, awaitables): a read returns its data."""
-    for name, fn, _info in _read_methods(provider):
-        assert not inspect.isgeneratorfunction(fn) and not inspect.iscoroutinefunction(fn), f"{provider}.{name}"
-        assert not inspect.isasyncgenfunction(fn), f"{provider}.{name}"
-        returns = inspect.signature(fn).return_annotation
-        assert returns is not inspect.Signature.empty, f"{provider}.{name}: no return annotation"
-        text = returns if isinstance(returns, str) else str(returns)
-        assert not LAZY_RETURN.search(text), f"{provider}.{name} returns {text}"
+    _check(ai_guard.check_materialised_data, provider)
 
 
 # Read params that accept free text (BAPP skips its path-safety check on them). Each one only
@@ -330,25 +270,13 @@ REVIEWED_FREE_TEXT = {
 
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_free_text_params_are_reviewed(provider):
-    cls = _client_cls(provider)
-    found = set()
-    for name, info in ai_methods(cls).items():
-        for param in inspect.signature(getattr(cls, name)).parameters.values():
-            ann = param.annotation
-            if "free_text" in (ann if isinstance(ann, str) else repr(ann)):
-                found.add((provider, name, param.name))
-    assert found == {t for t in REVIEWED_FREE_TEXT if t[0] == provider}
+    _check(ai_guard.check_free_text_reviewed, provider, free_text=REVIEWED_FREE_TEXT)
 
 
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_marks_sit_on_plain_methods_only(provider):
     """`ai_methods` skips a mark put above @staticmethod/@classmethod; none may exist."""
-    cls = _client_cls(provider)
-    for klass in cls.__mro__:
-        for name, value in vars(klass).items():
-            if isinstance(value, (staticmethod, classmethod)):
-                assert not hasattr(value, AI_ATTR), f"{provider}: {klass.__name__}.{name} mark is ignored"
-                assert not hasattr(value.__func__, AI_ATTR), f"{provider}: {klass.__name__}.{name} is not a method"
+    _check(ai_guard.check_plain_methods_only, provider)
 
 
 def test_guard_sees_a_mark_hidden_by_staticmethod():
@@ -423,58 +351,24 @@ def test_temu_parameters_cannot_replace_the_api_type():
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_marked_method_annotations_resolve_at_runtime(provider):
     """BAPP builds the tool schema from the type hints; a TYPE_CHECKING-only import breaks it."""
-    cls = _client_cls(provider)
-    for name in ai_methods(cls):
-        typing.get_type_hints(getattr(cls, name), include_extras=True)
+    _check(ai_guard.check_annotations_resolve, provider)
 
 
 # ── allowed_keys: every free-form dict an agent can fill is an allow-list ──
 
-ROUTING_OR_AUTH_KEYS = {
-    "_method",
-    "rest_route",
-    "_jsonp",
-    "_envelope",
-    "consumer_key",
-    "consumer_secret",
-    "oauth_consumer_key",
-    "oauth_signature",
-    "ps_method",
-    "url",
-    "ws_key",
-    "output_format",
-    "io_format",
-    "schema",
-}
 # Temu's signed envelope and call() options; `type` is a legitimate filter elsewhere (WooCommerce).
 TEMU_ENVELOPE_KEYS = {"type", "app_key", "access_token", "timestamp", "sign", "sign_method", "retry", "log_body"}
 
 
-def _dict_typed(annotation) -> bool:
-    text = annotation if isinstance(annotation, str) else repr(annotation)
-    return bool(re.search(r"\b(dict|Dict|Mapping)\b", text))
-
-
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_flat_extras_and_dict_params_have_allowed_keys(provider):
-    for name, fn, info in _read_methods(provider):
-        for key, shape in info.extra.items():
-            if shape == "flat":
-                assert info.allowed_keys.get(key), f"{provider}.{name}: flat extra {key!r} has no allowed_keys"
-        for param in list(inspect.signature(fn).parameters.values())[1:]:
-            if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
-                continue
-            if _dict_typed(param.annotation):
-                assert info.allowed_keys.get(param.name), f"{provider}.{name}: dict param {param.name!r} unlisted"
+    _check(ai_guard.check_dict_params_have_allowed_keys, provider)
 
 
 @pytest.mark.parametrize("provider", SHOP_PROVIDERS)
 def test_allowed_keys_never_list_routing_or_auth_keys(provider):
-    for name, _fn, info in _read_methods(provider):
-        for arg, patterns in info.allowed_keys.items():
-            blocked = ROUTING_OR_AUTH_KEYS | (TEMU_ENVELOPE_KEYS if provider == "temu" else set())
-            for key in blocked:
-                assert not key_allowed(key, patterns), f"{provider}.{name}.{arg} allows {key!r}"
+    blocked = TEMU_ENVELOPE_KEYS if provider == "temu" else set()
+    _check(ai_guard.check_allowed_keys_safe, provider, extra_blocked=blocked)
 
 
 def test_ai_method_requires_allowed_keys_for_flat_extra():

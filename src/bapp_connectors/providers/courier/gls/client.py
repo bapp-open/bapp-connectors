@@ -19,6 +19,8 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -120,6 +122,7 @@ class GLSApiClient:
 
     # ── AWB ──
 
+    @ai_method("write", "Create a parcel and its label (books a shipment).")
     def generate_awb(self, parcel_data: dict[str, Any]) -> dict:
         """POST PrintLabels — generate AWB labels for parcels.
 
@@ -132,6 +135,7 @@ class GLSApiClient:
         payload["ParcelList"] = [parcel_data]
         return self._post("PrintLabels", payload, retry=False, log_body=True)
 
+    @ai_method("write", "Delete a parcel by its parcel id.")
     def delete_parcel(self, parcel_id: int) -> dict:
         """POST DeleteLabels — delete a parcel by its ID (not AWB number)."""
         payload = self._auth_payload()
@@ -140,6 +144,7 @@ class GLSApiClient:
 
     # ── Tracking ──
 
+    @ai_method("read", "Tracking history of a parcel number.")
     def get_parcel_status(self, parcel_number: str, language: str | None = None) -> dict:
         """POST GetParcelStatuses — get tracking history for a parcel."""
         payload = self._auth_payload()
@@ -148,6 +153,7 @@ class GLSApiClient:
         payload["ReturnPOD"] = False
         return self._post("GetParcelStatuses", payload)
 
+    @ai_method("read", "Tracking history for up to 100 parcel numbers.")
     def get_parcel_list_statuses(self, parcel_numbers: list[int], language: str | None = None) -> dict:
         """POST GetParcelListStatuses — tracking history for up to 100 parcels at once."""
         if len(parcel_numbers) > STATUS_BATCH_SIZE:
@@ -159,6 +165,7 @@ class GLSApiClient:
 
     # ── Parcel List ──
 
+    @ai_method("read", "Parcels printed within a date range (default: the last 8 hours).")
     def get_parcel_list(
         self,
         period_start: datetime.datetime | None = None,

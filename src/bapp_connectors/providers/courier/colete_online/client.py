@@ -14,6 +14,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -21,6 +23,10 @@ logger = logging.getLogger(__name__)
 
 _AUTH_URL = "https://auth.colete-online.ro/token"
 _TOKEN_REFRESH_MARGIN = 300  # 5 minutes before expiry
+
+
+# Top-level keys of an order body, as `order/price` and `shipping-points/*` take it.
+AI_ORDER_KEYS = ("sender", "recipient", "packages", "service", "extraOptions")
 
 
 class ColeteOnlineApiClient:
@@ -101,11 +107,13 @@ class ColeteOnlineApiClient:
 
     # ── Orders ──
 
+    @ai_method("write", "Create a shipping order (books a courier).")
     def create_order(self, payload: dict[str, Any], staging: bool = True) -> dict:
         """POST /staging/order or /order — create a shipping order."""
         path = "staging/order" if staging else "order"
         return self._call("POST", path, json=payload)
 
+    @ai_method("read", "Status of an order by its unique id; staging=false for a production account.")
     def get_order_status(self, unique_id: str, staging: bool = True) -> dict:
         """GET /staging/order/status/{uniqueId} — get order status."""
         path = f"staging/order/status/{unique_id}" if staging else f"order/status/{unique_id}"
@@ -125,44 +133,64 @@ class ColeteOnlineApiClient:
 
     # ── Price Estimation ──
 
+    @ai_method(
+        "read",
+        "Price estimates for a shipment, without creating an order.",
+        allowed_keys={"payload": AI_ORDER_KEYS},
+    )
     def get_price(self, payload: dict[str, Any]) -> dict:
         """POST /order/price — get price estimates for an order."""
         return self._call("POST", "order/price", json=payload)
 
     # ── Services ──
 
+    @ai_method("read", "The courier services available to the account.")
     def get_services(self) -> list | dict:
         """GET /service/list — list available courier services."""
         return self._call("GET", "service/list")
 
     # ── Addresses ──
 
+    @ai_method("read", "The account's saved addresses.")
     def get_addresses(self) -> list | dict:
         """GET /address — list saved addresses."""
         return self._call("GET", "address")
 
     # ── User ──
 
+    @ai_method("read", "The account balance.")
     def get_balance(self) -> dict:
         """GET /user/balance — get account balance."""
         return self._call("GET", "user/balance")
 
     # ── Search / Geolocation ──
 
+    @ai_method("read", "Search locations in a country by name.")
     def search_location(self, country_code: str, needle: str) -> list | dict:
         """GET /search/location/{countryCode}/{needle} — search for a location."""
         return self._call("GET", f"search/location/{country_code}/{needle}")
 
+    @ai_method("read", "Search cities in a county by name.")
     def search_city(self, country_code: str, county: str, needle: str) -> list | dict:
         """GET /search/city/{countryCode}/{county}/{needle} — search for a city."""
         return self._call("GET", f"search/city/{country_code}/{county}/{needle}")
 
     # ── Shipping Points ──
 
+    @ai_method(
+        "read",
+        "Localities with shipping points for a shipment.",
+        allowed_keys={"payload": AI_ORDER_KEYS},
+    )
     def get_shipping_points_localities(self, payload: dict[str, Any]) -> list | dict:
         """POST /shipping-points/localities-list — list localities with shipping points."""
         return self._call("POST", "shipping-points/localities-list", json=payload)
 
+    @ai_method(
+        "read",
+        "Shipping points in a county for a shipment.",
+        allowed_keys={"payload": AI_ORDER_KEYS},
+    )
     def get_shipping_points_list(self, county: str, payload: dict[str, Any]) -> list | dict:
         """POST /shipping-points/list/{county} — list shipping points in a county."""
         return self._call("POST", f"shipping-points/list/{county}", json=payload)

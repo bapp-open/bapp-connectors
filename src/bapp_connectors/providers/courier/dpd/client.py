@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import AuthenticationError, ProviderError
 
 if TYPE_CHECKING:
@@ -58,12 +59,15 @@ class DpdApiClient:
 
     # ── Account / nomenclators ──
 
+    @ai_method("read", "The DPD client id of the account.")
     def own_client_id(self) -> int:
         return int(self._call("client").get("clientId"))
 
+    @ai_method("read", "The clients (sender addresses) under the account's contract.")
     def contract_clients(self) -> list[dict]:
         return self._call("client/contract").get("clients") or []
 
+    @ai_method("read", "Find DPD sites (localities) in a country by name, region or post code.")
     def find_sites(self, country_id: int, name: str = "", region: str = "", post_code: str = "") -> list[dict]:
         body: dict = {"countryId": country_id}
         if name:
@@ -74,11 +78,13 @@ class DpdApiClient:
             body["postCode"] = post_code
         return self._call("location/site", body).get("sites") or []
 
+    @ai_method("read", "Find streets of a DPD site by name.")
     def find_streets(self, site_id: int, name: str) -> list[dict]:
         return self._call("location/street", {"siteId": site_id, "name": name}).get("streets") or []
 
     # ── Shipments ──
 
+    @ai_method("write", "Create a shipment (books a courier).")
     def create_shipment(self, body: dict) -> dict:
         """Never retried: a retry after a timeout could create a second shipment."""
         return self._call("shipment", body, retry=False, log_body=True)
@@ -87,9 +93,11 @@ class DpdApiClient:
         body = {"paperSize": paper_size, "format": "pdf", "parcels": [{"parcel": {"id": pid}} for pid in parcel_ids]}
         return self._call("print", body, raw=True)
 
+    @ai_method("read", "Tracking for up to 10 parcel ids.")
     def track(self, parcel_ids: list[str]) -> list[dict]:
         return self._call("track", {"parcels": [{"id": pid} for pid in parcel_ids[:10]]}).get("parcels") or []
 
+    @ai_method("write", "Cancel a shipment.")
     def cancel_shipment(self, shipment_id: str, comment: str = "Anulat din BAPP") -> dict:
         return self._call("shipment/cancel", {"shipmentId": shipment_id, "comment": comment}, retry=False,
                           log_body=True)

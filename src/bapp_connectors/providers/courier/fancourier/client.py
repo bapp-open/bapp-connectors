@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import AuthenticationError, ProviderError
 
 if TYPE_CHECKING:
@@ -82,14 +83,17 @@ class FanCourierApiClient:
 
     # ── Nomenclators ──
 
+    @ai_method("read", "FAN Courier branches.")
     def branches(self) -> list[dict]:
         return self._call("GET", "reports/branches").get("data") or []
 
+    @ai_method("read", "The courier services available to the account.")
     def services(self) -> list[dict]:
         return self._call("GET", "reports/services").get("data") or []
 
     # ── AWB ──
 
+    @ai_method("write", "Create AWBs (books shipments).")
     def create_awb(self, body: dict) -> list[dict]:
         """POST /intern-awb; per-shipment results in `response`, never retried (would book twice)."""
         result = self._call("POST", "intern-awb", json=body, retry=False, log_body=True)
@@ -104,13 +108,16 @@ class FanCourierApiClient:
             raise ProviderError(f"FAN Courier label: {_error_text(response)}")
         return response.content
 
+    @ai_method("read", "Tracking for the given AWBs of a FAN client id.")
     def tracking(self, client_id: str, awbs: list[str]) -> list[dict]:
         params = [("clientId", client_id), *[("awb[]", a) for a in awbs], ("language", "ro")]
         return self._call("GET", "reports/awb/tracking", params=params).get("data") or []
 
+    @ai_method("write", "Delete (cancel) an AWB.")
     def delete_awb(self, client_id: str, awb: str) -> dict:
         return self._call("DELETE", "awb", params={"clientId": client_id, "awb": awb}, retry=False, log_body=True)
 
+    @ai_method("read", "The AWBs of one day (YYYY-MM-DD) for a FAN client id, one page per call.")
     def awb_report(self, client_id: str, date: str, page: int = 1, per_page: int = 100) -> dict:
         """The shipping slip of one day (no date ranges in the API)."""
         return self._call("GET", "reports/awb", params={"clientId": client_id, "date": date, "page": page,

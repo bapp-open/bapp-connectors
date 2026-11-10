@@ -11,6 +11,8 @@ import time
 from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -19,6 +21,10 @@ logger = logging.getLogger(__name__)
 # Token is valid for 12 hours, refresh with a margin of 5 minutes.
 _TOKEN_EXPIRY_SHORT = 12 * 3600
 _TOKEN_REFRESH_MARGIN = 300
+
+
+# `client-awb-list` filters an agent may send (unix timestamps, 0/1).
+AI_AWB_LIST_FILTERS = ("startTimestamp", "endTimestamp", "isPrinted")
 
 
 class SamedayApiClient:
@@ -111,10 +117,12 @@ class SamedayApiClient:
 
     # ── AWB ──
 
+    @ai_method("write", "Create an AWB (books a shipment).")
     def generate_awb(self, payload: dict[str, Any]) -> dict:
         """POST /awb — generate an AWB."""
         return self._call("POST", "awb", json=payload)
 
+    @ai_method("write", "Delete (cancel) an AWB.")
     def delete_parcel(self, awb_number: str) -> bool:
         """DELETE /awb/{awb_number} — cancel/delete a parcel."""
         self._call("DELETE", f"awb/{awb_number}")
@@ -132,12 +140,14 @@ class SamedayApiClient:
 
     # ── Tracking ──
 
+    @ai_method("read", "Tracking history of an AWB.")
     def get_parcel_status(self, parcel_number: str) -> dict:
         """GET /client/parcel/{parcel_number}001/status-history — get tracking history."""
         return self._call("GET", f"client/parcel/{parcel_number}001/status-history")
 
     # ── Pickup Points ──
 
+    @ai_method("read", "The account's pickup points.")
     def get_pickup_points(self) -> list:
         """GET /client/pickup-points — list available pickup points."""
         response = self._call("GET", "client/pickup-points")
@@ -147,6 +157,12 @@ class SamedayApiClient:
 
     # ── AWB List ──
 
+    @ai_method(
+        "read",
+        "AWBs, one page per call; params filters by period or printed state.",
+        extra={"params": "flat"},
+        allowed_keys={"params": AI_AWB_LIST_FILTERS},
+    )
     def get_awb_list(self, page: int = 1, per_page: int = 50, **kwargs) -> dict:
         """GET /client-awb-list — list AWBs with pagination."""
         params: dict[str, Any] = {

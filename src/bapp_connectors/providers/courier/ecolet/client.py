@@ -16,6 +16,7 @@ from urllib.parse import quote
 
 import requests
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import AuthenticationError, ProviderError
 
 if TYPE_CHECKING:
@@ -24,6 +25,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _TOKEN_MARGIN_SECONDS = 120
+
+
+# Top-level keys of a v2 order body (see mappers.build_order_body).
+AI_ORDER_BODY_KEYS = (
+    "sender", "receiver", "parcel", "parcels", "additional_services", "courier", "shipment_details",
+)
 
 
 class EcoletApiClient:
@@ -105,30 +112,41 @@ class EcoletApiClient:
             raise AuthenticationError("eColet: not authenticated.")
         return body.get("user") or {}
 
+    @ai_method("read", "The courier services available to the account.")
     def services(self) -> list[dict]:
         return self._call("GET", "v1/services").get("services") or []
 
+    @ai_method("read", "The account's address book, one page per call.")
     def address_book(self, page: int = 1) -> list[dict]:
         return self._call("GET", "v1/address-book", params={"page": page}).get("data") or []
 
+    @ai_method("read", "Search localities in a country by name.")
     def search_localities(self, country: str, query: str) -> list[dict]:
         return self._call("GET", f"v1/locations/{country.lower()}/localities/{quote(query[:70], safe='')}").get(
             "localities") or []
 
     # ── Orders ──
 
+    @ai_method(
+        "read",
+        "Prices, availability and pickup slots per service for a shipment, without booking it.",
+        allowed_keys={"body": AI_ORDER_BODY_KEYS},
+    )
     def reload_form(self, body: dict) -> dict:
         """Prices, availability and pickup slots per service slug; errors can come with 200."""
         return self._call("POST", "v2/add-parcel/reload-form", json=body, log_body=True).get("form") or {}
 
+    @ai_method("write", "Book a shipment (asynchronous order).")
     def send_order(self, body: dict) -> int:
         """Books the shipment asynchronously; returns the order-to-send id, not an AWB."""
         response = self._call("POST", "v2/add-parcel/send-order", json=body, retry=False, log_body=True)
         return int(response["order_to_send_id"])
 
+    @ai_method("read", "State of a pending order-to-send by id.")
     def order_to_send(self, order_to_send_id: int) -> dict:
         return self._call("GET", f"v1/order-to-send/{order_to_send_id}").get("order_to_send") or {}
 
+    @ai_method("read", "An order by id.")
     def order(self, order_id: int) -> dict:
         return self._call("GET", f"v1/order/{order_id}").get("data") or {}
 
@@ -136,12 +154,15 @@ class EcoletApiClient:
         response = self._call("GET", f"v1/order/{order_id}/download-waybill", raw=True)
         return response.content, response.headers.get("Content-Type", "")
 
+    @ai_method("read", "Statuses of the orders with the given AWBs.")
     def statuses_by_awb(self, awbs: list[str]) -> list[dict]:
         return self._call("POST", "v1/order/get-statuses-for-many-orders", json={"awbs": awbs}).get("data") or []
 
+    @ai_method("write", "Cancel an order.")
     def cancel_order(self, order_id: int) -> dict:
         return self._call("DELETE", f"v1/order/{order_id}", retry=False, log_body=True)
 
+    @ai_method("read", "Orders, one page per call, optionally created between two dates.")
     def list_orders(self, page: int = 1, date_from: str = "", date_to: str = "") -> dict:
         """Panel endpoint (not in the public spec): Laravel paginator {data, meta}."""
         params: dict = {"page": page}

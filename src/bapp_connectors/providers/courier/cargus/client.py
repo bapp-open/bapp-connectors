@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import AuthenticationError, ProviderError
 
 if TYPE_CHECKING:
@@ -90,11 +91,13 @@ class CargusApiClient:
 
     # ── Account ──
 
+    @ai_method("read", "The account's pickup locations (sender points).")
     def pickup_locations(self) -> list[dict]:
         return self._call("GET", "PickupLocations") or []
 
     # ── AWB ──
 
+    @ai_method("write", "Create an AWB (books a shipment).")
     def create_awb(self, body: dict) -> dict:
         """POST Awbs/WithGetAwb: the created AWB objects. Never retried (a retry could book twice)."""
         result = self._call("POST", "Awbs/WithGetAwb", json=body, retry=False, log_body=True)
@@ -109,12 +112,15 @@ class CargusApiClient:
         encoded = self._call("GET", "AwbDocuments", params=params)
         return base64.b64decode(encoded) if isinstance(encoded, str) else b""
 
+    @ai_method("read", "Tracking events for the given AWB barcodes.")
     def trace(self, barcodes: list[str]) -> list[dict]:
         return self._call("GET", "AwbTrace", params={"barCode": json.dumps(barcodes)}) or []
 
+    @ai_method("write", "Delete (cancel) an AWB.")
     def delete_awb(self, barcode: str) -> bool:
         return self._call("DELETE", "Awbs", params={"barCode": barcode}, retry=False, log_body=True) is True
 
+    @ai_method("read", "AWBs created between two dates (MM-dd-yyyy), one page per call.")
     def awbs_by_date(self, from_date: str, to_date: str, page: int = 1, per_page: int = 100) -> list[dict]:
         """Dates as MM-dd-yyyy (per the PDF for Awbs/GetByDate)."""
         params = {"FromDate": from_date, "ToDate": to_date, "pageNumber": page, "itemsPerPage": per_page}
