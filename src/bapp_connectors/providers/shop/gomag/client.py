@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -42,6 +44,13 @@ class GomagApiClient:
 
     # ── Products ──
 
+    @ai_method(
+        "read",
+        "Products, one page per call (page, limit); params adds Gomag filters.",
+        extra={
+            "params": "flat",
+        },
+    )
     def get_products(self, page: int = 1, limit: int = 100, **kwargs) -> dict:
         params: dict[str, Any] = {
             "page": page,
@@ -51,12 +60,15 @@ class GomagApiClient:
         params.update(extra_params)
         return self.http.call("GET", "product/read/json", params=params, **kwargs)
 
+    @ai_method("write", "Create products.")
     def create_product(self, payload: list[dict], **kwargs) -> dict:
         return self._post("product/write/json", payload, **kwargs)
 
+    @ai_method("write", "Update products.")
     def update_product(self, payload: list[dict], **kwargs) -> dict:
         return self._post("product/patch/json", payload, **kwargs)
 
+    @ai_method("write", "Set stock and price per SKU.")
     def update_product_inventory(self, payload: list[dict], **kwargs) -> dict:
         """Stock / price per SKU: ``data={"products": [{"sku": ..., "stock": ...}]}``.
 
@@ -67,11 +79,13 @@ class GomagApiClient:
         kwargs.setdefault("log_body", True)
         return self._post("product/inventory/json", {"products": list(payload)}, **kwargs)
 
+    @ai_method("write", "Delete products.")
     def delete_product(self, payload: list[dict], **kwargs) -> dict:
         return self._post("product/delete/json", payload, **kwargs)
 
     # ── Orders ──
 
+    @ai_method("read", "Orders, one page per call (page, limit); params adds Gomag filters.", extra={"params": "flat"})
     def get_orders(self, page: int = 1, limit: int = 100, **kwargs) -> dict:
         params: dict[str, Any] = {
             "page": page,
@@ -81,6 +95,7 @@ class GomagApiClient:
         params.update(extra_params)
         return self.http.call("GET", "order/read/json", params=params, **kwargs)
 
+    @ai_method("read", "The order with the given customer-facing number.")
     def get_order(self, order_id: str, **kwargs) -> dict:
         """One order, by the number the customer sees (what the DTO carries as `order_id`).
 
@@ -91,6 +106,7 @@ class GomagApiClient:
         params: dict[str, Any] = {"number": order_id}
         return self.http.call("GET", "order/read/json", params=params, **kwargs)
 
+    @ai_method("write", "Set an order's status by internal order id and numeric status id.")
     def update_order_status(self, order_id: str | int, status_id: str | int, **kwargs) -> dict:
         """Gomag takes the order's INTERNAL id and the NUMERIC status id, in a POST body.
 
@@ -102,9 +118,11 @@ class GomagApiClient:
         payload = {"orders": [{"order": int(order_id), "status": int(status_id)}]}
         return self._post("order/status/json", payload, **kwargs)
 
+    @ai_method("write", "Create an order.")
     def create_order(self, payload: dict, **kwargs) -> dict:
         return self._post("order/add/json", payload, **kwargs)
 
+    @ai_method("write", "Add a note to an order (visible to the customer when is_public).")
     def add_order_note(self, order_id: int, note: str, is_public: bool = False, **kwargs) -> dict:
         payload: dict[str, Any] = {"order_id": order_id, "note": note}
         if is_public:
@@ -119,11 +137,13 @@ class GomagApiClient:
 
     # ── Order Statuses ──
 
+    @ai_method("read", "The shop's order statuses, in one call.")
     def get_order_statuses(self, **kwargs) -> dict:
         return self.http.call("GET", "order/status/read/json", **kwargs)
 
     # ── Categories ──
 
+    @ai_method("read", "Categories, one page per call (page, limit).")
     def get_categories(self, page: int = 1, limit: int = 100, **kwargs) -> dict:
         params: dict[str, Any] = {
             "page": page,
@@ -131,20 +151,25 @@ class GomagApiClient:
         }
         return self.http.call("GET", "category/read/json", params=params, **kwargs)
 
+    @ai_method("write", "Create categories.")
     def create_category(self, payload: list[dict], **kwargs) -> dict:
         return self._post("category/write/json", payload, **kwargs)
 
+    @ai_method("write", "Update categories.")
     def update_category(self, payload: list[dict], **kwargs) -> dict:
         return self._post("category/patch/json", payload, **kwargs)
 
+    @ai_method("write", "Delete categories.")
     def delete_category(self, payload: list[dict], **kwargs) -> dict:
         return self._post("category/delete/json", payload, **kwargs)
 
     # ── AWB / Shipping ──
 
+    @ai_method("read", "The carriers configured in the shop, in one call.")
     def get_carriers(self, **kwargs) -> dict:
         return self.http.call("GET", "awb/carrier/read/json", **kwargs)
 
+    @ai_method("read", "AWBs, one page per call (page, limit), filtered by order, AWB number or carrier.")
     def get_awbs(
         self,
         order_id: int | None = None,
@@ -163,18 +188,22 @@ class GomagApiClient:
             params["carrier_id"] = carrier_id
         return self.http.call("GET", "awb/read/json", params=params, **kwargs)
 
+    @ai_method("write", "Register an AWB on an order.")
     def create_awb(self, payload: dict, **kwargs) -> dict:
         return self._post("awb/add/json", payload, **kwargs)
 
+    @ai_method("write", "Book a carrier and generate an AWB.")
     def generate_awb(self, payload: dict, **kwargs) -> dict:
         return self._post("awb/generate/json", payload, **kwargs)
 
+    @ai_method("write", "Delete an AWB.")
     def delete_awb(self, awb_id: int, **kwargs) -> dict:
         return self._post("awb/delete/json", {"awb_id": awb_id}, **kwargs)
 
     def print_awb(self, awb_id: int, **kwargs) -> dict:
         return self._post("awb/print/json", {"awb_id": awb_id}, **kwargs)
 
+    @ai_method("write", "Set an AWB's status (optionally the order's status too).")
     def update_awb_status(self, awb_id: int, status: str, update_order_status: bool = False, **kwargs) -> dict:
         payload: dict[str, Any] = {"awb_id": awb_id, "status": status}
         if update_order_status:
@@ -183,34 +212,41 @@ class GomagApiClient:
 
     # ── Invoices ──
 
+    @ai_method("write", "Create an invoice.")
     def create_invoice(self, payload: dict, **kwargs) -> dict:
         return self._post("invoice/add/json", payload, **kwargs)
 
+    @ai_method("write", "Generate the invoice of an order.")
     def generate_invoice(self, order_id: int, series: str | None = None, **kwargs) -> dict:
         payload: dict[str, Any] = {"orderId": order_id}
         if series:
             payload["series"] = series
         return self._post("invoice/generate/json", payload, **kwargs)
 
+    @ai_method("write", "Cancel an invoice.")
     def cancel_invoice(self, invoice_id: int, **kwargs) -> dict:
         return self._post("invoice/cancel/json", {"invoice_id": invoice_id}, **kwargs)
 
     # ── Attributes ──
 
+    @ai_method("read", "Product attributes, one page per call (page, limit), or one by id.")
     def get_attributes(self, attribute_id: int | None = None, page: int = 1, limit: int = 100, **kwargs) -> dict:
         params: dict[str, Any] = {"page": page, "limit": limit}
         if attribute_id is not None:
             params["id"] = attribute_id
         return self.http.call("GET", "attribute/read/json", params=params, **kwargs)
 
+    @ai_method("write", "Create attributes.")
     def create_attribute(self, payload: list[dict], **kwargs) -> dict:
         return self._post("attribute/write/json", payload, **kwargs)
 
+    @ai_method("write", "Update attributes.")
     def update_attribute(self, payload: list[dict], **kwargs) -> dict:
         return self._post("attribute/patch/json", payload, **kwargs)
 
     # ── Customers ──
 
+    @ai_method("read", "Customers, one page per call (page, limit), filtered by id, email, phone or update date.")
     def get_customers(
         self,
         customer_id: int | None = None,
@@ -234,5 +270,6 @@ class GomagApiClient:
 
     # ── Payment Methods ──
 
+    @ai_method("read", "The shop's payment methods, in one call.")
     def get_payment_methods(self, **kwargs) -> dict:
         return self.http.call("GET", "payment/read/json", **kwargs)

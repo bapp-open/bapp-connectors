@@ -10,6 +10,8 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -58,6 +60,10 @@ class TrendyolApiClient:
 
     # ── Orders ──
 
+    @ai_method(
+        "read",
+        "Shipment packages (orders), newest change first, one page per call (page from 0, size), filtered by status, order number, package ids or created_after.",
+    )
     def get_orders(
         self,
         page: int = 0,
@@ -90,11 +96,13 @@ class TrendyolApiClient:
 
         return self._call("GET", f"order/sellers/{self.seller_id}/orders", params=params, **kwargs)
 
+    @ai_method("read", "One order by its Trendyol order number, or an empty dict.")
     def get_order(self, order_id: str) -> dict:
         res = self.get_orders(order_id=order_id)
         content = (res.get("content") or []) if isinstance(res, dict) else []
         return content[0] if content else {}
 
+    @ai_method("read", "Claims (returns) created between start_ms and end_ms, one page per call (page from 0, size).")
     def get_claims(self, start_ms: int, end_ms: int, page: int = 0, size: int = 50, **kwargs) -> dict:
         params = {"startDate": start_ms, "endDate": end_ms, "page": page, "size": size}
         return self._call("GET", f"order/sellers/{self.seller_id}/claims", params=params, **kwargs)
@@ -105,6 +113,13 @@ class TrendyolApiClient:
     # past that the `nextPageToken` of the previous answer continues the listing.
     PRODUCTS_PAGE_SIZE = 100
 
+    @ai_method(
+        "read",
+        "Approved products from Product v2, grouped by content, one page per call (page or next_page_token, up to 100); params adds Trendyol filters.",
+        extra={
+            "params": "flat",
+        },
+    )
     def get_products(
         self,
         page: int = 0,
@@ -128,6 +143,7 @@ class TrendyolApiClient:
         params.update(kwargs.pop("params", None) or {})
         return self._call("GET", f"product/sellers/{self.seller_id}/products/approved", params=params, **kwargs)
 
+    @ai_method("write", "Update the content of approved products (Product v2 content-bulk-update).")
     def batch_update_content(self, items: list[dict], **kwargs) -> dict:
         """Update the content (title, description...) of approved products, Product v2.
 
@@ -138,17 +154,20 @@ class TrendyolApiClient:
             "POST", f"product/sellers/{self.seller_id}/products/content-bulk-update", data=data, **kwargs
         )
 
+    @ai_method("write", "Update price and stock of products (price-and-inventory batch).")
     def batch_update_price_inventory(self, products: list[dict], **kwargs) -> dict:
         data = _json_encode({"items": products})
         return self._call(
             "POST", f"inventory/sellers/{self.seller_id}/products/price-and-inventory", data=data, **kwargs
         )
 
+    @ai_method("read", "The result of an earlier batch request by its batch id.")
     def get_batch_result(self, batch_id: str, **kwargs) -> dict:
         return self._call("GET", f"product/sellers/{self.seller_id}/products/batch-requests/{batch_id}", **kwargs)
 
     # ── Categories ──
 
+    @ai_method("read", "The Trendyol category tree, in one call.")
     def get_categories(self, **kwargs) -> dict:
         return self._call("GET", "product/product-categories", **kwargs)
 
@@ -174,6 +193,10 @@ class TrendyolApiClient:
 
     # ── Finance ──
 
+    @ai_method(
+        "read",
+        "Settlement transactions of one type between start_date and end_date (ms), one page per call (page from 0, size).",
+    )
     def get_settlements(
         self,
         transaction_type: str,
@@ -194,6 +217,10 @@ class TrendyolApiClient:
             "GET", f"finance/che/sellers/{self.seller_id}/settlements", params=params, **kwargs
         )
 
+    @ai_method(
+        "read",
+        "Other financial transactions of one type between start_date and end_date (ms), one page per call (page from 0, size).",
+    )
     def get_other_financials(
         self,
         transaction_type: str,

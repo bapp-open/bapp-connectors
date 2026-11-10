@@ -20,6 +20,7 @@ from urllib.parse import quote
 
 import requests
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import AuthenticationError, ProviderError
 
 if TYPE_CHECKING:
@@ -106,6 +107,7 @@ class AltexApiClient:
 
     # ── Orders ──
 
+    @ai_method("read", "Orders, one page per call (page, per_page), filtered by start_date, end_date or status.")
     def list_orders(self, start_date: str = "", end_date: str = "", status: int | None = None,
                     page: int = 1, per_page: int = 100) -> dict:
         params: dict = {"page_nr": page, "items_per_page": per_page}
@@ -117,9 +119,11 @@ class AltexApiClient:
             params["status"] = status
         return self._call("GET", "sales/order/", params=params) or {}
 
+    @ai_method("read", "One order by its Altex id.")
     def get_order(self, order_id: str) -> dict:
         return self._call("GET", f"sales/order/{order_id}/") or {}
 
+    @ai_method("write", "Set an order's status on Altex (with a cancellation reason when cancelling).")
     def update_order_status(self, order_id: str, status: int, cancellation_reason: int | None = None) -> None:
         body: dict = {"status": status}
         if cancellation_reason is not None:
@@ -136,16 +140,20 @@ class AltexApiClient:
         self._call("POST", f"sales/order/{order_id}/awb/", form=form,
                    files={"media": (f"awb_{number}.pdf", pdf, "application/pdf")}, retry=False, log_body=True)
 
+    @ai_method("read", "The couriers Altex offers, in one call.")
     def couriers(self) -> list[dict]:
         return _items(self._call("GET", "sales/courier/"))
 
+    @ai_method("read", "The seller's pickup locations, in one call.")
     def locations(self) -> list[dict]:
         """Pickup locations; the docs say {id, courier_id, ...}, real answers {courier_location_id, address}."""
         return _items(self._call("GET", "sales/location/"))
 
+    @ai_method("read", "Altex regions (first 100), in one call.")
     def regions(self) -> list[dict]:
         return _items(self._call("GET", "sales/region/", params={"page_nr": 1, "items_per_page": 100}))
 
+    @ai_method("read", "All localities of one region, every page fetched.")
     def localities(self, region_id: int) -> list[dict]:
         out, page = [], 1
         while True:
@@ -156,6 +164,7 @@ class AltexApiClient:
                 return out
             page += 1
 
+    @ai_method("write", "Book an Altex courier and create an AWB for an order.")
     def generate_awb(self, order_id: str, form: dict) -> dict:
         """Altex books the courier; never retried (a retry could book a second AWB)."""
         return self._call("POST", f"sales/order/{order_id}/awb/generate", form=form, retry=False,
@@ -163,26 +172,31 @@ class AltexApiClient:
 
     # ── Returns (RMA) ──
 
+    @ai_method("read", "Return requests (RMA), one page per call (page, per_page), optionally created from a date.")
     def list_rmas(self, created_from: str = "", page: int = 1, per_page: int = 100) -> dict:
         params: dict = {"page_nr": page, "items_per_page": per_page}
         if created_from:
             params["created_at"] = created_from
         return self._call("GET", "sales/rma/", params=params) or {}
 
+    @ai_method("read", "One return request by its Altex id.")
     def get_rma(self, rma_id: str) -> dict:
         return self._call("GET", f"sales/rma/{rma_id}/") or {}
 
     # ── Offers ──
 
+    @ai_method("read", "Offers, one page per call (page, per_page), optionally updated from a date.")
     def list_offers(self, page: int = 1, per_page: int = 100, updated_from: str = "") -> dict:
         params: dict = {"page_nr": page, "items_per_page": per_page}
         if updated_from:
             params["updated_from"] = updated_from
         return self._call("GET", "catalog/offer/", params=params) or {}
 
+    @ai_method("write", "Update an offer's fields.")
     def update_offer(self, offer_id: str, fields: dict) -> None:
         self._call("PUT", f"catalog/offer/{offer_id}/", json=fields, retry=False, log_body=True)
 
+    @ai_method("write", "Set an offer's stock.")
     def update_offer_stock(self, offer_id: str, stock: int) -> None:
         self._call("PUT", f"catalog/offer/{offer_id}/stock/", json={"stock": int(stock)}, retry=False,
                    log_body=True)

@@ -9,6 +9,8 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from bapp_connectors.core.http import ResilientHttpClient
 
@@ -37,6 +39,7 @@ class OkaziiApiClient:
 
     # ── Auth / Connection Test ──
 
+    @ai_method("read", "Okazii countries, in one call.")
     def get_countries(self) -> dict | list | str:
         """List countries — used as a lightweight auth check."""
         return self._call("GET", "countries")
@@ -50,6 +53,13 @@ class OkaziiApiClient:
 
     # ── Orders ──
 
+    @ai_method(
+        "read",
+        "Orders (first page unless params carries page), created from created_after until today when given; params adds Okazii filters.",
+        extra={
+            "params": "flat",
+        },
+    )
     def get_orders(
         self,
         created_after: datetime.datetime | None = None,
@@ -67,6 +77,7 @@ class OkaziiApiClient:
             return result.get("hydra:member", [])
         return []
 
+    @ai_method("read", "One order by its Okazii id.")
     def get_order(self, order_id: int | str) -> dict:
         result = self._call("GET", f"export_orders/{order_id}")
         if isinstance(result, dict):
@@ -75,9 +86,11 @@ class OkaziiApiClient:
 
     # ── Couriers ──
 
+    @ai_method("read", "The AWB and courier data of one order.")
     def get_order_courier(self, order_id: int | str) -> dict | str:
         return self._call("GET", f"order_awbs/{order_id}")
 
+    @ai_method("read", "The couriers available for AWBs, in one call.")
     def get_couriers(self) -> list[dict]:
         result = self._call("GET", "bid_awb_couriers")
         if isinstance(result, dict):
@@ -86,6 +99,7 @@ class OkaziiApiClient:
 
     # ── Invoice ──
 
+    @ai_method("read", "The invoices attached to one order.")
     def get_order_invoices(self, order_id: int | str) -> dict | str:
         return self._call("GET", f"export_order_invoices/{order_id}")
 
@@ -110,6 +124,7 @@ class OkaziiApiClient:
 
     # ── Location ──
 
+    @ai_method("read", "Cities with courier availability, in one call.")
     def get_cities(self, **kwargs) -> list[dict]:
         """List cities with courier availability."""
         result = self._call("GET", "cities", **kwargs)
@@ -117,6 +132,7 @@ class OkaziiApiClient:
             return result.get("hydra:member", [])
         return []
 
+    @ai_method("read", "Counties, in one call.")
     def get_counties(self, **kwargs) -> list[dict]:
         """List counties."""
         result = self._call("GET", "counties", **kwargs)
@@ -126,11 +142,13 @@ class OkaziiApiClient:
 
     # ── GDL AWB (Okazii-managed shipping) ──
 
+    @ai_method("read", "One Okazii-managed (GDL) AWB by id.")
     def get_gdl_awb(self, awb_id: int | str) -> dict:
         """Get GDL AWB details."""
         result = self._call("GET", f"order_awb_gdls/{awb_id}")
         return result if isinstance(result, dict) else {}
 
+    @ai_method("write", "Create an Okazii-managed (GDL) AWB for an order.")
     def create_gdl_awb(
         self,
         order_id: int | str,
@@ -163,17 +181,20 @@ class OkaziiApiClient:
 
     # ── AWB (update) ──
 
+    @ai_method("write", "Set the AWB tracking data of an order.")
     def update_awb(self, order_id: int | str, awb_data: dict) -> dict | str:
         """Update AWB tracking info for an order."""
         return self._call("PUT", f"order_awbs/{order_id}", json=awb_data)
 
     # ── Seller Pickup Address ──
 
+    @ai_method("read", "One seller pickup address by id.")
     def get_seller_pickup_address(self, address_id: int | str) -> dict:
         """Get seller's pickup address."""
         result = self._call("GET", f"seller_pickup_addresses/{address_id}")
         return result if isinstance(result, dict) else {}
 
+    @ai_method("write", "Update a seller pickup address.")
     def update_seller_pickup_address(self, address_id: int | str, address_data: dict) -> dict | str:
         """Update seller's pickup address."""
         return self._call("PUT", f"seller_pickup_addresses/{address_id}", json=address_data)

@@ -10,6 +10,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.providers.shop.emag.errors import EmagError, EmagIPWhitelistError
 from bapp_connectors.providers.shop.emag.models import EmagApiResponse
 
@@ -80,6 +81,10 @@ class EmagApiClient:
 
     # ── Orders ──
 
+    @ai_method(
+        "read",
+        "Orders from order/read, one page per call (page, per_page up to 100), optionally filtered by status, order_id or created_after.",
+    )
     def get_orders(
         self,
         page: int = 1,
@@ -108,11 +113,13 @@ class EmagApiClient:
             payload["createdAfter"] = created_after
         return self._post_read("order/read", payload)
 
+    @ai_method("read", "One order by its eMAG id, or an empty dict when it does not exist.")
     def get_order(self, order_id: int) -> dict:
         """Fetch a single order by its eMAG ID."""
         resp = self.get_orders(order_id=order_id)
         return resp.results[0] if resp.results else {}
 
+    @ai_method("write", "Acknowledge an order on eMAG (moves it to status 2, in progress).")
     def order_acknowledge(self, order_id: int, max_retries: int = 3) -> EmagApiResponse:
         """Acknowledge an order (mark as being prepared / status 2).
 
@@ -135,6 +142,7 @@ class EmagApiClient:
                 raise
         raise EmagError(f"Failed to acknowledge order {order_id} after {max_retries} retries")
 
+    @ai_method("write", "Set an order's status on eMAG (order/save).")
     def update_order_status(self, order_id: int, status: int) -> EmagApiResponse:
         """Update an order's status on eMAG."""
         data = _json_encode([{"id": order_id, "status": status}])
@@ -143,6 +151,13 @@ class EmagApiClient:
 
     # ── Products ──
 
+    @ai_method(
+        "read",
+        "Product offers from product_offer/read, one page per call (page, per_page); params adds eMAG filter fields to the request.",
+        extra={
+            "params": "flat",
+        },
+    )
     def get_products(
         self,
         page: int = 1,
@@ -158,18 +173,21 @@ class EmagApiClient:
         payload.update(extra_params)
         return self._post_read("product_offer/read", payload)
 
+    @ai_method("write", "Create or update product offers through product_offer/save.")
     def update_product(self, product_data: list[dict]) -> EmagApiResponse:
         """Update one or more product offers via product_offer/save."""
         data = _json_encode(product_data)
         raw = self._call("POST", "product_offer/save", data=data)
         return self._parse_response(raw)
 
+    @ai_method("write", "Update offers (price, stock, status) through offer/save.")
     def update_offer(self, offer_data: list[dict]) -> EmagApiResponse:
         """Update one or more offers via offer/save (newer eMAG API)."""
         data = _json_encode(offer_data)
         raw = self._call("POST", "offer/save", data=data)
         return self._parse_response(raw)
 
+    @ai_method("write", "Set the stock of one offer through offer_stock.")
     def update_offer_stock(self, product_id: int, quantity: int) -> EmagApiResponse:
         """Update stock via dedicated PATCH endpoint (lighter than product_offer/save)."""
         data = _json_encode({"stock": quantity})
@@ -178,6 +196,7 @@ class EmagApiClient:
 
     # ── Categories ──
 
+    @ai_method("read", "eMAG categories, one page per call (page, per_page).")
     def get_categories(self, page: int = 1, per_page: int = 100) -> EmagApiResponse:
         """Fetch categories."""
         payload: dict[str, Any] = {
@@ -186,24 +205,28 @@ class EmagApiClient:
         }
         return self._post_read("category/read", payload)
 
+    @ai_method("read", "The total number of product offers and pages in the seller account.")
     def get_product_count(self) -> EmagApiResponse:
         """Get total product offer count."""
         return self._post_read("product_offer/count")
 
     # ── Couriers ──
 
+    @ai_method("read", "The courier accounts configured on the seller account, in one call.")
     def get_couriers(self) -> EmagApiResponse:
         """Fetch available courier accounts."""
         return self._post_read("courier_accounts/read")
 
     # ── VAT ──
 
+    @ai_method("read", "The VAT rates eMAG accepts on offers, in one call.")
     def get_vat_list(self) -> EmagApiResponse:
         """Fetch VAT rates."""
         return self._post_read("vat/read")
 
     # ── Locality ──
 
+    @ai_method("read", "eMAG localities matching a region and a name, in one call.")
     def get_locality(self, region: str, name: str, country: str = "RO") -> EmagApiResponse:
         """Look up a locality by region and name."""
         payload: dict[str, Any] = {
@@ -215,18 +238,31 @@ class EmagApiClient:
 
     # ── AWB / Shipping ──
 
+    @ai_method("write", "Book a courier and create an AWB through awb/save.")
     def generate_awb(self, awb_data: dict) -> EmagApiResponse:
         """Generate AWB via eMAG's awb/save endpoint."""
         data = _json_encode(awb_data)
         raw = self._call("POST", "awb/save", data=data, timeout=60)
         return self._parse_response(raw)
 
+    @ai_method(
+        "read",
+        "Return requests (RMA), one page per call (page, per_page), filtered by date_start, date_end, order_id, emag_id or request_status.",
+        extra={
+            "date_start": "scalar",
+            "date_end": "scalar",
+            "order_id": "scalar",
+            "emag_id": "scalar",
+            "request_status": "scalar",
+        },
+    )
     def read_rma(self, page: int = 1, per_page: int = 100, **filters: Any) -> EmagApiResponse:
         """Read return requests (RMA). Valid filters: date_start, date_end, order_id, emag_id,
         request_status. The `id` filter is silently ignored by eMAG."""
         payload: dict[str, Any] = {"currentPage": page, "itemsPerPage": per_page, **filters}
         return self._post_read("rma/read", payload)
 
+    @ai_method("read", "AWB details by eMAG AWB id or reservation id, in one call.")
     def read_awb(
         self,
         emag_id: int | None = None,
@@ -263,11 +299,16 @@ class EmagApiClient:
     # Invoice endpoints return {total_results, invoices} instead of the standard
     # {isError, results} wrapper, so they use _call directly.
 
+    @ai_method("read", "The categories of invoices eMAG issues to the seller (e.g. FC = commission), in one call.")
     def get_invoice_categories(self) -> dict:
         """Fetch invoice categories (e.g. FC=Commission)."""
         data = _json_encode({})
         return self._call("POST", "invoice/categories", data=data)
 
+    @ai_method(
+        "read",
+        "Invoices eMAG issued to the seller (commissions, settlements), one page per call, filtered by category, number or date range.",
+    )
     def get_invoices(
         self,
         category: str | None = None,
@@ -300,6 +341,10 @@ class EmagApiClient:
         data = _json_encode(payload)
         return self._call("POST", "invoice/read", data=data)
 
+    @ai_method(
+        "read",
+        "Invoices the seller issued to customers as stored on eMAG, one page per call, filtered by category, order, number or date range.",
+    )
     def get_customer_invoices(
         self,
         category: str | None = None,

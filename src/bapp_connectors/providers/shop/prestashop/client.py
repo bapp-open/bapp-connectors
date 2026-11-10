@@ -14,6 +14,7 @@ from urllib.parse import urljoin
 
 from requests.auth import HTTPBasicAuth
 
+from bapp_connectors.core.ai import ai_method, drop_method_override
 from bapp_connectors.core.errors import ConfigurationError
 
 if TYPE_CHECKING:
@@ -67,6 +68,9 @@ class PrestaShopApiClient:
         """
         headers = kwargs.pop("headers", {})
         headers.setdefault("Output-Format", "JSON")
+        # the webservice honours `?ps_method=DELETE` on a GET: a read never carries it
+        if method == "GET" and "params" in kwargs:
+            kwargs["params"] = drop_method_override(kwargs["params"], "ps_method")
 
         # Convert JSON payload to XML for write operations
         if method in ("POST", "PUT", "PATCH") and "json" in kwargs:
@@ -145,6 +149,7 @@ class PrestaShopApiClient:
 
     # ── Auth / Connection Test ──
 
+    @ai_method("read", "The webservice resources the API key may access, in one call.")
     def api_resources(self) -> set[str]:
         """Resursele pe care cheia chiar le poate atinge, din rădăcina webservice-ului.
 
@@ -176,6 +181,10 @@ class PrestaShopApiClient:
 
     # ── Orders ──
 
+    @ai_method(
+        "read",
+        "Orders, one page per call; options holds PrestaShop list parameters (display, filter[...], sort, limit 'offset,count').",
+    )
     def get_orders(self, options: dict[str, Any] | None = None, **kwargs) -> list[dict]:
         """Fetch orders with optional filter/display options."""
         params = options or {}
@@ -184,6 +193,7 @@ class PrestaShopApiClient:
             return self._unwrap_list(result, "orders", "order")
         return []
 
+    @ai_method("read", "One order by its PrestaShop id.")
     def get_order(self, order_id: int, **kwargs) -> dict:
         """Fetch a single order by ID."""
         result = self._call("GET", f"orders/{order_id}", **kwargs)
@@ -198,6 +208,7 @@ class PrestaShopApiClient:
 
     # ── Addresses ──
 
+    @ai_method("read", "One address by its PrestaShop id.")
     def get_address(self, resource_id: int, **kwargs) -> dict:
         """Fetch an address by ID."""
         result = self._call("GET", f"addresses/{resource_id}", **kwargs)
@@ -205,11 +216,13 @@ class PrestaShopApiClient:
 
     # ── Countries / States ──
 
+    @ai_method("read", "One country by its PrestaShop id.")
     def get_country(self, resource_id: int, **kwargs) -> dict:
         """Fetch a country by ID."""
         result = self._call("GET", f"countries/{resource_id}", **kwargs)
         return result.get("country", {}) if isinstance(result, dict) else {}
 
+    @ai_method("read", "One state or region by its PrestaShop id.")
     def get_state(self, resource_id: int, **kwargs) -> dict:
         """Fetch a state/region by ID."""
         result = self._call("GET", f"states/{resource_id}", **kwargs)
@@ -217,6 +230,10 @@ class PrestaShopApiClient:
 
     # ── Products ──
 
+    @ai_method(
+        "read",
+        "Products, one page per call; options holds PrestaShop list parameters (display, filter[...], sort, limit 'offset,count').",
+    )
     def get_products(self, options: dict[str, Any] | None = None, **kwargs) -> list[dict]:
         """Fetch products with optional filter/display options."""
         params = options or {}
@@ -225,6 +242,7 @@ class PrestaShopApiClient:
             return self._unwrap_list(result, "products", "product")
         return []
 
+    @ai_method("read", "One product by its PrestaShop id.")
     def get_product(self, resource_id: int, **kwargs) -> dict:
         """Fetch a single product by ID."""
         result = self._call("GET", f"products/{resource_id}", **kwargs)
@@ -232,6 +250,10 @@ class PrestaShopApiClient:
 
     # ── Categories ──
 
+    @ai_method(
+        "read",
+        "Categories, one page per call; options holds PrestaShop list parameters (display, filter[...], sort, limit 'offset,count').",
+    )
     def get_categories(self, options: dict[str, Any] | None = None, **kwargs) -> list[dict]:
         """Fetch categories with optional filter/display options."""
         params = options or {}
@@ -242,6 +264,7 @@ class PrestaShopApiClient:
 
     # ── Stock ──
 
+    @ai_method("read", "Stock rows, by stock ids or product ids, with the chosen display fields, in one call.")
     def get_stock_available(
         self,
         stock_ids: list | None = None,
@@ -262,14 +285,17 @@ class PrestaShopApiClient:
             params[f"filter[{filter_type}]"] = ids
         return self._call("GET", "stock_availables", params=params, **kwargs)
 
+    @ai_method("write", "Update stock rows (stock_availables).")
     def update_stock_available(self, data: dict, **kwargs) -> dict | list | str:
         """Update stock availability."""
         return self._call("PUT", "stock_availables", json=data, **kwargs)
 
+    @ai_method("write", "Update a product.")
     def update_product(self, product_id: int, data: dict, **kwargs) -> dict | list | str:
         """Update a product via PUT."""
         return self._call("PUT", f"products/{product_id}", json={"product": data}, **kwargs)
 
+    @ai_method("write", "Create a product.")
     def create_product(self, data: dict, **kwargs) -> dict | list | str:
         """Create a new product via POST."""
         result = self._call("POST", "products", json={"product": data}, **kwargs)
@@ -277,10 +303,12 @@ class PrestaShopApiClient:
             return result.get("product", result)
         return result
 
+    @ai_method("write", "Delete a product.")
     def delete_product(self, product_id: int, **kwargs) -> dict | list | str:
         """Delete a product."""
         return self._call("DELETE", f"products/{product_id}", **kwargs)
 
+    @ai_method("write", "Create a category.")
     def create_category(self, data: dict, **kwargs) -> dict | list | str:
         """Create a new category via POST."""
         result = self._call("POST", "categories", json={"category": data}, **kwargs)
@@ -288,15 +316,18 @@ class PrestaShopApiClient:
             return result.get("category", result)
         return result
 
+    @ai_method("write", "Update an order.")
     def update_order(self, order_id: int, data: dict, **kwargs) -> dict | list | str:
         """Update an order via PUT."""
         return self._call("PUT", f"orders/{order_id}", json={"order": data}, **kwargs)
 
+    @ai_method("read", "The shop's order states, the merchant's own included, in one call.")
     def get_order_states(self, **kwargs) -> list[dict]:
         """The shop's order states (`order_states` resource), the merchant's own ones included."""
         result = self._call("GET", "order_states", params={"display": "full"}, **kwargs)
         return self._unwrap_list(result if isinstance(result, dict) else {}, "order_states", "order_state")
 
+    @ai_method("write", "Add an order history entry, which changes the order's state.")
     def create_order_history(self, data: dict, **kwargs) -> dict | list | str:
         """Create an order history entry (PrestaShop's way to change order status)."""
         result = self._call("POST", "order_histories", json={"order_history": data}, **kwargs)
@@ -306,22 +337,26 @@ class PrestaShopApiClient:
 
     # ── Product Features (attributes) ──
 
+    @ai_method("read", "All product features, in one call.")
     def get_product_features(self, **kwargs) -> list[dict]:
         result = self._call("GET", "product_features", params={"display": "full"}, **kwargs)
         if isinstance(result, dict):
             return self._unwrap_list(result, "product_features", "product_feature")
         return []
 
+    @ai_method("read", "One product feature by id.")
     def get_product_feature(self, feature_id: int, **kwargs) -> dict:
         result = self._call("GET", f"product_features/{feature_id}", **kwargs)
         return result.get("product_feature", {}) if isinstance(result, dict) else {}
 
+    @ai_method("write", "Create a product feature.")
     def create_product_feature(self, data: dict, **kwargs) -> dict | list | str:
         result = self._call("POST", "product_features", json={"product_feature": data}, **kwargs)
         if isinstance(result, dict):
             return result.get("product_feature", result)
         return result
 
+    @ai_method("read", "The values of one product feature, in one call.")
     def get_product_feature_values(self, feature_id: int, **kwargs) -> list[dict]:
         params = {"display": "full", "filter[id_feature]": str(feature_id)}
         result = self._call("GET", "product_feature_values", params=params, **kwargs)
@@ -329,6 +364,7 @@ class PrestaShopApiClient:
             return self._unwrap_list(result, "product_feature_values", "product_feature_value")
         return []
 
+    @ai_method("write", "Create a product feature value.")
     def create_product_feature_value(self, data: dict, **kwargs) -> dict | list | str:
         result = self._call("POST", "product_feature_values", json={"product_feature_value": data}, **kwargs)
         if isinstance(result, dict):
@@ -337,12 +373,14 @@ class PrestaShopApiClient:
 
     # ── Product Options (variant attributes like Size, Color) ──
 
+    @ai_method("read", "All product options (attribute groups such as Size or Color), in one call.")
     def get_product_options(self, **kwargs) -> list[dict]:
         result = self._call("GET", "product_options", params={"display": "full"}, **kwargs)
         if isinstance(result, dict):
             return self._unwrap_list(result, "product_options", "product_option")
         return []
 
+    @ai_method("read", "The values of one product option, in one call.")
     def get_product_option_values(self, option_id: int, **kwargs) -> list[dict]:
         params = {"display": "full", "filter[id_attribute_group]": str(option_id)}
         result = self._call("GET", "product_option_values", params=params, **kwargs)
@@ -350,12 +388,14 @@ class PrestaShopApiClient:
             return self._unwrap_list(result, "product_option_values", "product_option_value")
         return []
 
+    @ai_method("write", "Create a product option (attribute group).")
     def create_product_option(self, data: dict, **kwargs) -> dict | list | str:
         result = self._call("POST", "product_options", json={"product_option": data}, **kwargs)
         if isinstance(result, dict):
             return result.get("product_option", result)
         return result
 
+    @ai_method("write", "Create a product option value.")
     def create_product_option_value(self, data: dict, **kwargs) -> dict | list | str:
         result = self._call("POST", "product_option_values", json={"product_option_value": data}, **kwargs)
         if isinstance(result, dict):
@@ -364,6 +404,7 @@ class PrestaShopApiClient:
 
     # ── Combinations (variants) ──
 
+    @ai_method("read", "Combinations (variants), of one product or of all, in one call.")
     def get_combinations(self, product_id: int | None = None, **kwargs) -> list[dict]:
         params: dict = {"display": "full"}
         if product_id:
@@ -373,24 +414,29 @@ class PrestaShopApiClient:
             return self._unwrap_list(result, "combinations", "combination")
         return []
 
+    @ai_method("read", "One combination (variant) by id.")
     def get_combination(self, combination_id: int, **kwargs) -> dict:
         result = self._call("GET", f"combinations/{combination_id}", **kwargs)
         return result.get("combination", {}) if isinstance(result, dict) else {}
 
+    @ai_method("write", "Create a combination (variant).")
     def create_combination(self, data: dict, **kwargs) -> dict | list | str:
         result = self._call("POST", "combinations", json={"combination": data}, **kwargs)
         if isinstance(result, dict):
             return result.get("combination", result)
         return result
 
+    @ai_method("write", "Update a combination (variant).")
     def update_combination(self, combination_id: int, data: dict, **kwargs) -> dict | list | str:
         return self._call("PUT", f"combinations/{combination_id}", json={"combination": data}, **kwargs)
 
+    @ai_method("write", "Delete a combination (variant).")
     def delete_combination(self, combination_id: int, **kwargs) -> dict | list | str:
         return self._call("DELETE", f"combinations/{combination_id}", **kwargs)
 
     # ── Images ──
 
+    @ai_method("read", "The list of products that have images, with their image ids, in one call.")
     def get_images(self, **kwargs) -> dict | list | str:
         """Fetch product images."""
         return self._call("GET", "images/products", **kwargs)

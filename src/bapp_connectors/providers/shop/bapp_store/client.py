@@ -8,6 +8,7 @@ from typing import Any
 
 import requests
 
+from bapp_connectors.core.ai import ai_method
 from bapp_connectors.core.errors import AuthenticationError, ProviderError
 from bapp_connectors.core.http import ResilientHttpClient
 from bapp_connectors.core.http.auth import NoAuth
@@ -56,6 +57,7 @@ class BappStoreClient:
         raise_for_status(response)
         return response.json()
 
+    @ai_method("read", "All store categories, every page fetched.")
     def list_categories(self) -> list[dict]:
         page = self._call("GET", CATEGORY_PATH, params={"page_size": PAGE_LIMIT})
         rows = list(page["results"])
@@ -64,12 +66,14 @@ class BappStoreClient:
             rows.extend(page["results"])
         return rows
 
+    @ai_method("read", "Store products, one page per call (page), optionally by product code.")
     def find_products(self, code: str | None = None, page: int = 1) -> dict:
         params: dict[str, Any] = {"page_size": PAGE_LIMIT, "page": page}
         if code:
             params["code"] = code
         return self._call("GET", PRODUCT_PATH, params=params)
 
+    @ai_method("read", "Orders changed since a date, one batch per call; pass the returned cursor to continue.")
     def export_orders(self, since: str | None, cursor: str | None, limit: int = 50) -> dict:
         params: dict[str, Any] = {"limit": limit}
         if since:
@@ -78,6 +82,7 @@ class BappStoreClient:
             params["cursor"] = cursor
         return self._call("GET", ORDERS_EXPORT_PATH, params=params)
 
+    @ai_method("read", "One order by its store number.")
     def export_order(self, number: str) -> dict:
         return self._call("GET", ORDER_EXPORT_PATH, params={"number": number})
 

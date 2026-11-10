@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from datetime import datetime
 
@@ -71,6 +73,7 @@ class CelApiClient:
 
     # ── Orders ──
 
+    @ai_method("read", "Orders, one slice per call (start offset, limit), filtered by status or created_after.")
     def get_orders(
         self,
         start: int = 0,
@@ -92,6 +95,7 @@ class CelApiClient:
             return result.get("results", [])
         return []
 
+    @ai_method("read", "One order by its CEL id.")
     def get_order(self, order_id: int, **kwargs) -> dict:
         """Fetch a single order by ID."""
         result = self._call("POST", "orders/getOrder", json={"order": order_id}, **kwargs)
@@ -99,12 +103,14 @@ class CelApiClient:
 
     # ── Categories ──
 
+    @ai_method("read", "The supplier categories, in one call.")
     def get_categories(self, **kwargs) -> list | dict:
         """Fetch supplier categories."""
         return self._call("POST", "import/getSupplierCategories", **kwargs)
 
     # ── Products ──
 
+    @ai_method("read", "Products, one slice per call (start offset, limit).")
     def get_products(self, start: int = 0, limit: int = 100, **kwargs) -> list[dict]:
         """Fetch products."""
         data: dict[str, Any] = {"start": start, "limit": limit}

@@ -102,3 +102,28 @@ def ai_methods(client_or_cls: Any) -> dict[str, AiMethodInfo]:
             if isinstance(info, AiMethodInfo) and callable(func):
                 found[name] = info
     return found
+
+
+def _php_query_name(key: str) -> str:
+    """The name PHP files a query key under in ``$_GET``: leading spaces dropped, the part
+    before an array bracket kept, and spaces, dots and a stray ``[`` turned into ``_``."""
+    name = key.lstrip(" ")
+    bracket = name.find("[")
+    if bracket > 0 and "]" in name[bracket:]:
+        name = name[:bracket]
+    return name.replace(" ", "_").replace(".", "_").replace("[", "_")
+
+
+def drop_method_override(params: Any, override_name: str) -> Any:
+    """Remove a PHP method-override query key (WordPress ``_method``, PrestaShop ``ps_method``)
+    from a GET's params.
+
+    Both backends honour that key on a GET, so ``GET products/5?_method=DELETE`` deletes. A read
+    method that accepts free query filters (``params`` declared ``'flat'``) must never let one
+    through. Keys are compared as PHP sees them (``_method``, ``.method``, `` method``,
+    ``_method[]`` are the same key). Anything that is not a dict is returned unchanged.
+    """
+    if not isinstance(params, dict):
+        return params
+    target = override_name.lower()
+    return {k: v for k, v in params.items() if not (isinstance(k, str) and _php_query_name(k).lower() == target)}

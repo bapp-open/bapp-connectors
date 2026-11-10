@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from bapp_connectors.core.ai import ai_method
+
 if TYPE_CHECKING:
     from datetime import datetime
 
@@ -38,6 +40,7 @@ class VendigoApiClient:
 
     # ── Auth / Connection Test ──
 
+    @ai_method("read", "The product groups, in one call.")
     def get_groups(self) -> list:
         """List product groups — used as a lightweight auth check."""
         result = self._call("GET", "groups/list")
@@ -54,6 +57,13 @@ class VendigoApiClient:
 
     # ── Orders ──
 
+    @ai_method(
+        "read",
+        "Orders (one page as Vendigo answers it), created from created_after when given; params adds Vendigo filters.",
+        extra={
+            "params": "flat",
+        },
+    )
     def get_orders(
         self,
         created_after: datetime | None = None,
@@ -69,12 +79,14 @@ class VendigoApiClient:
             return result.get("orders", [])
         return []
 
+    @ai_method("read", "One order by its Vendigo id.")
     def get_order(self, order_id: int | str) -> dict:
         result = self._call("GET", f"orders/{order_id}")
         if isinstance(result, dict):
             return result.get("order", {})
         return {}
 
+    @ai_method("write", "Set an order's status on Vendigo.")
     def set_order_status(self, order_id: int | str, status: str, **kwargs: Any) -> dict | str:
         return self._call(
             "POST",
@@ -83,6 +95,7 @@ class VendigoApiClient:
             **kwargs,
         )
 
+    @ai_method("write", "Acknowledge an order (sets it to received).")
     def order_acknowledge(self, order_id: int | str) -> dict | str:
         """Acknowledge the order to the marketplace."""
         return self.set_order_status(order_id=order_id, status="received", timeout=30)
@@ -98,12 +111,14 @@ class VendigoApiClient:
 
     # ── Products ──
 
+    @ai_method("read", "All products, in one call.")
     def get_products(self) -> list[dict]:
         result = self._call("GET", "products/list")
         if isinstance(result, dict):
             return result.get("products", [])
         return []
 
+    @ai_method("read", "One product by the seller's external id.")
     def get_product_by_external_id(self, external_id: int | str) -> dict:
         result = self._call("GET", f"products/by_external_id/{external_id}")
         if isinstance(result, dict):
@@ -112,12 +127,14 @@ class VendigoApiClient:
 
     # ── Other ──
 
+    @ai_method("read", "The payment options, in one call.")
     def get_payment_options(self) -> list[dict]:
         result = self._call("GET", "payment_options/list")
         if isinstance(result, dict):
             return result.get("payment_options", [])
         return []
 
+    @ai_method("read", "The delivery options, in one call.")
     def get_delivery_options(self) -> list[dict]:
         result = self._call("GET", "delivery_options/list")
         if isinstance(result, dict):
