@@ -40,13 +40,13 @@ REVIEWED_READ_METHODS: dict[str, set[str]] = {
     "stripe": {
         "get_charge_redacted",
         "get_customer_redacted",
-        "get_payout",
+        "get_payout_redacted",
         "get_payment_intent_redacted",
-        "get_subscription",
+        "get_subscription_redacted",
         "list_balance_transactions_redacted",
         "list_payment_intents_redacted",
-        "list_payment_methods",
-        "list_payouts",
+        "list_payment_methods_redacted",
+        "list_payouts_redacted",
     },
 }
 
@@ -70,6 +70,10 @@ UNMARKED_ON_PURPOSE: dict[tuple[str, str], str] = {
     ("stripe", "list_balance_transactions"): "expand[] can pull a client_secret in; agent uses the _redacted one",
     ("stripe", "get_customer"): "legacy sources carry client_secret / redirect URLs; agent uses get_customer_redacted",
     ("stripe", "get_charge"): "expand[] can pull a client_secret in; agent uses get_charge_redacted",
+    ("stripe", "get_subscription"): "raw response for the adapter; agent uses get_subscription_redacted",
+    ("stripe", "list_payment_methods"): "raw response for the adapter; agent uses list_payment_methods_redacted",
+    ("stripe", "list_payouts"): "raw response for the adapter; agent uses list_payouts_redacted",
+    ("stripe", "get_payout"): "raw response for the adapter; agent uses get_payout_redacted",
     ("stripe", "update_subscription"): "**data posted as-is",
     ("stripe", "update_customer"): "**data posted as-is",
     ("stripe", "create_payment_intent"): "charges a saved card off-session",
@@ -147,10 +151,40 @@ def test_stripe_redacted_reads_drop_client_secret_at_any_depth():
     assert out["data"][0]["id"] == "pi_1"
 
 
+@pytest.mark.parametrize(
+    "read",
+    [
+        lambda c: c.get_subscription_redacted("sub_1"),
+        lambda c: c.list_payment_methods_redacted("cus_1"),
+        lambda c: c.list_payouts_redacted(limit=2),
+        lambda c: c.get_payout_redacted("po_1"),
+    ],
+    ids=["get_subscription", "list_payment_methods", "list_payouts", "get_payout"],
+)
+def test_stripe_other_reads_are_redacted_too(read):
+    secret = "pi_9Zz_secret_Q1"
+    body = {
+        "id": "x_1",
+        "data": [{"id": "pm_1", "client_secret": secret}],
+        "latest_invoice": {"payment_intent": {"id": "pi_9Zz", "client_secret": secret}},
+        "note": f"see {secret}",
+    }
+    client, http = _stripe_client(body)
+    out = read(client)
+    assert secret not in repr(out)
+    assert out["id"] == "x_1"
+    assert out["latest_invoice"]["payment_intent"]["id"] == "pi_9Zz"
+    http.call.assert_called_once()
+
+
 def test_stripe_redacted_reads_send_no_expand():
     client, http = _stripe_client({"data": []})
     client.list_balance_transactions_redacted(payout="po_1")
     client.get_charge_redacted("ch_1")
+    client.get_subscription_redacted("sub_1")
+    client.list_payment_methods_redacted("cus_1")
+    client.list_payouts_redacted()
+    client.get_payout_redacted("po_1")
     for call in http.call.call_args_list:
         params = call.kwargs.get("params") or {}
         assert not any(k.startswith("expand") for k in params), call

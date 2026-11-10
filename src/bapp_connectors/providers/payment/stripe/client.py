@@ -189,7 +189,6 @@ class StripeApiClient:
 
         return self._call("POST", "checkout/sessions", data=data)
 
-    @ai_method("read", "One subscription: status, plan items, current period, customer.")
     def get_subscription(self, subscription_id: str) -> dict:
         """Retrieve a subscription by ID."""
         return self._call("GET", f"subscriptions/{subscription_id}")
@@ -275,9 +274,6 @@ class StripeApiClient:
 
     # ── Payment Methods ──
 
-    @ai_method(
-        "read", "Payment methods saved on a customer (card brand, last 4 digits, expiry), by type (default card)."
-    )
     def list_payment_methods(self, customer_id: str, pm_type: str = "card") -> dict:
         """List payment methods attached to a customer."""
         return self._call(
@@ -292,7 +288,6 @@ class StripeApiClient:
 
     # ── Payouts ──
 
-    @ai_method("read", "Payouts to the bank account, newest first, filterable by creation time (unix seconds).")
     def list_payouts(
         self,
         *,
@@ -311,7 +306,6 @@ class StripeApiClient:
             params["created[lte]"] = str(created_lte)
         return self._call("GET", "payouts", params=params)
 
-    @ai_method("read", "One payout to the bank account.")
     def get_payout(self, payout_id: str) -> dict:
         """Retrieve a single payout."""
         return self._call("GET", f"payouts/{payout_id}")
@@ -443,3 +437,32 @@ class StripeApiClient:
     @ai_method("read", "One charge: amount, status, card brand and last 4 digits, refunds, billing details.")
     def get_charge_redacted(self, charge_id: str) -> dict:
         return _redacted(self.get_charge(charge_id))
+
+    @ai_method("read", "One subscription: status, plan items, current period, customer.")
+    def get_subscription_redacted(self, subscription_id: str) -> dict:
+        return _redacted(self.get_subscription(subscription_id))
+
+    @ai_method(
+        "read", "Payment methods saved on a customer (card brand, last 4 digits, expiry), by type (default card)."
+    )
+    def list_payment_methods_redacted(self, customer_id: str, pm_type: str = "card") -> dict:
+        return _redacted(self.list_payment_methods(customer_id, pm_type=pm_type))
+
+    @ai_method("read", "Payouts to the bank account, newest first, filterable by creation time (unix seconds).")
+    def list_payouts_redacted(
+        self,
+        *,
+        limit: int = 25,
+        starting_after: str | None = None,
+        created_gte: int | None = None,
+        created_lte: int | None = None,
+    ) -> dict:
+        return _redacted(
+            self.list_payouts(
+                limit=limit, starting_after=starting_after, created_gte=created_gte, created_lte=created_lte
+            )
+        )
+
+    @ai_method("read", "One payout to the bank account.")
+    def get_payout_redacted(self, payout_id: str) -> dict:
+        return _redacted(self.get_payout(payout_id))
