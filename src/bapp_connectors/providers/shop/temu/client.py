@@ -8,6 +8,7 @@ itself, using the injected client only for retry policy, rate limiting and loggi
 from __future__ import annotations
 
 import time
+import urllib.parse
 from typing import Any
 
 import requests
@@ -173,6 +174,47 @@ class TemuApiClient:
     @ai_method("read", "The tax invoice status of one parent order.")
     def invoice_detail(self, parent_order_sn: str) -> dict:
         return self.call("temu.pay.tax.invoice.detail.query", parentOrderSn=parent_order_sn) or {}
+
+    def invoice_file_signature(self) -> str:
+        """Upload signature for the invoice galerie (``/api/galerie/general_file``)."""
+        result = self.call("temu.pay.tax.get.galerie.signature") or {}
+        signature = result.get("signature") if isinstance(result, dict) else None
+        if not signature:
+            raise ProviderError("Temu: galerie signature missing from the answer")
+        return signature
+
+    def upload_invoice_file(self, content: bytes, file_name: str) -> str:
+        """Store an invoice PDF in Temu's galerie; the URL it answers is what `upload_invoice` accepts."""
+        host = "{0.scheme}://{0.netloc}".format(urllib.parse.urlparse(self.base_url))
+        try:
+            response = self.http.call("POST", f"{host}/api/galerie/general_file", direct_response=True,
+                                      data={"sign": self.invoice_file_signature()},
+                                      files={"file": (file_name, content, "application/pdf")})
+        except ConnectorError:
+            raise
+        except requests.RequestException as exc:
+            raise ProviderError(f"Temu galerie upload: transport error: {exc}", retryable=True) from exc
+        try:
+            answer = response.json()
+        except ValueError:
+            answer = {}
+        url = (answer or {}).get("url") if isinstance(answer, dict) else None
+        if not getattr(response, "ok", False) or not url:
+            raise ProviderError(f"Temu galerie upload refused (HTTP {getattr(response, 'status_code', None)}): "
+                                f"{str(answer)[:200]}")
+        return url
+
+    def download_public(self, url: str) -> bytes:
+        """GET a public file (the seller's invoice PDF) to hand it to the galerie."""
+        try:
+            response = self.http.call("GET", url, direct_response=True)
+        except ConnectorError:
+            raise
+        except requests.RequestException as exc:
+            raise ProviderError(f"Temu: invoice download failed: {exc}", retryable=True) from exc
+        if not getattr(response, "ok", False):
+            raise ProviderError(f"Temu: invoice download failed with HTTP {getattr(response, 'status_code', None)}")
+        return response.content
 
     def upload_invoice(self, **fields: Any) -> dict:
         return self.call("temu.pay.tax.merchant.upload.invoice", retry=False, log_body=True, **fields) or {}

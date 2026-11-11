@@ -16,7 +16,7 @@ def _adapter(fake):
 def test_attach_invoice_payload(fake):
     adapter = _adapter(fake)
     fake.add("POST", "openapi/router", ok({"success": True}))
-    assert adapter.attach_invoice("PO-1", "https://portal.example.test/f/abc?format=file", name="FAC 2026 17") is True
+    assert adapter.attach_invoice("PO-1", "https://openapi-b-eu.temu.com/e-tax-merchant-external/x/abc.pdf", name="FAC 2026 17") is True
     body = fake.last_call().kwargs["json"]
     assert body["type"] == "temu.pay.tax.merchant.upload.invoice" and fake.last_call().kwargs.get("retry") is False
     assert body["parentOrderSn"] == "PO-1" and body["invoiceDirection"] == 1 and body["recipientType"] == 1
@@ -27,14 +27,14 @@ def test_attach_invoice_payload(fake):
 def test_attach_invoice_name_defaults_to_url_basename(fake):
     adapter = _adapter(fake)
     fake.add("POST", "openapi/router", ok({"success": True}))
-    adapter.attach_invoice("PO-1", "https://x.example.test/docs/FAC-2026-18.pdf?format=file")
+    adapter.attach_invoice("PO-1", "https://openapi-b-eu.temu.com/e-tax-merchant-external/x/FAC-2026-18.pdf")
     assert fake.last_call().kwargs["json"]["invoiceName"] == "FAC-2026-18"
 
 
 def test_attach_credit_note_with_optional_fields(fake):
     adapter = _adapter(fake)
     fake.add("POST", "openapi/router", ok({"success": True}))
-    adapter.attach_invoice("PO-1", "https://x.example.test/s.pdf", credit_note=True, currency="RON", date="2026-10-22",
+    adapter.attach_invoice("PO-1", "https://openapi-b-eu.temu.com/e-tax-merchant-external/x/s.pdf", credit_note=True, currency="RON", date="2026-10-22",
                            amount=Decimal("124.95"))
     body = fake.last_call().kwargs["json"]
     assert body["invoiceDirection"] == 2 and body["invoiceCurrency"] == "RON" and body["invoiceDate"] == "2026-10-22"

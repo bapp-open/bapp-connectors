@@ -451,6 +451,10 @@ class TemuShopAdapter(
         """Upload the seller's invoice (or credit note) for a parent order; `invoice_url` must be public."""
         if not name:
             name = urllib.parse.urlparse(invoice_url).path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        # Temu takes the file only from its own galerie: an outside link answers 7000000
+        if "/e-tax-merchant-external/" not in invoice_url:
+            content = self.client.download_public(invoice_url)
+            invoice_url = self.client.upload_invoice_file(content, f"{name[:196]}.pdf")
         fields: dict = {
             "parentOrderSn": order_id,
             "invoiceDirection": 2 if credit_note else 1,
