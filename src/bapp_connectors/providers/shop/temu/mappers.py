@@ -70,8 +70,9 @@ def contact_from_shipping_info(data: dict) -> Contact:
         email="",
         address=Address(
             street=street,
-            city=(data.get("regionName2") or "").strip(),
-            region=(data.get("regionName3") or "").strip(),
+            # regionName2 = județul, regionName3 = localitatea
+            city=(data.get("regionName3") or "").strip(),
+            region=(data.get("regionName2") or "").strip(),
             postal_code=(data.get("postCode") or "").strip(),
             country=country_from_region(data.get("regionName1")),
         ),

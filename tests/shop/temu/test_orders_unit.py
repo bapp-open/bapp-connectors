@@ -28,7 +28,9 @@ def test_order_without_amounts_is_flagged():
     assert o.items[0].extra["skuId"] == parent["orderList"][0]["skuId"] and o.items[0].extra["packageSn"].startswith("PK-")
     assert o.shipping.email == "" and o.extra["relay_email"].endswith("temuemail.com")
     assert o.shipping.name == "Client Test" and o.shipping.phone and o.shipping.address.country == "RO"
-    assert o.shipping.address.city == "Oraș Test" and o.shipping.address.postal_code == "400000"
+    # Temu: regionName2 = județul, regionName3 = localitatea (văzut pe comenzi reale: "Galați" / "Gohor")
+    assert o.shipping.address.region == "Cluj" and o.shipping.address.city == "Cluj-Napoca"
+    assert o.shipping.address.postal_code == "400000"
     assert o.created_at.tzinfo is not None and o.updated_at is not None
     assert o.provider_meta.provider == "temu" and o.provider_meta.raw_id == o.order_id
     assert o.extra["site_id"] == 140 and o.extra["fulfillment_type"] == "fulfillBySeller"
