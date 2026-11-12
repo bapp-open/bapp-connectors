@@ -45,6 +45,14 @@ manifest = ProviderManifest(
                 group=API_ACCESS,
             ),
             CredentialField(
+                name="waba_id",
+                label="WhatsApp Business Account ID",
+                sensitive=False,
+                required=False,
+                help_text="Needed to list message templates (the token also needs whatsapp_business_management).",
+                group=API_ACCESS,
+            ),
+            CredentialField(
                 name="app_secret",
                 label="App Secret",
                 sensitive=True,

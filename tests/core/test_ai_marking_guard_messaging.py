@@ -139,6 +139,7 @@ UNMARKED_ON_PURPOSE: dict[tuple[str, str], str] = {
     ("telegram", "forward_message"): _SEND,
     ("whatsapp", "test_auth"): "connection test helper",
     ("whatsapp", "get_media_url"): "any Graph node; returns a media download URL",
+    ("whatsapp", "list_message_templates"): "the account id goes into the path: any Graph node",
     ("whatsapp", "delete_media"): "deletes",
     ("whatsapp", "mark_as_read"): "read receipt",
     ("whatsapp", "send_template"): _SEND,

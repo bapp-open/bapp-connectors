@@ -306,3 +306,47 @@ class TestCredentials:
             "phone_number_id": PHONE_ID,
         })
         assert adapter.validate_credentials() is True
+
+
+# ── Message templates ──
+
+
+class TestListTemplates:
+
+    @staticmethod
+    def _adapter(pages, **credentials):
+        from unittest import mock
+        adapter = WhatsAppMessagingAdapter(credentials={"token": TOKEN, "phone_number_id": PHONE_ID, **credentials})
+        adapter.client.http = mock.Mock()
+        adapter.client.http.call.side_effect = pages
+        return adapter
+
+    def test_uses_the_waba_credential_and_follows_paging(self):
+        adapter = self._adapter([
+            {"data": [{"name": "a"}], "paging": {"cursors": {"after": "CUR"}, "next": "https://next"}},
+            {"data": [{"name": "b"}], "paging": {"cursors": {"after": "END"}}},
+        ], waba_id="WABA1")
+        assert [t["name"] for t in adapter.list_templates()] == ["a", "b"]
+        first, second = adapter.client.http.call.call_args_list
+        assert first.args == ("GET", "WABA1/message_templates")
+        assert "after" not in first.kwargs["params"]
+        assert second.kwargs["params"]["after"] == "CUR"
+
+    def test_explicit_waba_id_wins(self):
+        adapter = self._adapter([{"data": []}], waba_id="WABA1")
+        adapter.list_templates(waba_id="OTHER")
+        assert adapter.client.http.call.call_args.args == ("GET", "OTHER/message_templates")
+
+    def test_without_a_waba_id_nothing_is_called(self):
+        adapter = self._adapter([])
+        with pytest.raises(ValueError):
+            adapter.list_templates()
+        adapter.client.http.call.assert_not_called()
+
+    def test_permission_error_is_raised(self):
+        adapter = self._adapter([RuntimeError("403")], waba_id="WABA1")
+        with pytest.raises(RuntimeError):
+            adapter.list_templates()
+
+    def test_waba_id_is_optional(self):
+        assert self._adapter([]).validate_credentials() is True

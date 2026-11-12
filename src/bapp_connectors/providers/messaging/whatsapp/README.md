@@ -14,6 +14,7 @@ WhatsApp Business Cloud API integration for sending messages, media, templates, 
 |-------|-------|----------|-----------|
 | `token` | Access Token | Yes | Yes |
 | `phone_number_id` | Phone Number ID | Yes | No |
+| `waba_id` | WhatsApp Business Account ID | No | No |
 
 ## Settings
 
@@ -31,6 +32,7 @@ WhatsApp Business Cloud API integration for sending messages, media, templates, 
 | Receive messages (inbound) | Yes (via webhook) |
 | Webhooks | Yes (`messages`, `message_status`) |
 | Send template message | Yes (via `OutboundMessage.template_id`) |
+| List message templates | Yes (`adapter.list_templates()`; needs `waba_id` and the `whatsapp_business_management` permission) |
 | Send image | Yes (via `extra.media_type="image"`) |
 | Send document | Yes (via `extra.media_type="document"`) |
 | Send video | Yes (via `extra.media_type="video"`) |

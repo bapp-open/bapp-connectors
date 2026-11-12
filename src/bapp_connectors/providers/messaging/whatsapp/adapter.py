@@ -58,6 +58,7 @@ class WhatsAppMessagingAdapter(MessagingPort, RichMessagingCapability, WebhookCa
         self.credentials = credentials
         config = config or {}
         self.phone_number_id = credentials.get("phone_number_id", "")
+        self.waba_id = str(credentials.get("waba_id", "") or "").strip()
         self._app_secret = credentials.get("app_secret", "")
         self._webhook_verify_token = credentials.get("webhook_verify_token", "")
 
@@ -96,6 +97,30 @@ class WhatsAppMessagingAdapter(MessagingPort, RichMessagingCapability, WebhookCa
             )
         except Exception as e:
             return ConnectionTestResult(success=False, message=str(e))
+
+    # ── Message templates ──
+
+    def list_templates(self, waba_id: str = "", max_pages: int = 5) -> list[dict]:
+        """The message templates of the WhatsApp Business Account, as Meta returns them.
+
+        `waba_id` defaults to the `waba_id` credential. The phone number does not expose its
+        account id, so a caller without the credential must supply it (it is `entry[].id` of
+        every webhook Meta sends). Needs the `whatsapp_business_management` permission on the
+        token; without it Meta answers 403 and the error is raised, not swallowed.
+        """
+        waba_id = str(waba_id or self.waba_id or "").strip()
+        if not waba_id:
+            raise ValueError("WhatsApp Business Account ID (waba_id) is required to list templates")
+        templates: list[dict] = []
+        after = ""
+        for _page in range(max_pages):
+            response = self.client.list_message_templates(waba_id, after=after)
+            templates.extend(row for row in response.get("data") or [] if isinstance(row, dict))
+            paging = response.get("paging") or {}
+            after = (paging.get("cursors") or {}).get("after", "") if paging.get("next") else ""
+            if not after:
+                break
+        return templates
 
     # ── MessagingPort ──
 

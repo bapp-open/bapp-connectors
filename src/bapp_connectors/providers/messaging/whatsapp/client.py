@@ -23,6 +23,7 @@ AI_PHONE_NUMBER_FIELDS = (
     "platform_type,throughput,messaging_limit_tier"
 )
 AI_BUSINESS_PROFILE_FIELDS = "about,address,description,email,profile_picture_url,websites,vertical"
+TEMPLATE_FIELDS = "id,name,language,status,category,parameter_format,components"
 
 
 class WhatsAppApiClient:
@@ -66,6 +67,15 @@ class WhatsAppApiClient:
         return self.http.call(
             "GET", f"{self.phone_number_id}/whatsapp_business_profile", params={"fields": AI_BUSINESS_PROFILE_FIELDS}
         )
+
+    # ── Message templates (WhatsApp Business Account) ──
+
+    def list_message_templates(self, waba_id: str, limit: int = 100, after: str = "") -> dict:
+        """GET /{waba_id}/message_templates — needs the `whatsapp_business_management` permission."""
+        params: dict[str, Any] = {"fields": TEMPLATE_FIELDS, "limit": limit}
+        if after:
+            params["after"] = after
+        return self.http.call("GET", f"{waba_id}/message_templates", params=params)
 
     # ── Text Messages ──
 
